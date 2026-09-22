@@ -13,7 +13,7 @@ import { PLAYERS, PIECE_TYPES } from './game/constants.js';
 import { Users, UserCheck, Copy, Swords, Sparkles, Clock, Check } from 'lucide-react';
 
 // Component con cho phòng chơi, sử dụng key={roomId} để reset sạch sẽ mỗi khi đổi phòng
-function RoomView({ roomId, playerName, onLeaveRoom, onRoleChange }) {
+function RoomView({ roomId, playerName, isCreator, onLeaveRoom, onRoleChange }) {
   const {
     gameState,
     role,
@@ -27,7 +27,7 @@ function RoomView({ roomId, playerName, onLeaveRoom, onRoleChange }) {
     handleConfirmSetup,
     handleMakeMove,
     handleRestartGame,
-  } = usePlayRoom(roomId, playerName);
+  } = usePlayRoom(roomId, playerName, isCreator);
 
   const [selectedSetupType, setSelectedSetupType] = useState(PIECE_TYPES.ROCK);
 
@@ -96,7 +96,8 @@ function RoomView({ roomId, playerName, onLeaveRoom, onRoleChange }) {
           {/* Danh sách thành viên trong phòng */}
           <div className="waiting-participants-section">
             <div className="waiting-participants-header">
-              <span className="font-semibold text-xs text-neutral-700">
+              <span className="font-semibold text-xs text-neutral-700 flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-emerald-600" />
                 Thành viên trong phòng ({participants.length}):
               </span>
               <span className="text-xs text-neutral-400">
@@ -167,6 +168,36 @@ function RoomView({ roomId, playerName, onLeaveRoom, onRoleChange }) {
 
         {/* CỘT PHẢI: Bảng xếp quân (khi Setup) / Hướng dẫn chờ (khi Waiting) / Thẻ đấu thủ (khi Playing) */}
         <div className="stage-controls-column">
+          {/* Thanh thành viên trong phòng (luôn hiển thị cho chủ phòng & người chơi theo dõi) */}
+          {!isWaitingPhase && (
+            <div className="card" style={{ padding: '10px 14px', marginBottom: '12px' }}>
+              <div className="flex items-center justify-between text-xs text-neutral-700 font-semibold mb-1.5">
+                <span className="flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-emerald-600" />
+                  Người trong phòng ({participants.length}):
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {participants.map((p) => {
+                  const isRedPlayer = p.id === seats?.[PLAYERS.RED]?.id || p.id === gameState?.hostId;
+                  const isBluePlayer = p.id === seats?.[PLAYERS.BLUE]?.id;
+                  const isMe = p.id === clientId;
+                  return (
+                    <span
+                      key={p.id}
+                      className={`badge badge--small ${
+                        isRedPlayer ? 'badge--red' : isBluePlayer ? 'badge--blue' : 'badge--neutral'
+                      }`}
+                    >
+                      {isRedPlayer ? '👑 Đỏ: ' : isBluePlayer ? '⚔️ Xanh: ' : '👁️ Xem: '}
+                      {p.name} {isMe ? '(Bạn)' : ''}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {isSetupPhase ? (
             <SetupPanel
               gameState={gameState}
@@ -242,11 +273,28 @@ export default function App() {
     return params.get('room') || null;
   });
 
+  const [isCreator, setIsCreator] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const r = params.get('room');
+    if (r) {
+      return sessionStorage.getItem(`ottv2_creator_${r}`) === '1';
+    }
+    return false;
+  });
+
   const [playerName, setPlayerName] = useState(() => {
     return localStorage.getItem('ottv2_player_name') || 'Người chơi';
   });
 
-  const [activeRole, setActiveRole] = useState('spectator');
+  const [activeRole, setActiveRole] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const r = params.get('room');
+    if (r && sessionStorage.getItem(`ottv2_creator_${r}`) === '1') {
+      return 'red';
+    }
+    return 'spectator';
+  });
+
   const [isRulesOpen, setIsRulesOpen] = useState(false);
 
   // Đồng bộ URL khi vào/rời phòng
@@ -260,13 +308,19 @@ export default function App() {
     window.history.replaceState({}, '', url.toString());
   }, [currentRoomId]);
 
-  function handleJoinRoom(roomId, name) {
+  function handleJoinRoom(roomId, name, creator = false) {
     if (name) setPlayerName(name);
+    setIsCreator(creator);
+    setActiveRole(creator ? 'red' : 'spectator');
     setCurrentRoomId(roomId);
   }
 
   function handleLeaveRoom() {
+    if (currentRoomId) {
+      sessionStorage.removeItem(`ottv2_creator_${currentRoomId}`);
+    }
     setCurrentRoomId(null);
+    setIsCreator(false);
     setActiveRole('spectator');
   }
 
@@ -294,6 +348,7 @@ export default function App() {
             key={currentRoomId}
             roomId={currentRoomId}
             playerName={playerName}
+            isCreator={isCreator}
             onLeaveRoom={handleLeaveRoom}
             onRoleChange={setActiveRole}
           />

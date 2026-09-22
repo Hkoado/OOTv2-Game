@@ -24,8 +24,9 @@ export default function Lobby({ onJoinRoom, onOpenRules }) {
     const randomCode = 'OTT-' + Math.floor(1000 + Math.random() * 9000);
     // Xóa cache cũ nếu tình cờ trùng mã
     localStorage.removeItem(`ottv2_room_${randomCode}`);
+    sessionStorage.setItem(`ottv2_creator_${randomCode}`, '1');
     saveRecentRoom(randomCode);
-    onJoinRoom(randomCode, playerName);
+    onJoinRoom(randomCode, playerName, true);
   }
 
   function handleJoinCustomRoom(e) {
@@ -33,7 +34,8 @@ export default function Lobby({ onJoinRoom, onOpenRules }) {
     if (!customRoomId.trim()) return;
     const cleanId = customRoomId.trim().toUpperCase();
     saveRecentRoom(cleanId);
-    onJoinRoom(cleanId, playerName);
+    const isCreator = sessionStorage.getItem(`ottv2_creator_${cleanId}`) === '1';
+    onJoinRoom(cleanId, playerName, isCreator);
   }
 
   function saveRecentRoom(roomId) {
@@ -160,7 +162,8 @@ export default function Lobby({ onJoinRoom, onOpenRules }) {
                     className="btn btn--secondary btn--small"
                     onClick={() => {
                       saveRecentRoom(id);
-                      onJoinRoom(id, playerName);
+                      const isCreator = sessionStorage.getItem(`ottv2_creator_${id}`) === '1';
+                      onJoinRoom(id, playerName, isCreator);
                     }}
                   >
                     <span>Vào lại</span>

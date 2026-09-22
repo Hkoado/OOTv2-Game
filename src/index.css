@@ -907,17 +907,31 @@ body {
 }
 
 .piece__svg {
-  width: 72%;
-  height: 72%;
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.piece-symbol {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.45rem;
+  line-height: 1;
+  user-select: none;
   pointer-events: none;
 }
 
 .selector-svg {
-  width: 68%;
-  height: 68%;
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   pointer-events: none;
+}
+
+.selector-svg.piece-symbol {
+  font-size: 1.4rem;
 }
 
 .mini-pill-circle {
@@ -941,6 +955,11 @@ body {
 .mini-pill-circle svg {
   width: 14px;
   height: 14px;
+}
+
+.mini-pill-circle .piece-symbol {
+  font-size: 0.75rem;
+  line-height: 1;
 }
 
 @media (max-width: 640px) {

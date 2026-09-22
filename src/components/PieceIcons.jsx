@@ -1,32 +1,16 @@
 import React from 'react';
-import { Hammer, Hand, Scissors } from 'lucide-react';
+import { PIECE_ICONS } from '../game/constants.js';
 
 /**
- * Icon quân cờ Oẳn Tù Tì v2
- * Sử dụng nét vẽ gốc tự nhiên từ Lucide React (stroke: currentColor), loại bỏ viền đen thân trắng
+ * Icon quân cờ Oẳn Tù Tì gốc (✊, ✋, ✌️)
+ * Không viền, không hiệu ứng
  */
-export function PieceSvg({ type, className = "w-6 h-6", strokeWidth = 2.2 }) {
-  const iconProps = {
-    className,
-    stroke: "currentColor",
-    fill: "none",
-    strokeWidth,
-    strokeLinecap: "round",
-    strokeLinejoin: "round",
-  };
-
-  if (type === 'rock') {
-    return <Hammer {...iconProps} />;
-  }
-
-  if (type === 'paper') {
-    return <Hand {...iconProps} />;
-  }
-
-  if (type === 'scissors') {
-    return <Scissors {...iconProps} />;
-  }
-
-  return null;
+export function PieceSvg({ type, className = "" }) {
+  const icon = PIECE_ICONS[type] || '';
+  return (
+    <span className={`piece-symbol ${className}`} role="img" aria-label={type}>
+      {icon}
+    </span>
+  );
 }
 
