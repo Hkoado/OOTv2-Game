@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>OTTv2 - Oẳn Tù Tì Chiến Thuật 9x9</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tone.js for Web Audio sound effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    .game-font {
+      font-family: 'Fredoka', cursive, sans-serif;
+    }
+    .board-grid {
+      display: grid;
+      grid-template-columns: repeat(9, minmax(0, 1fr));
+      aspect-ratio: 1 / 1;
+    }
+    .cell-target-p1 {
+      box-shadow: inset 0 0 12px rgba(59, 130, 246, 0.7);
+      background: radial-gradient(circle, rgba(59,130,246,0.2) 0%, rgba(30,58,138,0.1) 100%);
+    }
+    .cell-target-p2 {
+      box-shadow: inset 0 0 12px rgba(239, 68, 68, 0.7);
+      background: radial-gradient(circle, rgba(239,68,68,0.2) 0%, rgba(153,27,27,0.1) 100%);
+    }
+    .piece-bounce {
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .piece-bounce:hover {
+      transform: scale(1.1);
+    }
+    .valid-move-dot::after {
+      content: '';
+      position: absolute;
+      width: 28%;
+      height: 28%;
+      border-radius: 9999px;
+      background-color: rgba(34, 197, 94, 0.85);
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.9);
+      animation: pulse 1.5s infinite;
+    }
+    .valid-attack-ring {
+      box-shadow: inset 0 0 0 3px #ef4444, inset 0 0 10px rgba(239, 68, 68, 0.6) !important;
+      background-color: rgba(239, 68, 68, 0.15) !important;
+      animation: attackPulse 1.2s infinite alternate;
+    }
+    @keyframes attackPulse {
+      from { transform: scale(0.98); }
+      to { transform: scale(1); }
+    }
+    /* Custom scrollbar for history log */
+    ::-webkit-scrollbar {
+      width: 5px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #475569;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-between p-2 sm:p-4 overflow-x-hidden">
+
+  <header class="w-full max-w-5xl flex flex-wrap items-center justify-between gap-3 py-2 px-3 bg-slate-900/80 backdrop-blur rounded-2xl border border-slate-800 shadow-xl mb-3">
+    <div class="flex items-center space-x-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-500 via-amber-500 to-indigo-500 flex items-center justify-center shadow-lg shadow-rose-500/20 text-2xl font-black">
+        ⚔️
+      </div>
+      <div>
+        <h1 class="game-font text-xl sm:text-2xl font-bold tracking-wide bg-gradient-to-r from-rose-400 via-amber-300 to-cyan-400 bg-clip-text text-transparent">
+          OTTv2: Đấu Trí 9x9
+        </h1>
+        <p class="text-xs text-slate-400 hidden sm:block">Oẳn Tù Tì Chiến Thuật Di Động (8 hướng / Ô Đích i9 & a1)</p>
+      </div>
+    </div>
+
+    <!-- Mode Selector & Controls -->
+    <div class="flex items-center space-x-2">
+      <select id="gameMode" class="bg-slate-800 border border-slate-700 text-xs sm:text-sm font-semibold rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-200 cursor-pointer">
+        <option value="pvp">👥 2 Người (Cùng máy)</option>
+        <option value="ai">🤖 Đấu với Máy (AI)</option>
+      </select>
+
+      <button id="soundToggle" class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-sm transition" title="Bật/Tắt âm thanh">
+        🔊
+      </button>
+
+      <button id="rulesBtn" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium text-xs sm:text-sm shadow-md transition">
+        📖 Luật
+      </button>
+
+      <button id="restartBtn" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg font-medium text-xs sm:text-sm shadow-md transition flex items-center gap-1">
+        🔄 Ván mới
+      </button>
+    </div>
+  </header>
+
+  <main class="w-full max-w-5xl flex-1 flex flex-col lg:flex-row items-center lg:items-start justify-center gap-4">
+    
+    <!-- Player 2 (Top / Blue) Status Card -->
+    <section class="w-full lg:w-52 bg-slate-900/80 p-3 rounded-2xl border border-slate-800 flex lg:flex-col justify-between items-center gap-2 shadow-lg order-1">
+      <div class="flex lg:flex-col items-center gap-2 text-center">
+        <div id="p2Avatar" class="w-11 h-11 rounded-xl bg-blue-600/30 border-2 border-blue-500 flex items-center justify-center text-xl shadow-md">
+          🤖
+        </div>
+        <div>
+          <div class="font-bold text-blue-400 text-sm sm:text-base flex items-center gap-1 justify-center">
+            <span id="p2NameLabel">Người chơi 2 (Xanh)</span>
+          </div>
+          <span class="text-[11px] text-slate-400 block">Mục tiêu đích: <b class="text-amber-400">a1</b></span>
+        </div>
+      </div>
+
+      <!-- P2 Piece Inventory Counters -->
+      <div class="flex lg:flex-col gap-1.5 text-xs w-full justify-center">
+        <div class="flex items-center justify-between bg-slate-800/70 px-2 py-1 rounded-lg border border-slate-700/50 min-w-[70px]">
+          <span title="Búa (Rock)">✊ Búa</span>
+          <span id="p2-rock-count" class="font-mono font-bold text-amber-300">3</span>
+        </div>
+        <div class="flex items-center justify-between bg-slate-800/70 px-2 py-1 rounded-lg border border-slate-700/50 min-w-[70px]">
+          <span title="Bao/Lá (Paper)">✋ Lá</span>
+          <span id="p2-paper-count" class="font-mono font-bold text-amber-300">3</span>
+        </div>
+        <div class="flex items-center justify-between bg-slate-800/70 px-2 py-1 rounded-lg border border-slate-700/50 min-w-[70px]">
+          <span title="Kéo (Scissors)">✌️ Kéo</span>
+          <span id="p2-scissors-count" class="font-mono font-bold text-amber-300">3</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Center Board Wrapper -->
+    <section class="flex flex-col items-center order-2 w-full max-w-[530px]">
+      <!-- Turn Indicator Banner -->
+      <div id="turnBanner" class="mb-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold tracking-wide flex items-center gap-2 border shadow-lg transition-all duration-300">
+        <!-- Dynamically injected -->
+      </div>
+
+      <!-- 9x9 Board with Coordinate Labels -->
+      <div class="relative w-full p-2 sm:p-3 bg-slate-900/90 rounded-2xl border-2 border-slate-800 shadow-2xl">
+        <!-- Top Coordinate Letters (a-i) -->
+        <div class="grid grid-cols-9 text-center text-[10px] sm:text-xs text-slate-500 font-mono font-semibold mb-1">
+          <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span><span>i</span>
+        </div>
+
+        <!-- Board Grid -->
+        <div id="chessBoard" class="board-grid rounded-xl overflow-hidden border border-slate-700 bg-slate-900 shadow-inner">
+          <!-- 81 Squares rendered via JS -->
+        </div>
+
+        <!-- Bottom Coordinate Letters (a-i) -->
+        <div class="grid grid-cols-9 text-center text-[10px] sm:text-xs text-slate-500 font-mono font-semibold mt-1">
+          <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span><span>i</span>
+        </div>
+      </div>
+
+      <!-- Quick Hint Bar -->
+      <div class="w-full mt-2 text-center text-[11px] text-slate-400 font-mono flex items-center justify-around bg-slate-900/50 p-2 rounded-xl border border-slate-800/80">
+        <span>✊ đập ✌️</span>
+        <span>•</span>
+        <span>✌️ cắt ✋</span>
+        <span>•</span>
+        <span>✋ bọc ✊</span>
+        <span>•</span>
+        <span>Cùng loại = Chặn đường</span>
+      </div>
+    </section>
+
+    <!-- Player 1 (Bottom / Red) Status Card + Log -->
+    <section class="w-full lg:w-52 flex flex-col gap-3 order-3">
+      <div class="bg-slate-900/80 p-3 rounded-2xl border border-slate-800 flex lg:flex-col justify-between items-center gap-2 shadow-lg">
+        <div class="flex lg:flex-col items-center gap-2 text-center">
+          <div class="w-11 h-11 rounded-xl bg-red-600/30 border-2 border-red-500 flex items-center justify-center text-xl shadow-md">
+            🧑
+          </div>
+          <div>
+            <div class="font-bold text-red-400 text-sm sm:text-base">Người chơi 1 (Đỏ)</div>
+            <span class="text-[11px] text-slate-400 block">Mục tiêu đích: <b class="text-amber-400">i9</b></span>
+          </div>
+        </div>
+
+        <!-- P1 Piece Inventory Counters -->
+        <div class="flex lg:flex-col gap-1.5 text-xs w-full justify-center">
+          <div class="flex items-center justify-between bg-slate-800/70 px-2 py-1 rounded-lg border border-slate-700/50 min-w-[70px]">
+            <span title="Búa (Rock)">✊ Búa</span>
+            <span id="p1-rock-count" class="font-mono font-bold text-amber-300">3</span>
+          </div>
+          <div class="flex items-center justify-between bg-slate-800/70 px-2 py-1 rounded-lg border border-slate-700/50 min-w-[70px]">
+            <span title="Bao/Lá (Paper)">✋ Lá</span>
+            <span id="p1-paper-count" class="font-mono font-bold text-amber-300">3</span>
+          </div>
+          <div class="flex items-center justify-between bg-slate-800/70 px-2 py-1 rounded-lg border border-slate-700/50 min-w-[70px]">
+            <span title="Kéo (Scissors)">✌️ Kéo</span>
+            <span id="p1-scissors-count" class="font-mono font-bold text-amber-300">3</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Log Panel -->
+      <div class="bg-slate-900/80 p-3 rounded-2xl border border-slate-800 shadow-lg flex-1 min-h-[140px] max-h-[180px] flex flex-col">
+        <div class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center justify-between">
+          <span>Nhật ký nước đi</span>
+          <span class="text-[10px] text-slate-500" id="moveCounter">0 nước</span>
+        </div>
+        <div id="moveLog" class="flex-1 overflow-y-auto text-[11px] space-y-1 font-mono text-slate-300 pr-1">
+          <div class="text-slate-500 italic">Trận đấu bắt đầu. Lượt của Đỏ!</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Rules Modal -->
+  <div id="rulesModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 text-slate-200 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+      <h3 class="game-font text-2xl font-bold text-amber-400 mb-3 flex items-center gap-2">
+        <span>📜</span> Luật Chơi OTTv2 (Oẳn Tù Tì 9x9)
+      </h3>
+      <div class="space-y-3 text-sm text-slate-300 leading-relaxed">
+        <p><b class="text-white">1. Bàn cờ:</b> Kích thước <b>9x9</b> ô (cột a-i, hàng 1-9). Mỗi người chơi sở hữu 9 quân gồm: 3 Búa (✊), 3 Lá (✋), 3 Kéo (✌️).</p>
+        <p><b class="text-white">2. Di chuyển:</b> Mỗi lượt, bạn được di chuyển 1 quân cờ đi <b>1 ô theo 8 hướng</b> (ngang, dọc, chéo - hệt như quân Vua trong cờ vua).</p>
+        <p><b class="text-white">3. Cơ chế Ăn quân:</b></p>
+        <ul class="list-disc list-inside pl-2 space-y-1 text-xs text-slate-300">
+          <li><span class="text-amber-300">✊ Búa</span> ăn <span class="text-blue-300">✌️ Kéo</span></li>
+          <li><span class="text-blue-300">✌️ Kéo</span> ăn <span class="text-emerald-300">✋ Lá</span></li>
+          <li><span class="text-emerald-300">✋ Lá</span> ăn <span class="text-amber-300">✊ Búa</span></li>
+          <li><span class="text-rose-400 font-semibold">Cùng loại quân:</span> KHÔNG THỂ ăn nhau. Chúng chặn đường đi của nhau.</li>
+          <li>Không thể đi vào ô có quân cùng phe.</li>
+        </ul>
+        <p><b class="text-emerald-400">4. Điều Kiện Thắng (2 cách):</b></p>
+        <ol class="list-decimal list-inside pl-2 space-y-1 text-xs text-slate-300">
+          <li><b>Tiêu diệt chủng loại:</b> Ăn hết sạch 1 loại quân bất kỳ của đối thủ (ví dụ: ăn hết cả 3 Búa, hoặc cả 3 Kéo, hoặc cả 3 Lá của địch).</li>
+          <li><b>Chiếm cứ điểm đối phương:</b> 
+            <br>&bull; Người chơi 1 (Đỏ) đưa bất kỳ quân nào vào ô <b class="text-amber-400 font-mono">i9</b> (Góc trên cùng bên phải).
+            <br>&bull; Người chơi 2 (Xanh) đưa bất kỳ quân nào vào ô <b class="text-amber-400 font-mono">a1</b> (Góc dưới cùng bên trái).
+          </li>
+        </ol>
+      </div>
+      <button id="closeRulesBtn" class="mt-5 w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 font-bold rounded-xl text-white shadow-lg transition">
+        Đã hiểu, vào chơi ngay!
+      </button>
+    </div>
+  </div>
+
+  <!-- Winner Modal -->
+  <div id="winModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-amber-500/60 rounded-3xl max-w-md w-full p-6 sm:p-8 text-center shadow-2xl relative animate-bounce-short">
+      <div id="winBadge" class="text-6xl mb-3">🏆</div>
+      <h2 id="winTitle" class="game-font text-3xl font-extrabold text-white mb-2">Chiến Thắng!</h2>
+      <p id="winReason" class="text-sm text-slate-300 mb-6 bg-slate-800/80 py-2.5 px-4 rounded-xl border border-slate-700">
+        Lý do thắng trận...
+      </p>
+      <div class="flex gap-3 justify-center">
+        <button id="modalRestartBtn" class="px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 font-bold text-white rounded-xl shadow-lg transition transform active:scale-95">
+          🎮 Chơi lại ván mới
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Game Types & Constants
+    const BOARD_SIZE = 9;
+    const PIECE_TYPES = {
+      ROCK: 'ROCK',
+      PAPER: 'PAPER',
+      SCISSORS: 'SCISSORS'
+    };
+
+    const PIECE_CONFIG = {
+      ROCK: { emoji: '✊', name: 'Búa', beats: 'SCISSORS' },
+      PAPER: { emoji: '✋', name: 'Lá', beats: 'ROCK' },
+      SCISSORS: { emoji: '✌️', name: 'Kéo', beats: 'PAPER' }
+    };
+
+    const PLAYERS = {
+      P1: { id: 1, name: 'Người chơi 1 (Đỏ)', color: 'text-red-400', bg: 'bg-red-500', targetCell: { r: 0, c: 8 } }, // i9 in 0-indexed matrix (row 0, col 8)
+      P2: { id: 2, name: 'Người chơi 2 (Xanh)', color: 'text-blue-400', bg: 'bg-blue-500', targetCell: { r: 8, c: 0 } } // a1 in 0-indexed matrix (row 8, col 0)
+    };
+
+    // State Variables
+    let board = [];
+    let currentPlayer = 1;
+    let selectedSquare = null;
+    let validMoves = [];
+    let isGameOver = false;
+    let moveHistory = [];
+    let isSoundEnabled = true;
+    let gameMode = 'pvp'; // 'pvp' or 'ai'
+    let isAiThinking = false;
+
+    let sfxMove, sfxCapture, sfxWin;
+    function initAudio() {
+      try {
+        sfxMove = new Tone.Synth({
+          oscillator: { type: 'sine' },
+          envelope: { attack: 0.005, decay: 0.1, sustain: 0.01, release: 0.1 }
+        }).toDestination();
+        sfxMove.volume.value = -12;
+
+        sfxCapture = new Tone.PolySynth(Tone.Synth, {
+          oscillator: { type: 'triangle' },
+          envelope: { attack: 0.01, decay: 0.2, sustain: 0.05, release: 0.2 }
+        }).toDestination();
+        sfxCapture.volume.value = -6;
+
+        sfxWin = new Tone.PolySynth(Tone.Synth).toDestination();
+        sfxWin.volume.value = -4;
+      } catch (e) {
+        console.warn('Web Audio init deferred until interaction');
+      }
+    }
+
+    function playSound(type) {
+      if (!isSoundEnabled) return;
+      try {
+        Tone.start();
+        if (!sfxMove) initAudio();
+        if (type === 'move') {
+          sfxMove.triggerAttackRelease('C5', '0.05');
+        } else if (type === 'capture') {
+          sfxCapture.triggerAttackRelease(['E5', 'G5', 'B5'], '0.15');
+        } else if (type === 'win') {
+          sfxWin.triggerAttackRelease(['C5', 'E5', 'G5', 'C6'], '0.4');
+        }
+      } catch (err) {
+        // Audio error ignored safely
+      }
+    }
+
+    /**
+     * Board is 9x9 matrix (0 to 8).
+     * Rows: 0 is rank 9, 8 is rank 1.
+     * Cols: 0 is 'a', 8 is 'i'.
+     * Target for P1: row 0, col 8 ('i9').
+     * Target for P2: row 8, col 0 ('a1').
+     */
+    function initBoard() {
+      board = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
+
+      // Initial layout:
+      // Player 2 (Xanh) starts at Row 0 (rank 9) with 9 pieces: 3 Rock, 3 Paper, 3 Scissors
+      const p2Layout = [
+        PIECE_TYPES.ROCK, PIECE_TYPES.PAPER, PIECE_TYPES.SCISSORS,
+        PIECE_TYPES.ROCK, PIECE_TYPES.PAPER, PIECE_TYPES.SCISSORS,
+        PIECE_TYPES.ROCK, PIECE_TYPES.PAPER, PIECE_TYPES.SCISSORS
+      ];
+
+      // Player 1 (Đỏ) starts at Row 8 (rank 1) with 9 pieces
+      const p1Layout = [
+        PIECE_TYPES.SCISSORS, PIECE_TYPES.PAPER, PIECE_TYPES.ROCK,
+        PIECE_TYPES.SCISSORS, PIECE_TYPES.PAPER, PIECE_TYPES.ROCK,
+        PIECE_TYPES.SCISSORS, PIECE_TYPES.PAPER, PIECE_TYPES.ROCK
+      ];
+
+      for (let c = 0; c < 9; c++) {
+        board[0][c] = { player: 2, type: p2Layout[c], id: `p2_${c}` };
+        board[8][c] = { player: 1, type: p1Layout[c], id: `p1_${c}` };
+      }
+
+      currentPlayer = 1;
+      selectedSquare = null;
+      validMoves = [];
+      isGameOver = false;
+      moveHistory = [];
+      isAiThinking = false;
+      
+      updateUI();
+      renderBoard();
+      updatePieceCounts();
+      updateTurnBanner();
+      renderLog();
+    }
+
+    // Convert coordinates: r=8, c=0 -> "a1"
+    function toCoordString(r, c) {
+      const colLetter = String.fromCharCode(97 + c);
+      const rowNumber = 9 - r;
+      return `${colLetter}${rowNumber}`;
+    }
+
+    /**
+     * Can attacker capture or move into defender piece?
+     */
+    function canAttack(attackerType, defenderType) {
+      return PIECE_CONFIG[attackerType].beats === defenderType;
+    }
+
+    /**
+     * Determine legal moves for square {r, c}
+     * Any 8 adjacent squares:
+     * - Empty square: Allowed
+     * - Allied square: NOT Allowed
+     * - Enemy square of SAME type: NOT Allowed (blocks each other)
+     * - Enemy square of WEAKER type: Allowed (Capture)
+     * - Enemy square of STRONGER type: NOT Allowed
+     */
+    function getValidMoves(r, c) {
+      const piece = board[r][c];
+      if (!piece) return [];
+
+      const moves = [];
+      // 8 directions (King in chess)
+      const directions = [
+        [-1, -1], [-1, 0], [-1, 1],
+        [ 0, -1],          [ 0, 1],
+        [ 1, -1], [ 1, 0], [ 1, 1]
+      ];
+
+      for (const [dr, dc] of directions) {
+        const nr = r + dr;
+        const nc = c + dc;
+
+        // Check inside board bounds
+        if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE) {
+          const target = board[nr][nc];
+
+          if (!target) {
+            // Empty cell: Legal move
+            moves.push({ r: nr, c: nc, isCapture: false });
+          } else if (target.player !== piece.player) {
+            // Enemy cell: Can only capture if attacker beats target
+            if (canAttack(piece.type, target.type)) {
+              moves.push({ r: nr, c: nc, isCapture: true });
+            }
+            // If same type or weaker, cannot move onto it (blocked)
+          }
+        }
+      }
+      return moves;
+    }
+
+    /**
+     * Checks if current move triggered any win condition:
+     * 1. Check if piece reached designated target square (i9 for P1, a1 for P2).
+     * 2. Check if any enemy piece type is completely wiped out (0 count).
+     */
+    function checkWinCondition(lastMovePlayer, targetR, targetC) {
+      // 1. Destination square reached
+      if (lastMovePlayer === 1 && targetR === 0 && targetC === 8) {
+        return {
+          winner: 1,
+          reason: 'Người chơi 1 (Đỏ) đã xuất sắc đưa quân đến cứ điểm đích i9!'
+        };
+      }
+      if (lastMovePlayer === 2 && targetR === 8 && targetC === 0) {
+        return {
+          winner: 2,
+          reason: 'Người chơi 2 (Xanh) đã xuất sắc đưa quân đến cứ điểm đích a1!'
+        };
+      }
+
+      // 2. Extinction of any piece type of opponent
+      const opponent = lastMovePlayer === 1 ? 2 : 1;
+      const counts = { ROCK: 0, PAPER: 0, SCISSORS: 0 };
+
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          const p = board[r][c];
+          if (p && p.player === opponent) {
+            counts[p.type]++;
+          }
+        }
+      }
+
+      for (const type of [PIECE_TYPES.ROCK, PIECE_TYPES.PAPER, PIECE_TYPES.SCISSORS]) {
+        if (counts[type] === 0) {
+          const typeName = PIECE_CONFIG[type].name;
+          const winnerName = lastMovePlayer === 1 ? 'Người chơi 1 (Đỏ)' : (gameMode === 'ai' ? 'Máy AI' : 'Người chơi 2 (Xanh)');
+          return {
+            winner: lastMovePlayer,
+            reason: `${winnerName} đã tiêu diệt hoàn toàn toàn bộ quân ${typeName} của đối thủ!`
+          };
+        }
+      }
+
+      return null;
+    }
+
+    function renderBoard() {
+      const boardEl = document.getElementById('chessBoard');
+      boardEl.innerHTML = '';
+
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          const cell = document.createElement('div');
+          const isDark = (r + c) % 2 === 1;
+          
+          cell.className = `relative flex items-center justify-center font-bold select-none cursor-pointer transition-colors duration-150 ${
+            isDark ? 'bg-slate-800/90' : 'bg-slate-700/60'
+          }`;
+          
+          // Coordinate tag styling (corner markers)
+          if (r === 0 && c === 8) {
+            cell.classList.add('cell-target-p1');
+            const tag = document.createElement('span');
+            tag.innerText = 'ĐÍCH i9';
+            tag.className = 'absolute top-0.5 right-1 text-[8px] font-mono text-red-400 font-extrabold pointer-events-none opacity-80';
+            cell.appendChild(tag);
+          }
+          if (r === 8 && c === 0) {
+            cell.classList.add('cell-target-p2');
+            const tag = document.createElement('span');
+            tag.innerText = 'ĐÍCH a1';
+            tag.className = 'absolute bottom-0.5 left-1 text-[8px] font-mono text-blue-400 font-extrabold pointer-events-none opacity-80';
+            cell.appendChild(tag);
+          }
+
+          // Highlight selected piece
+          if (selectedSquare && selectedSquare.r === r && selectedSquare.c === c) {
+            cell.classList.add('ring-2', 'ring-amber-400', 'bg-amber-400/20');
+          }
+
+          // Highlight valid moves
+          const isValidTarget = validMoves.find(m => m.r === r && m.c === c);
+          if (isValidTarget) {
+            if (isValidTarget.isCapture) {
+              cell.classList.add('valid-attack-ring');
+            } else {
+              cell.classList.add('valid-move-dot');
+            }
+          }
+
+          // Piece rendering
+          const piece = board[r][c];
+          if (piece) {
+            const pieceContainer = document.createElement('div');
+            pieceContainer.className = `w-full h-full flex flex-col items-center justify-center p-0.5 piece-bounce`;
+
+            const iconSpan = document.createElement('span');
+            iconSpan.className = `text-lg sm:text-2xl drop-shadow-md transition transform ${
+              piece.player === 1 ? 'scale-100' : 'rotate-180'
+            }`;
+            iconSpan.innerText = PIECE_CONFIG[piece.type].emoji;
+
+            const badgeSpan = document.createElement('div');
+            badgeSpan.className = `w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full border border-slate-900 ${
+              piece.player === 1 ? 'bg-red-500 shadow-red-500/80' : 'bg-blue-500 shadow-blue-500/80'
+            } shadow-sm`;
+
+            pieceContainer.appendChild(iconSpan);
+            pieceContainer.appendChild(badgeSpan);
+            cell.appendChild(pieceContainer);
+          }
+
+          // Cell click / tap event
+          cell.addEventListener('click', () => handleCellClick(r, c));
+          boardEl.appendChild(cell);
+        }
+      }
+    }
+
+    function handleCellClick(r, c) {
+      if (isGameOver || isAiThinking) return;
+
+      // If playing with AI and it's AI turn (Player 2), ignore user clicks
+      if (gameMode === 'ai' && currentPlayer === 2) return;
+
+      const clickedPiece = board[r][c];
+
+      // If user clicks on own piece: Select and calculate valid moves
+      if (clickedPiece && clickedPiece.player === currentPlayer) {
+        selectedSquare = { r, c };
+        validMoves = getValidMoves(r, c);
+        renderBoard();
+        return;
+      }
+
+      // If a piece is already selected, check if clicked cell is a valid move
+      if (selectedSquare) {
+        const move = validMoves.find(m => m.r === r && m.c === c);
+        if (move) {
+          executeMove(selectedSquare.r, selectedSquare.c, r, c, move.isCapture);
+          return;
+        } else {
+          // Deselect
+          selectedSquare = null;
+          validMoves = [];
+          renderBoard();
+        }
+      }
+    }
+
+    function executeMove(fromR, fromC, toR, toC, isCapture) {
+      const movingPiece = board[fromR][fromC];
+      const targetPiece = board[toR][toC];
+
+      // Play Sound
+      if (isCapture) {
+        playSound('capture');
+      } else {
+        playSound('move');
+      }
+
+      // Update Board State
+      board[toR][toC] = movingPiece;
+      board[fromR][fromC] = null;
+
+      // Log Move
+      const pName = movingPiece.player === 1 ? 'Đỏ' : (gameMode === 'ai' ? 'Máy' : 'Xanh');
+      const pieceName = PIECE_CONFIG[movingPiece.type].name;
+      const fromStr = toCoordString(fromR, fromC);
+      const toStr = toCoordString(toR, toC);
+      let logText = `${pName}: ${pieceName} (${fromStr} ➔ ${toStr})`;
+
+      if (isCapture && targetPiece) {
+        logText += ` ⚔️ ăn ${PIECE_CONFIG[targetPiece.type].name}`;
+      }
+      addLogEntry(logText);
+
+      // Check Win Condition
+      const winResult = checkWinCondition(movingPiece.player, toR, toC);
+
+      // Reset selection
+      selectedSquare = null;
+      validMoves = [];
+      updatePieceCounts();
+
+      if (winResult) {
+        isGameOver = true;
+        renderBoard();
+        showWinModal(winResult);
+        return;
+      }
+
+      // Switch turn
+      currentPlayer = currentPlayer === 1 ? 2 : 1;
+      updateTurnBanner();
+      renderBoard();
+
+      // Trigger AI move if in AI mode and it's Player 2 turn
+      if (gameMode === 'ai' && currentPlayer === 2 && !isGameOver) {
+        triggerAiMove();
+      }
+    }
+
+    function triggerAiMove() {
+      isAiThinking = true;
+      updateTurnBanner();
+
+      setTimeout(() => {
+        if (isGameOver) {
+          isAiThinking = false;
+          return;
+        }
+
+        // Collect all possible legal moves for Player 2
+        const allLegalMoves = [];
+        for (let r = 0; r < BOARD_SIZE; r++) {
+          for (let c = 0; c < BOARD_SIZE; c++) {
+            const piece = board[r][c];
+            if (piece && piece.player === 2) {
+              const moves = getValidMoves(r, c);
+              for (const m of moves) {
+                allLegalMoves.push({
+                  from: { r, c },
+                  to: { r: m.r, c: m.c },
+                  isCapture: m.isCapture,
+                  pieceType: piece.type
+                });
+              }
+            }
+          }
+        }
+
+        if (allLegalMoves.length === 0) {
+          // No legal moves: P1 wins
+          showWinModal({
+            winner: 1,
+            reason: 'Người chơi 2 không còn nước đi hợp lệ nào!'
+          });
+          isAiThinking = false;
+          return;
+        }
+
+        // Evaluate and score moves
+        // Highest priority: Winning immediately (reaching a1 or eradicating last enemy piece)
+        let bestScore = -Infinity;
+        let bestMoves = [];
+
+        for (const mv of allLegalMoves) {
+          let score = 0;
+
+          // 1. Instant Win at a1 (row 8, col 0)
+          if (mv.to.r === 8 && mv.to.c === 0) {
+            score += 10000;
+          }
+
+          // 2. Capture Score
+          if (mv.isCapture) {
+            const victim = board[mv.to.r][mv.to.c];
+            score += 150;
+
+            // Extra points if this victim is the last of its kind for P1!
+            let countOfThisType = 0;
+            for (let r = 0; r < 9; r++) {
+              for (let c = 0; c < 9; c++) {
+                if (board[r][c] && board[r][c].player === 1 && board[r][c].type === victim.type) {
+                  countOfThisType++;
+                }
+              }
+            }
+            if (countOfThisType === 1) {
+              score += 9000; // Will wipe out this species completely!
+            }
+          }
+
+          // 3. Proximity bonus towards target cell a1 (r:8, c:0)
+          const distToGoal = Math.hypot(8 - mv.to.r, 0 - mv.to.c);
+          score += (12 - distToGoal) * 4;
+
+          // 4. Slight penalty if stepping into immediate danger of being eaten
+          // (Simulate enemy response)
+          const directions = [
+            [-1, -1], [-1, 0], [-1, 1],
+            [ 0, -1],          [ 0, 1],
+            [ 1, -1], [ 1, 0], [ 1, 1]
+          ];
+          for (const [dr, dc] of directions) {
+            const adjR = mv.to.r + dr;
+            const adjC = mv.to.c + dc;
+            if (adjR >= 0 && adjR < 9 && adjC >= 0 && adjC < 9) {
+              const enemy = board[adjR][adjC];
+              if (enemy && enemy.player === 1 && canAttack(enemy.type, mv.pieceType)) {
+                score -= 40; // in threat range
+              }
+            }
+          }
+
+          // Slight random fuzziness for natural play
+          score += Math.random() * 8;
+
+          if (score > bestScore) {
+            bestScore = score;
+            bestMoves = [mv];
+          } else if (Math.abs(score - bestScore) < 0.01) {
+            bestMoves.push(mv);
+          }
+        }
+
+        const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+        isAiThinking = false;
+        executeMove(chosenMove.from.r, chosenMove.from.c, chosenMove.to.r, chosenMove.to.c, chosenMove.isCapture);
+      }, 450);
+    }
+
+    function updatePieceCounts() {
+      const counts = {
+        1: { ROCK: 0, PAPER: 0, SCISSORS: 0 },
+        2: { ROCK: 0, PAPER: 0, SCISSORS: 0 }
+      };
+
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          const p = board[r][c];
+          if (p) {
+            counts[p.player][p.type]++;
+          }
+        }
+      }
+
+      document.getElementById('p1-rock-count').innerText = counts[1].ROCK;
+      document.getElementById('p1-paper-count').innerText = counts[1].PAPER;
+      document.getElementById('p1-scissors-count').innerText = counts[1].SCISSORS;
+
+      document.getElementById('p2-rock-count').innerText = counts[2].ROCK;
+      document.getElementById('p2-paper-count').innerText = counts[2].PAPER;
+      document.getElementById('p2-scissors-count').innerText = counts[2].SCISSORS;
+    }
+
+    function updateTurnBanner() {
+      const banner = document.getElementById('turnBanner');
+      if (isGameOver) {
+        banner.className = 'mb-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold tracking-wide flex items-center gap-2 border bg-emerald-950 border-emerald-600 text-emerald-300';
+        banner.innerHTML = '🏁 Ván đấu kết thúc!';
+        return;
+      }
+
+      if (currentPlayer === 1) {
+        banner.className = 'mb-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold tracking-wide flex items-center gap-2 border bg-red-950/80 border-red-500/60 text-red-300 animate-pulse';
+        banner.innerHTML = '<span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block animate-ping"></span> Lượt: Người chơi 1 (Đỏ)';
+      } else {
+        banner.className = 'mb-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold tracking-wide flex items-center gap-2 border bg-blue-950/80 border-blue-500/60 text-blue-300 animate-pulse';
+        const name = gameMode === 'ai' ? (isAiThinking ? '🤖 Máy AI đang tính toán...' : '🤖 Lượt: Máy AI') : 'Lượt: Người chơi 2 (Xanh)';
+        banner.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block animate-ping"></span> ${name}`;
+      }
+    }
+
+    function addLogEntry(text) {
+      moveHistory.unshift(text);
+      renderLog();
+    }
+
+    function renderLog() {
+      const logContainer = document.getElementById('moveLog');
+      const counter = document.getElementById('moveCounter');
+      counter.innerText = `${moveHistory.length} nước`;
+
+      if (moveHistory.length === 0) {
+        logContainer.innerHTML = '<div class="text-slate-500 italic">Trận đấu bắt đầu. Lượt của Đỏ!</div>';
+        return;
+      }
+
+      logContainer.innerHTML = moveHistory.map((entry, idx) => {
+        const isLatest = idx === 0;
+        return `<div class="${isLatest ? 'text-amber-300 font-semibold' : 'text-slate-400'} border-b border-slate-800/40 pb-0.5">${entry}</div>`;
+      }).join('');
+    }
+
+    function showWinModal(result) {
+      playSound('win');
+      // Confetti effect
+      try {
+        confetti({
+          particleCount: 120,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+      } catch (e) {}
+
+      const modal = document.getElementById('winModal');
+      const title = document.getElementById('winTitle');
+      const reason = document.getElementById('winReason');
+      const badge = document.getElementById('winBadge');
+
+      const isP1 = result.winner === 1;
+      const winnerName = isP1 ? 'Người chơi 1 (Đỏ)' : (gameMode === 'ai' ? 'Máy AI (Xanh)' : 'Người chơi 2 (Xanh)');
+
+      badge.innerText = isP1 ? '🔴👑' : '🔵👑';
+      title.innerText = `${winnerName} Chiến Thắng!`;
+      title.className = `game-font text-2xl sm:text-3xl font-extrabold mb-2 ${isP1 ? 'text-red-400' : 'text-blue-400'}`;
+      reason.innerText = result.reason;
+
+      modal.classList.remove('hidden');
+    }
+
+    function updateUI() {
+      document.getElementById('winModal').classList.add('hidden');
+      document.getElementById('p2NameLabel').innerText = gameMode === 'ai' ? 'Máy AI (Xanh)' : 'Người chơi 2 (Xanh)';
+      document.getElementById('p2Avatar').innerText = gameMode === 'ai' ? '🤖' : '👤';
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initBoard();
+
+      // Sound toggle
+      const soundBtn = document.getElementById('soundToggle');
+      soundBtn.addEventListener('click', () => {
+        isSoundEnabled = !isSoundEnabled;
+        soundBtn.innerText = isSoundEnabled ? '🔊' : '🔇';
+      });
+
+      // Game Mode change
+      const modeSelect = document.getElementById('gameMode');
+      modeSelect.addEventListener('change', (e) => {
+        gameMode = e.target.value;
+        initBoard();
+      });
+
+      // Restart buttons
+      document.getElementById('restartBtn').addEventListener('click', () => {
+        initBoard();
+      });
+      document.getElementById('modalRestartBtn').addEventListener('click', () => {
+        initBoard();
+      });
+
+      // Rules Modal toggling
+      const rulesModal = document.getElementById('rulesModal');
+      document.getElementById('rulesBtn').addEventListener('click', () => {
+        rulesModal.classList.remove('hidden');
+      });
+      document.getElementById('closeRulesBtn').addEventListener('click', () => {
+        rulesModal.classList.add('hidden');
+      });
+      rulesModal.addEventListener('click', (e) => {
+        if (e.target === rulesModal) {
+          rulesModal.classList.add('hidden');
+        }
+      });
+    });
+  </script>
+</body>
+</html>
