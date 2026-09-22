@@ -114,8 +114,11 @@ export default function SetupPanel({
           </div>
 
           <div className="setup-panel-guide">
-            <span className="text-xs text-neutral-500">
-              👉 Click vào loại quân ở trên, sau đó click vào ô bất kỳ trong sân nhà để đặt.
+            <span className="text-xs text-neutral-600 block mb-1">
+              👉 <strong>Cách 1:</strong> Chọn loại quân ở trên, bấm ô trống sân nhà để đặt.
+            </span>
+            <span className="text-xs text-neutral-600 block">
+              👉 <strong>Cách 2:</strong> Bấm vào quân đã xếp trên bàn cờ để đổi chỗ hoặc nhấc về khay.
             </span>
           </div>
 
@@ -147,9 +150,25 @@ export default function SetupPanel({
       ) : (
         <div className="setup-panel-side__waiting">
           <div className="spinner" />
-          <p className="text-sm text-neutral-600">
-            Chờ <strong>{activePlayerName}</strong> hoàn tất dàn quân (còn {timeLeft}s).
-          </p>
+          <div className="text-sm text-neutral-600">
+            {role === 'blue' && isRedPhase ? (
+              <p>
+                Bạn là <strong>Đội Xanh</strong>. Đội Đỏ đang xếp quân trước (còn <strong>{timeLeft}s</strong>).
+                <br />
+                <span className="text-xs text-neutral-500 mt-1 block">
+                  💡 Bạn sẽ được xếp quân ngay sau đó và được nhìn thấy toàn bộ quân Đỏ để khắc chế!
+                </span>
+              </p>
+            ) : role === 'red' && isBluePhase ? (
+              <p>
+                Đội Đỏ đã xếp xong! Chờ <strong>Đội Xanh</strong> hoàn tất dàn quân (còn <strong>{timeLeft}s</strong>).
+              </p>
+            ) : (
+              <p>
+                Chế độ xem: Chờ <strong>{activePlayerName}</strong> hoàn tất dàn quân (còn <strong>{timeLeft}s</strong>).
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>

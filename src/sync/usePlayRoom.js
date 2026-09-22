@@ -1,21 +1,21 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { playhtml } from 'playhtml';
 import Peer from 'peerjs';
 import {
   createNewGame,
   GAME_PHASES,
-  startSetupRed,
   completeSetupRed,
   completeSetupBlue,
   executeMove,
   autoPlaceRemaining,
+  approveOpponent,
 } from '../game/gameState.js';
 import { PLAYERS } from '../game/constants.js';
 
 function getOrCreateClientId() {
   let id = sessionStorage.getItem('ottv2_client_id');
   if (!id) {
-    id = 'user_' + Math.random().toString(36).substring(2, 9);
+    id = 'user_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now().toString(36);
     sessionStorage.setItem('ottv2_client_id', id);
   }
   return id;
@@ -33,90 +33,158 @@ export function usePlayRoom(roomId, playerName = '') {
   const clientId = useRef(getOrCreateClientId()).current;
   const effectivePlayerName = playerName || getStoredPlayerName();
   const cleanId = sanitizeRoomId(roomId);
-  const hostPeerId = `ottv2_host_${cleanId}`;
 
-  const [gameState, setGameState] = useState(() => createNewGame(roomId));
-  const [role, setRole] = useState('spectator'); // 'red' | 'blue' | 'spectator'
+  // Khởi tạo state từ localStorage nếu có, hoặc tạo mới
+  const [gameState, setGameState] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`ottv2_room_${roomId}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.roomId === roomId) {
+          return parsed;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return createNewGame(roomId);
+  });
+
   const [isConnected, setIsConnected] = useState(false);
 
   const stateRef = useRef(gameState);
   stateRef.current = gameState;
 
+  // Xác định vai trò role và isHost một cách tất định từ seats & hostId
+  const role = useMemo(() => {
+    if (gameState?.seats?.[PLAYERS.RED]?.id === clientId) return 'red';
+    if (gameState?.seats?.[PLAYERS.BLUE]?.id === clientId) return 'blue';
+    return 'spectator';
+  }, [gameState?.seats, clientId]);
+
+  const isHost = useMemo(() => {
+    if (!gameState) return false;
+    if (gameState.hostId === clientId) return true;
+    if (gameState.seats?.[PLAYERS.RED]?.id === clientId) return true;
+    // Nếu chưa có ai làm host và chưa có Red, người này có thể làm host
+    if (!gameState.hostId && !gameState.seats?.[PLAYERS.RED]) return true;
+    return false;
+  }, [gameState, clientId]);
+
   const peerRef = useRef(null);
-  const connectionsRef = useRef([]); // Host lưu danh sách client
-  const hostConnRef = useRef(null);  // Guest lưu kết nối tới Host
-  const isHostRef = useRef(false);
+  const connectionsRef = useRef([]); // Host lưu danh sách kết nối client
+  const hostConnRef = useRef(null);  // Guest kết nối tới Host
   const broadcastChannelRef = useRef(null);
 
   // Phát tán trạng thái mới tới toàn bộ kết nối
   const broadcastState = useCallback((newState) => {
-    stateRef.current = newState;
-    setGameState(newState);
+    const enrichedState = {
+      ...newState,
+      version: (newState.version || stateRef.current?.version || 0) + 1,
+      updatedAt: Date.now(),
+    };
+
+    stateRef.current = enrichedState;
+    setGameState(enrichedState);
 
     try {
-      localStorage.setItem(`ottv2_room_${roomId}`, JSON.stringify(newState));
+      localStorage.setItem(`ottv2_room_${roomId}`, JSON.stringify(enrichedState));
     } catch {
       // ignore
     }
 
-    // 1. BroadcastChannel (local tabs)
+    // 1. BroadcastChannel (rất nhanh cho các tab trên cùng máy)
     if (broadcastChannelRef.current) {
-      broadcastChannelRef.current.postMessage({
-        type: 'STATE_UPDATE',
-        state: newState,
-        senderId: clientId,
-      });
+      try {
+        broadcastChannelRef.current.postMessage({
+          type: 'STATE_UPDATE',
+          state: enrichedState,
+          senderId: clientId,
+        });
+      } catch {
+        // ignore
+      }
     }
 
-    // 2. PeerJS WebRTC (kết nối giữa 2 máy tính qua Internet)
-    if (isHostRef.current) {
-      // Host gửi cho tất cả clients
+    // 2. WebRTC PeerJS
+    if (isHost) {
       connectionsRef.current.forEach((conn) => {
         if (conn.open) {
-          conn.send({ type: 'STATE_UPDATE', state: newState, senderId: clientId });
+          try {
+            conn.send({ type: 'STATE_UPDATE', state: enrichedState, senderId: clientId });
+          } catch {
+            // ignore
+          }
         }
       });
     } else if (hostConnRef.current && hostConnRef.current.open) {
-      // Guest gửi lên Host để Host áp dụng & broadcast
-      hostConnRef.current.send({ type: 'ACTION_STATE_UPDATE', state: newState, senderId: clientId });
+      try {
+        hostConnRef.current.send({ type: 'ACTION_STATE_UPDATE', state: enrichedState, senderId: clientId });
+      } catch {
+        // ignore
+      }
     }
 
-    // 3. playhtml event dispatch
+    // 3. playhtml event dispatch (PartyKit multi-client sync)
     try {
       playhtml.dispatchPlayEvent?.({
         type: 'OTT_SYNC',
-        eventPayload: { state: newState, senderId: clientId, timestamp: Date.now() },
+        eventPayload: { state: enrichedState, senderId: clientId, timestamp: Date.now() },
       });
     } catch {
       // ignore
     }
-  }, [clientId, roomId]);
+  }, [clientId, roomId, isHost]);
 
-  // Khởi tạo PeerJS WebRTC và playhtml
+  // Thiết lập các kênh kết nối Realtime (BroadcastChannel + playhtml + WebRTC)
   useEffect(() => {
     if (!roomId) return;
 
     let isDestroyed = false;
 
-    // Reset state ban đầu cho phòng mới
-    const freshGame = createNewGame(roomId);
-    setGameState(freshGame);
-    stateRef.current = freshGame;
-
-    // 1. BroadcastChannel
+    // 1. Khởi tạo BroadcastChannel cho tab cùng máy
     const bc = new BroadcastChannel(`ottv2_bc_${cleanId}`);
     broadcastChannelRef.current = bc;
+
     bc.onmessage = (event) => {
-      const { type, state, senderId } = event.data || {};
-      if (type === 'STATE_UPDATE' && state && senderId !== clientId) {
-        if (state.updatedAt > (stateRef.current?.updatedAt || 0)) {
+      const { type, state, senderId, user, action } = event.data || {};
+      if (senderId === clientId) return;
+
+      if (type === 'STATE_UPDATE' && state) {
+        const curVer = stateRef.current?.version || 0;
+        const newVer = state.version || 0;
+        if (newVer >= curVer || state.updatedAt > (stateRef.current?.updatedAt || 0)) {
           setGameState(state);
           stateRef.current = state;
+        }
+      } else if (type === 'JOIN_ROOM' && user) {
+        // Nếu ta là Host, cập nhật danh sách người tham gia
+        const cur = stateRef.current;
+        if (cur && (cur.hostId === clientId || cur.seats?.[PLAYERS.RED]?.id === clientId)) {
+          const exists = (cur.participants || []).some((p) => p.id === user.id);
+          if (!exists) {
+            const nextParticipants = [
+              ...(cur.participants || []),
+              { id: user.id, name: user.name, isHost: false, joinedAt: Date.now() },
+            ];
+            const updated = {
+              ...cur,
+              participants: nextParticipants,
+            };
+            broadcastState(updated);
+          } else {
+            // Gửi lại state mới nhất cho người vừa vào
+            bc.postMessage({
+              type: 'STATE_UPDATE',
+              state: cur,
+              senderId: clientId,
+            });
+          }
         }
       }
     };
 
-    // 2. playhtml init
+    // 2. playhtml init (PartyKit cloud sync)
     try {
       playhtml.init({
         room: `ottv2_${cleanId}`,
@@ -127,7 +195,9 @@ export function usePlayRoom(roomId, playerName = '') {
           playhtml.registerPlayEventListener('OTT_SYNC', {
             onEvent: (payload) => {
               if (payload && payload.state && payload.senderId !== clientId) {
-                if (payload.state.updatedAt > (stateRef.current?.updatedAt || 0)) {
+                const curVer = stateRef.current?.version || 0;
+                const newVer = payload.state.version || 0;
+                if (newVer >= curVer || payload.state.updatedAt > (stateRef.current?.updatedAt || 0)) {
                   setGameState(payload.state);
                   stateRef.current = payload.state;
                 }
@@ -144,92 +214,47 @@ export function usePlayRoom(roomId, playerName = '') {
       setIsConnected(true);
     }
 
-    // 3. WebRTC P2P qua PeerJS (Đảm bảo 100% kết nối giữa 2 máy khác nhau)
-    // Thử làm Host trước
-    const hostPeer = new Peer(hostPeerId, {
-      debug: 1,
-    });
+    // 3. WebRTC PeerJS với ID độc nhất cho mỗi client để tránh lỗi ID taken
+    const myPeerId = `ottv2_${cleanId}_${clientId.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    let peerInstance = null;
 
-    hostPeer.on('open', (id) => {
-      if (isDestroyed) return;
-      isHostRef.current = true;
-      peerRef.current = hostPeer;
-      setIsConnected(true);
-      setRole('red');
+    try {
+      peerInstance = new Peer(myPeerId, { debug: 1 });
+      peerRef.current = peerInstance;
 
-      // Host tự động chiếm ghế Đỏ
-      const hostGame = {
-        ...stateRef.current,
-        seats: {
-          ...stateRef.current.seats,
-          [PLAYERS.RED]: { id: clientId, name: effectivePlayerName },
-        },
-        updatedAt: Date.now(),
-      };
-      stateRef.current = hostGame;
-      setGameState(hostGame);
+      peerInstance.on('open', () => {
+        if (isDestroyed) return;
+        setIsConnected(true);
+      });
 
-      // Lắng nghe các máy khác kết nối tới
-      hostPeer.on('connection', (conn) => {
+      // Lắng nghe kết nối P2P từ các client khác
+      peerInstance.on('connection', (conn) => {
         connectionsRef.current.push(conn);
 
         conn.on('open', () => {
-          // Gửi toàn bộ trạng thái hiện tại cho máy mới kết nối
-          conn.send({
-            type: 'STATE_UPDATE',
-            state: stateRef.current,
-            senderId: clientId,
-          });
+          if (stateRef.current) {
+            conn.send({
+              type: 'STATE_UPDATE',
+              state: stateRef.current,
+              senderId: clientId,
+            });
+          }
         });
 
         conn.on('data', (data) => {
           if (!data) return;
-
-          // Khách xin vào ghế
-          if (data.type === 'REQUEST_JOIN') {
-            const current = stateRef.current;
-            let assignedRole = 'spectator';
-            let nextSeats = { ...current.seats };
-            let nextPhase = current.phase;
-            let nextDeadline = current.setupDeadline;
-
-            if (!nextSeats[PLAYERS.BLUE]) {
-              assignedRole = 'blue';
-              nextSeats[PLAYERS.BLUE] = { id: data.senderId, name: data.playerName };
-              // Đủ 2 người -> Bắt đầu Xếp quân Đỏ 30s
-              if (nextPhase === GAME_PHASES.WAITING) {
-                nextPhase = GAME_PHASES.SETUP_RED;
-                nextDeadline = Date.now() + 30000;
-              }
-            }
-
-            const updated = {
-              ...current,
-              seats: nextSeats,
-              phase: nextPhase,
-              setupDeadline: nextDeadline,
-              updatedAt: Date.now(),
-            };
-
-            stateRef.current = updated;
-            setGameState(updated);
-
-            // Phản hồi vai trò cho máy khách
-            conn.send({
-              type: 'ASSIGN_ROLE',
-              role: assignedRole,
-              state: updated,
-            });
-
-            // Phát cho tất cả các máy khác
-            broadcastState(updated);
-          } else if (data.type === 'ACTION_STATE_UPDATE' && data.state) {
-            // Khách thực hiện nước đi / xếp quân
-            if (data.state.updatedAt > (stateRef.current?.updatedAt || 0)) {
-              stateRef.current = data.state;
+          if (data.type === 'STATE_UPDATE' && data.state) {
+            const curVer = stateRef.current?.version || 0;
+            const newVer = data.state.version || 0;
+            if (newVer >= curVer || data.state.updatedAt > (stateRef.current?.updatedAt || 0)) {
               setGameState(data.state);
-              broadcastState(data.state);
+              stateRef.current = data.state;
             }
+          } else if (data.type === 'ACTION_STATE_UPDATE' && data.state) {
+            // Nhận cập nhật từ client và phát lại cho toàn phòng
+            setGameState(data.state);
+            stateRef.current = data.state;
+            broadcastState(data.state);
           }
         });
 
@@ -237,63 +262,71 @@ export function usePlayRoom(roomId, playerName = '') {
           connectionsRef.current = connectionsRef.current.filter((c) => c !== conn);
         });
       });
-    });
 
-    hostPeer.on('error', (err) => {
-      // Nếu ID Host đã tồn tại (tức đã có Máy 1 làm Host) -> Ta là Guest!
-      if (err.type === 'unavailable-id') {
-        hostPeer.destroy();
-        isHostRef.current = false;
+      peerInstance.on('error', (err) => {
+        console.warn('PeerJS status notice:', err.type);
+      });
+    } catch {
+      // ignore
+    }
 
-        const guestPeer = new Peer({ debug: 1 });
-        peerRef.current = guestPeer;
-
-        guestPeer.on('open', (guestId) => {
-          if (isDestroyed) return;
-          setIsConnected(true);
-
-          // Kết nối tới Host của phòng này
-          const conn = guestPeer.connect(hostPeerId, { reliable: true });
-          hostConnRef.current = conn;
-
-          conn.on('open', () => {
-            // Xin tham gia phòng và đăng ký tên
-            conn.send({
-              type: 'REQUEST_JOIN',
-              senderId: clientId,
-              playerName: effectivePlayerName,
-            });
-          });
-
-          conn.on('data', (data) => {
-            if (!data) return;
-            if (data.type === 'ASSIGN_ROLE') {
-              setRole(data.role);
-              if (data.state) {
-                setGameState(data.state);
-                stateRef.current = data.state;
-              }
-            } else if (data.type === 'STATE_UPDATE' && data.state) {
-              setGameState(data.state);
-              stateRef.current = data.state;
-            }
-          });
-        });
+    // 4. Khi vào phòng, tự động ghi danh hoặc xin vào danh sách người tham gia
+    const current = stateRef.current;
+    if (!current.hostId || current.hostId === clientId) {
+      // Người đầu tiên tạo phòng -> Làm Host (Đội Đỏ)
+      const hostGame = {
+        ...current,
+        hostId: clientId,
+        seats: {
+          ...current.seats,
+          [PLAYERS.RED]: { id: clientId, name: effectivePlayerName },
+        },
+        participants: [
+          { id: clientId, name: effectivePlayerName, isHost: true, joinedAt: Date.now() },
+        ],
+        updatedAt: Date.now(),
+      };
+      stateRef.current = hostGame;
+      setGameState(hostGame);
+      try {
+        localStorage.setItem(`ottv2_room_${roomId}`, JSON.stringify(hostGame));
+      } catch {
+        // ignore
       }
-    });
+    } else {
+      // Khách vào phòng -> Thông báo JOIN_ROOM qua BroadcastChannel & playhtml
+      bc.postMessage({
+        type: 'JOIN_ROOM',
+        user: { id: clientId, name: effectivePlayerName },
+        senderId: clientId,
+      });
+
+      try {
+        playhtml.dispatchPlayEvent?.({
+          type: 'OTT_JOIN',
+          eventPayload: { user: { id: clientId, name: effectivePlayerName }, senderId: clientId },
+        });
+      } catch {
+        // ignore
+      }
+    }
 
     return () => {
       isDestroyed = true;
       bc.close();
       if (peerRef.current) {
-        peerRef.current.destroy();
+        try {
+          peerRef.current.destroy();
+        } catch {
+          // ignore
+        }
       }
     };
-  }, [roomId, cleanId, clientId, effectivePlayerName, hostPeerId, broadcastState]);
+  }, [roomId, cleanId, clientId, effectivePlayerName, broadcastState]);
 
-  // Đếm ngược 30s Setup trên Host
+  // Đếm ngược 30s Setup (Host điều phối tự động xếp quân khi hết giờ)
   useEffect(() => {
-    if (!isHostRef.current) return;
+    if (!isHost) return;
     if (!gameState || !gameState.setupDeadline) return;
     if (gameState.phase !== GAME_PHASES.SETUP_RED && gameState.phase !== GAME_PHASES.SETUP_BLUE) return;
 
@@ -315,12 +348,25 @@ export function usePlayRoom(roomId, playerName = '') {
           broadcastState(nextState);
         }
       }
-    }, 500);
+    }, 400);
 
     return () => clearInterval(interval);
-  }, [gameState, broadcastState]);
+  }, [gameState, isHost, broadcastState]);
 
-  // Hành động: Xếp quân
+  // HÀNH ĐỘNG 1: Chủ phòng duyệt đối thủ vào Đội Xanh để bắt đầu trận đấu
+  const handleApprovePlayer = useCallback((participantId) => {
+    const currentState = stateRef.current;
+    if (!currentState) return;
+    if (!isHost && currentState.hostId !== clientId) return;
+
+    const candidate = (currentState.participants || []).find((p) => p.id === participantId);
+    if (!candidate) return;
+
+    const nextState = approveOpponent(currentState, candidate);
+    broadcastState(nextState);
+  }, [clientId, isHost, broadcastState]);
+
+  // HÀNH ĐỘNG 2: Xếp quân trong giai đoạn Setup (hỗ trợ đặt mới từ khay, di chuyển quân đã xếp, đổi chỗ 2 quân)
   const handlePlacePieceInSetup = useCallback((pieceIdOrType, targetSquare) => {
     const currentState = stateRef.current;
     if (!currentState) return;
@@ -334,9 +380,11 @@ export function usePlayRoom(roomId, playerName = '') {
     let pieceToPlace = null;
 
     if (['rock', 'paper', 'scissors'].includes(pieceIdOrType)) {
+      // Tìm quân chưa đặt trong khay của loại này
       pieceToPlace = unplaced.find((p) => p.type === pieceIdOrType && !p.square);
-      if (!pieceToPlace) return;
+      if (!pieceToPlace) return; // Đã đặt hết quân loại này
     } else {
+      // Quân đã có trên bàn cờ hoặc ID cụ thể
       pieceToPlace = currentState.pieces[pieceIdOrType] || unplaced.find((p) => p.id === pieceIdOrType);
     }
 
@@ -351,11 +399,13 @@ export function usePlayRoom(roomId, playerName = '') {
 
     if (existingOccupant) {
       if (pieceToPlace.square) {
+        // Đổi chỗ 2 quân đang ở trên bàn cờ
         existingOccupant.square = pieceToPlace.square;
-        newPieces[existingOccupant.id] = existingOccupant;
+        newPieces[existingOccupant.id] = { ...existingOccupant };
       } else {
+        // Thu hồi quân đang có tại ô này về khay unplaced
         existingOccupant.square = null;
-        newUnplaced.push(existingOccupant);
+        newUnplaced.push({ ...existingOccupant });
         delete newPieces[existingOccupant.id];
       }
     }
@@ -372,11 +422,10 @@ export function usePlayRoom(roomId, playerName = '') {
         ...currentState.unplacedPieces,
         [player]: newUnplaced,
       },
-      updatedAt: Date.now(),
     });
   }, [role, broadcastState]);
 
-  // Hành động: Nhấc quân về khay trong lúc Setup
+  // HÀNH ĐỘNG 3: Nhấc một quân đã đặt trên bàn cờ về khay
   const handleRemovePieceFromBoardInSetup = useCallback((pieceId) => {
     const currentState = stateRef.current;
     if (!currentState) return;
@@ -401,11 +450,10 @@ export function usePlayRoom(roomId, playerName = '') {
         ...currentState.unplacedPieces,
         [player]: newUnplaced,
       },
-      updatedAt: Date.now(),
     });
   }, [role, broadcastState]);
 
-  // Hành động: Xếp nhanh
+  // HÀNH ĐỘNG 4: Xếp ngẫu nhiên nhanh toàn bộ số quân
   const handleQuickAutoPlace = useCallback(() => {
     const currentState = stateRef.current;
     if (!currentState) return;
@@ -434,11 +482,10 @@ export function usePlayRoom(roomId, playerName = '') {
         ...currentState.unplacedPieces,
         [player]: [],
       },
-      updatedAt: Date.now(),
     });
   }, [role, broadcastState]);
 
-  // Hành động: Xác nhận xếp quân
+  // HÀNH ĐỘNG 5: Xác nhận đã xếp quân xong
   const handleConfirmSetup = useCallback(() => {
     const currentState = stateRef.current;
     if (!currentState) return;
@@ -458,7 +505,7 @@ export function usePlayRoom(roomId, playerName = '') {
     }
   }, [role, broadcastState]);
 
-  // Hành động: Đi một nước
+  // HÀNH ĐỘNG 6: Đi một nước cờ trong trận đấu
   const handleMakeMove = useCallback((pieceId, targetSquare) => {
     const currentState = stateRef.current;
     if (!currentState || currentState.phase !== GAME_PHASES.PLAYING) return;
@@ -468,14 +515,16 @@ export function usePlayRoom(roomId, playerName = '') {
       const nextState = executeMove(currentState, role, pieceId, targetSquare);
       broadcastState(nextState);
     } catch (err) {
-      console.warn('Lỗi nước đi:', err.message);
+      console.warn('Nước đi không hợp lệ:', err.message);
     }
   }, [role, broadcastState]);
 
-  // Hành động: Chơi lại
+  // HÀNH ĐỘNG 7: Chơi lại ván mới
   const handleRestartGame = useCallback(() => {
     const freshState = createNewGame(roomId);
+    freshState.hostId = stateRef.current.hostId;
     freshState.seats = stateRef.current.seats;
+    freshState.participants = stateRef.current.participants;
     freshState.phase = GAME_PHASES.SETUP_RED;
     freshState.setupDeadline = Date.now() + 30000;
     broadcastState(freshState);
@@ -484,8 +533,10 @@ export function usePlayRoom(roomId, playerName = '') {
   return {
     gameState,
     role,
+    isHost,
     clientId,
     isConnected,
+    handleApprovePlayer,
     handlePlacePieceInSetup,
     handleRemovePieceFromBoardInSetup,
     handleQuickAutoPlace,

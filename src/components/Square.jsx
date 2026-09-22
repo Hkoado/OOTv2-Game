@@ -10,6 +10,7 @@ export default function Square({
   targetType, // 'move' | 'capture'
   isLastMoveFrom,
   isLastMoveTo,
+  isSetupHome,
   onClick,
   showCoordinates,
   fileLabel,
@@ -26,7 +27,7 @@ export default function Square({
   return (
     <div
       onClick={onClick}
-      className={`square ${zoneClass} ${isSelected ? 'square--selected' : ''} ${
+      className={`square ${zoneClass} ${isSetupHome ? 'square--setup-home' : ''} ${isSelected ? 'square--selected' : ''} ${
         isValidTarget ? `square--valid-target square--target-${targetType}` : ''
       } ${isLastMoveFrom ? 'square--last-from' : ''} ${
         isLastMoveTo ? 'square--last-to' : ''

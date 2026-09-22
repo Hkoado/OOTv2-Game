@@ -68,14 +68,16 @@ export function autoPlaceRemaining(existingPlacedPieces, player) {
 export function createNewGame(roomId = 'ROOM_1') {
   return {
     roomId,
+    hostId: null, // ID của chủ phòng tạo phòng
     phase: GAME_PHASES.WAITING,
     turn: PLAYERS.RED, // Đỏ đi trước
     seats: {
       [PLAYERS.RED]: null,  // { id, name }
       [PLAYERS.BLUE]: null, // { id, name }
     },
-    spectators: [], // Danh sách ID người xem
-    pieces: {},     // { [id]: piece }
+    participants: [], // Danh sách người trong phòng: [{ id, name, isHost, joinedAt }]
+    spectators: [],   // Danh sách ID người xem
+    pieces: {},       // { [id]: piece }
     unplacedPieces: {
       [PLAYERS.RED]: createUnplacedPieces(PLAYERS.RED),
       [PLAYERS.BLUE]: createUnplacedPieces(PLAYERS.BLUE),
@@ -85,6 +87,23 @@ export function createNewGame(roomId = 'ROOM_1') {
     lastMove: null,      // { from, to, pieceId, capturedPieceId }
     winner: null,        // 'red' | 'blue'
     winReason: null,     // Lý do thắng
+    updatedAt: Date.now(),
+  };
+}
+
+/**
+ * Chủ phòng duyệt đối thủ vào Đội Xanh và bắt đầu giai đoạn xếp quân Đỏ (30s)
+ */
+export function approveOpponent(state, opponent) {
+  if (!opponent || !opponent.id) return state;
+  return {
+    ...state,
+    seats: {
+      ...state.seats,
+      [PLAYERS.BLUE]: { id: opponent.id, name: opponent.name },
+    },
+    phase: GAME_PHASES.SETUP_RED,
+    setupDeadline: Date.now() + SETUP_TIME_SECONDS * 1000,
     updatedAt: Date.now(),
   };
 }

@@ -2,15 +2,15 @@ import React from 'react';
 import { Hammer, Hand, Scissors } from 'lucide-react';
 
 /**
- * Sử dụng icon có sẵn từ thư viện Lucide React
- * Thân icon được fill màu trắng (#ffffff), đường nét họa tiết viền đen (#0f172a)
+ * Icon quân cờ Oẳn Tù Tì v2
+ * Sử dụng nét vẽ gốc tự nhiên từ Lucide React (stroke: currentColor), loại bỏ viền đen thân trắng
  */
-export function PieceSvg({ type, className = "w-6 h-6" }) {
+export function PieceSvg({ type, className = "w-6 h-6", strokeWidth = 2.2 }) {
   const iconProps = {
     className,
-    fill: "#ffffff",
-    stroke: "#0f172a",
-    strokeWidth: 2,
+    stroke: "currentColor",
+    fill: "none",
+    strokeWidth,
     strokeLinecap: "round",
     strokeLinejoin: "round",
   };
@@ -29,3 +29,4 @@ export function PieceSvg({ type, className = "w-6 h-6" }) {
 
   return null;
 }
+

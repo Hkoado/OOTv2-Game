@@ -21,6 +21,7 @@ export default function Board({
   selectedSetupType,
 }) {
   const [selectedPieceId, setSelectedPieceId] = useState(null);
+  const [selectedSetupPieceId, setSelectedSetupPieceId] = useState(null);
 
   const {
     phase,
@@ -34,44 +35,61 @@ export default function Board({
   const isRedSetup = phase === GAME_PHASES.SETUP_RED && role === 'red';
   const isBlueSetup = phase === GAME_PHASES.SETUP_BLUE && role === 'blue';
   const isSetupMode = isRedSetup || isBlueSetup;
+  const allowedSetupZone = isRedSetup ? 'red-home' : isBlueSetup ? 'blue-home' : null;
 
-  // Tính các nước đi hợp lệ cho quân đang chọn
+  // Tính các nước đi hợp lệ cho quân đang chọn trong giai đoạn thi đấu
   const validMoves = isMyTurn && selectedPieceId ? getValidMoves(pieces, selectedPieceId) : [];
   const validMoveMap = new Map();
   validMoves.forEach((m) => validMoveMap.set(m.square, m));
 
   // Xử lý khi click vào 1 ô trên bàn cờ
   function handleSquareClick(square, zone) {
-    // 1. Trong giai đoạn xếp quân
+    // 1. GIAI ĐOẠN XẾP QUÂN
     if (isSetupMode) {
-      const allowedZone = isRedSetup ? 'red-home' : 'blue-home';
-      if (zone === allowedZone) {
-        const existingOccupant = Object.values(pieces).find(
-          (p) => p.alive && p.square === square && p.player === role
-        );
+      if (zone !== allowedSetupZone) return;
 
-        if (existingOccupant && !selectedSetupType) {
-          // Nhấc quân ra khỏi bàn cờ nếu click vào quân của mình mà không chọn loại nào
-          onRemovePieceInSetup?.(existingOccupant.id);
-        } else if (selectedSetupType) {
-          // Đặt loại quân đang chọn vào ô này
-          onPlacePieceInSetup?.(selectedSetupType, square);
+      const existingOccupant = Object.values(pieces).find(
+        (p) => p.alive && p.square === square && p.player === role
+      );
+
+      // Nếu đang chọn một quân trên bàn cờ để di chuyển / đổi vị trí
+      if (selectedSetupPieceId) {
+        if (existingOccupant && existingOccupant.id === selectedSetupPieceId) {
+          // Bấm lại chính quân đó -> Bỏ chọn
+          setSelectedSetupPieceId(null);
+          return;
         }
+
+        // Di chuyển hoặc đổi chỗ quân đã chọn tới ô này
+        onPlacePieceInSetup?.(selectedSetupPieceId, square);
+        setSelectedSetupPieceId(null);
+        return;
+      }
+
+      // Nếu click vào một quân đã đặt trên sân của mình -> Chọn quân đó để đổi chỗ / nhấc
+      if (existingOccupant) {
+        setSelectedSetupPieceId(existingOccupant.id);
+        return;
+      }
+
+      // Nếu click vào một ô trống trong sân nhà -> Đặt loại quân đang chọn từ khay
+      if (selectedSetupType) {
+        onPlacePieceInSetup?.(selectedSetupType, square);
       }
       return;
     }
 
-    // 2. Trong giai đoạn thi đấu
+    // 2. GIAI ĐOẠN THI ĐẤU
     if (!isMyTurn) return;
 
-    // Nếu click vào một ô đích hợp lệ -> đi quân
+    // Nếu click vào một ô đích hợp lệ -> Đi quân
     if (validMoveMap.has(square)) {
       onMakeMove?.(selectedPieceId, square);
       setSelectedPieceId(null);
       return;
     }
 
-    // Nếu click vào quân của mình -> chọn quân đó
+    // Nếu click vào quân của mình -> Chọn quân đó
     const clickedPiece = Object.values(pieces).find(
       (p) => p.alive && p.square === square && p.player === role
     );
@@ -82,7 +100,7 @@ export default function Board({
     }
   }
 
-  // Tạo ma trận các ô cờ 9x9 (Hàng từ 9 xuống 1, cột từ a đến i theo góc nhìn tiêu chuẩn)
+  // Tạo ma trận các ô cờ 9x9 (Hàng từ 9 xuống 1, cột từ a đến i)
   const rows = [];
   for (let r = 9; r >= 1; r--) {
     const cols = [];
@@ -91,14 +109,21 @@ export default function Board({
       const zone = getSquareZone(square);
       const piece = Object.values(pieces).find((p) => p.alive && p.square === square);
 
-      const isSelected = selectedPieceId && piece?.id === selectedPieceId;
-      const isSelectable = isMyTurn && piece?.player === role;
+      const isSetupSelected = selectedSetupPieceId && piece?.id === selectedSetupPieceId;
+      const isPlaySelected = selectedPieceId && piece?.id === selectedPieceId;
+      const isSelected = isSetupSelected || isPlaySelected;
+
+      const isPlaySelectable = isMyTurn && piece?.player === role;
+      const isSetupSelectable = isSetupMode && piece?.player === role;
+      const isSelectable = isPlaySelectable || isSetupSelectable;
+
       const validTarget = validMoveMap.get(square);
+      const isSetupHome = isSetupMode && zone === allowedSetupZone;
 
       const isLastMoveFrom = lastMove?.from === square;
       const isLastMoveTo = lastMove?.to === square;
 
-      // Nhãn góc bàn cờ (tọa độ cờ vua)
+      // Nhãn tọa độ mép bàn cờ
       const fileLabel = r === 1 ? FILES[c - 1] : null;
       const rankLabel = c === 1 ? r : null;
 
@@ -115,6 +140,7 @@ export default function Board({
           isLastMoveTo={isLastMoveTo}
           fileLabel={fileLabel}
           rankLabel={rankLabel}
+          isSetupHome={isSetupHome}
           onClick={() => handleSquareClick(square, zone)}
         >
           {piece && (
@@ -139,6 +165,26 @@ export default function Board({
       <div className="board-grid">
         {rows.flat()}
       </div>
+
+      {/* Chú thích hướng dẫn thao tác trong lúc xếp quân */}
+      {isSetupMode && selectedSetupPieceId && (
+        <div className="setup-piece-action-bar">
+          <span className="text-xs text-neutral-700">
+            Đang chọn quân: bấm vào ô sân nhà khác để <strong>chuyển/đổi chỗ</strong>
+          </span>
+          <button
+            type="button"
+            className="btn btn--small btn--secondary text-xs"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemovePieceInSetup?.(selectedSetupPieceId);
+              setSelectedSetupPieceId(null);
+            }}
+          >
+            Nhấc về khay
+          </button>
+        </div>
+      )}
 
       {/* Chú thích các khu vực trên bàn cờ */}
       <div className="board-legend">
