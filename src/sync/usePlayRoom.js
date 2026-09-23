@@ -34,6 +34,18 @@ function sanitizeRoomId(id) {
   return (id || 'ROOM').replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
 }
 
+// So sánh state đến với state hiện tại: ưu tiên version (đơn điệu, đáng tin cậy),
+// chỉ dùng updatedAt (đồng hồ máy) làm tiêu chí phụ khi version bằng nhau, để tránh
+// lệch giờ giữa 2 máy làm mất nước đi/trạng thái mới hơn.
+function shouldAcceptIncomingState(incoming, current) {
+  if (!incoming) return false;
+  if (!current) return true;
+  const incomingVersion = incoming.version || 0;
+  const currentVersion = current.version || 0;
+  if (incomingVersion !== currentVersion) return incomingVersion > currentVersion;
+  return (incoming.updatedAt || 0) > (current.updatedAt || 0);
+}
+
 export function usePlayRoom(roomId, playerName = '', isCreatorProp = false) {
   const isCreator = isCreatorProp || (sessionStorage.getItem(`ottv2_creator_${roomId}`) === '1');
   const clientId = useRef(getOrCreateClientId(roomId)).current;
@@ -99,6 +111,58 @@ export function usePlayRoom(roomId, playerName = '', isCreatorProp = false) {
   const connectionsRef = useRef([]); // Host lưu danh sách kết nối client
   const hostConnRef = useRef(null);  // Guest kết nối tới Host
   const broadcastChannelRef = useRef(null);
+  const playhtmlReadyRef = useRef(false); // true sau khi đã registerPlayEventListener xong
+
+  // Gửi 1 trạng thái (không đổi version) ra toàn bộ kênh đang có - dùng lại được cho cả
+  // broadcastState (khi có thay đổi thật) và cho nhịp "heartbeat" đồng bộ lại định kỳ, để
+  // tự phục hồi khi 1 kênh nào đó (WebRTC vừa mở, playhtml chưa kịp đăng ký...) lỡ mất 1 lượt.
+  const transmitState = useCallback((stateToSend) => {
+    // 1. BroadcastChannel (đồng bộ tức thì 0ms giữa các tab cùng máy)
+    if (broadcastChannelRef.current) {
+      try {
+        broadcastChannelRef.current.postMessage({
+          type: 'STATE_UPDATE',
+          state: stateToSend,
+          senderId: clientId,
+        });
+      } catch {
+        // ignore
+      }
+    }
+
+    // 2. WebRTC PeerJS
+    if (isHost) {
+      connectionsRef.current.forEach((conn) => {
+        if (conn && conn.open) {
+          try {
+            conn.send({ type: 'STATE_UPDATE', state: stateToSend, senderId: clientId });
+          } catch {
+            // ignore
+          }
+        }
+      });
+    } else if (hostConnRef.current && hostConnRef.current.open) {
+      try {
+        hostConnRef.current.send({ type: 'ACTION_STATE_UPDATE', state: stateToSend, senderId: clientId });
+      } catch {
+        // ignore
+      }
+    }
+
+    // 3. playhtml event dispatch (PartyKit cloud sync)
+    // Chỉ dispatch khi listener 'OTT_SYNC' đã registerPlayEventListener xong (tránh lỗi
+    // "event not registered" do gọi dispatch sớm hơn thời điểm playhtml.init() resolve).
+    if (playhtmlReadyRef.current) {
+      try {
+        playhtml.dispatchPlayEvent?.({
+          type: 'OTT_SYNC',
+          eventPayload: { state: stateToSend, senderId: clientId, timestamp: Date.now() },
+        });
+      } catch {
+        // ignore
+      }
+    }
+  }, [clientId, isHost]);
 
   // Phát tán trạng thái mới tới toàn bộ kết nối
   const broadcastState = useCallback((newState) => {
@@ -117,48 +181,21 @@ export function usePlayRoom(roomId, playerName = '', isCreatorProp = false) {
       // ignore
     }
 
-    // 1. BroadcastChannel (đồng bộ tức thì 0ms giữa các tab cùng máy)
-    if (broadcastChannelRef.current) {
-      try {
-        broadcastChannelRef.current.postMessage({
-          type: 'STATE_UPDATE',
-          state: enrichedState,
-          senderId: clientId,
-        });
-      } catch {
-        // ignore
-      }
-    }
+    transmitState(enrichedState);
+  }, [roomId, transmitState]);
 
-    // 2. WebRTC PeerJS
-    if (isHost) {
-      connectionsRef.current.forEach((conn) => {
-        if (conn && conn.open) {
-          try {
-            conn.send({ type: 'STATE_UPDATE', state: enrichedState, senderId: clientId });
-          } catch {
-            // ignore
-          }
-        }
-      });
-    } else if (hostConnRef.current && hostConnRef.current.open) {
-      try {
-        hostConnRef.current.send({ type: 'ACTION_STATE_UPDATE', state: enrichedState, senderId: clientId });
-      } catch {
-        // ignore
+  // Nhịp đồng bộ định kỳ: mỗi bên tự gửi lại state mới nhất mình đang có, để nếu 1 nước đi/
+  // 1 lần xếp quân bị rớt qua mọi kênh (mất kết nối tạm thời, race lúc mới join...) thì phía
+  // còn lại vẫn tự bắt kịp trong vài giây sau, không bị "kẹt" chờ hết giờ mới thấy cập nhật.
+  useEffect(() => {
+    if (!roomId) return;
+    const heartbeat = setInterval(() => {
+      if (stateRef.current) {
+        transmitState(stateRef.current);
       }
-    }
-
-    // 3. playhtml event dispatch (PartyKit cloud sync)
-    try {
-      playhtml.dispatchPlayEvent?.({
-        type: 'OTT_SYNC',
-        eventPayload: { state: enrichedState, senderId: clientId, timestamp: Date.now() },
-      });
-    } catch {
-      // ignore
-    }
-  }, [clientId, roomId, isHost]);
+    }, 2500);
+    return () => clearInterval(heartbeat);
+  }, [roomId, transmitState]);
 
   // Xử lý khi có người mới xin vào phòng (dành cho Host)
   const handleIncomingJoin = useCallback((user) => {
@@ -189,6 +226,7 @@ export function usePlayRoom(roomId, playerName = '', isCreatorProp = false) {
     if (!roomId) return;
 
     let isDestroyed = false;
+    playhtmlReadyRef.current = false;
 
     // 1. Khởi tạo BroadcastChannel cho các tab cùng máy
     const bc = new BroadcastChannel(`ottv2_bc_${cleanId}`);
@@ -199,9 +237,7 @@ export function usePlayRoom(roomId, playerName = '', isCreatorProp = false) {
       if (senderId === clientId) return;
 
       if (type === 'STATE_UPDATE' && state) {
-        const curVer = stateRef.current?.version || 0;
-        const newVer = state.version || 0;
-        if (newVer >= curVer || state.updatedAt > (stateRef.current?.updatedAt || 0)) {
+        if (shouldAcceptIncomingState(state, stateRef.current)) {
           setGameState(state);
           stateRef.current = state;
         }
@@ -210,7 +246,7 @@ export function usePlayRoom(roomId, playerName = '', isCreatorProp = false) {
           handleIncomingJoin(user);
         }
       } else if (type === 'ACTION_STATE_UPDATE' && state) {
-        if (isHost || isCreator) {
+        if ((isHost || isCreator) && shouldAcceptIncomingState(state, stateRef.current)) {
           setGameState(state);
           stateRef.current = state;
           broadcastState(state);
@@ -229,9 +265,7 @@ export function usePlayRoom(roomId, playerName = '', isCreatorProp = false) {
           playhtml.registerPlayEventListener('OTT_SYNC', {
             onEvent: (payload) => {
               if (payload && payload.state && payload.senderId !== clientId) {
-                const curVer = stateRef.current?.version || 0;
-                const newVer = payload.state.version || 0;
-                if (newVer >= curVer || payload.state.updatedAt > (stateRef.current?.updatedAt || 0)) {
+                if (shouldAcceptIncomingState(payload.state, stateRef.current)) {
                   setGameState(payload.state);
                   stateRef.current = payload.state;
                 }
@@ -248,6 +282,18 @@ export function usePlayRoom(roomId, playerName = '', isCreatorProp = false) {
               }
             },
           });
+
+          // Chỉ đánh dấu "ready" (và chỉ gửi OTT_JOIN) SAU KHI đã đăng ký xong 2 listener
+          // trên, tránh dispatch trước khi registerPlayEventListener chạy (playhtml sẽ từ
+          // chối event với lỗi "event not registered" và người chơi mới sẽ không được
+          // Host biết tới qua kênh cloud này).
+          playhtmlReadyRef.current = true;
+          if (!isCreator && !isHost) {
+            playhtml.dispatchPlayEvent?.({
+              type: 'OTT_JOIN',
+              eventPayload: { user: { id: clientId, name: effectivePlayerName }, senderId: clientId },
+            });
+          }
         } catch {
           // ignore
         }
@@ -290,9 +336,11 @@ export function usePlayRoom(roomId, playerName = '', isCreatorProp = false) {
             if (data.type === 'JOIN_REQUEST' && data.user) {
               handleIncomingJoin(data.user);
             } else if (data.type === 'ACTION_STATE_UPDATE' && data.state) {
-              setGameState(data.state);
-              stateRef.current = data.state;
-              broadcastState(data.state);
+              if (shouldAcceptIncomingState(data.state, stateRef.current)) {
+                setGameState(data.state);
+                stateRef.current = data.state;
+                broadcastState(data.state);
+              }
             }
           });
 
@@ -314,35 +362,72 @@ export function usePlayRoom(roomId, playerName = '', isCreatorProp = false) {
         const guestPeer = new Peer(guestPeerId, { debug: 1 });
         peerRef.current = guestPeer;
 
-        guestPeer.on('open', () => {
-          if (isDestroyed) return;
-          setIsConnected(true);
+        let reconnectAttempts = 0;
+        let reconnectTimer = null;
 
+        // Kết nối tới Host, và TỰ THỬ LẠI nếu rớt/không mở được (mạng chập chờn, ICE lần đầu
+        // thất bại...). Không có bước này thì 1 lần kết nối lỗi là Khách kẹt luôn tới hết ván,
+        // chỉ còn trông chờ playhtml/BroadcastChannel - đúng kiểu triệu chứng "vào phòng không
+        // thấy xếp quân, đợi hết giờ mới tự xếp" nếu 2 kênh còn lại cũng chậm/không sẵn sàng.
+        const connectToHost = () => {
+          if (isDestroyed) return;
           try {
             const conn = guestPeer.connect(hostPeerId, { reliable: true });
             hostConnRef.current = conn;
 
             conn.on('open', () => {
+              reconnectAttempts = 0;
               conn.send({
                 type: 'JOIN_REQUEST',
                 user: { id: clientId, name: effectivePlayerName },
                 senderId: clientId,
               });
+              // Gửi lại action gần nhất (nếu có) để không bị mất nước đi/lượt xếp quân đã
+              // thao tác trong lúc đang mất kết nối.
+              if (stateRef.current) {
+                conn.send({ type: 'ACTION_STATE_UPDATE', state: stateRef.current, senderId: clientId });
+              }
             });
 
             conn.on('data', (data) => {
               if (!data) return;
               if (data.type === 'STATE_UPDATE' && data.state) {
-                const curVer = stateRef.current?.version || 0;
-                const newVer = data.state.version || 0;
-                if (newVer >= curVer || data.state.updatedAt > (stateRef.current?.updatedAt || 0)) {
+                if (shouldAcceptIncomingState(data.state, stateRef.current)) {
                   setGameState(data.state);
                   stateRef.current = data.state;
                 }
               }
             });
+
+            const scheduleReconnect = () => {
+              if (isDestroyed || reconnectTimer) return;
+              reconnectAttempts += 1;
+              const delay = Math.min(1000 * reconnectAttempts, 5000);
+              reconnectTimer = setTimeout(() => {
+                reconnectTimer = null;
+                connectToHost();
+              }, delay);
+            };
+
+            conn.on('close', scheduleReconnect);
+            conn.on('error', scheduleReconnect);
           } catch (err) {
             console.warn('Guest connect to Host error:', err);
+          }
+        };
+
+        guestPeer.on('open', () => {
+          if (isDestroyed) return;
+          setIsConnected(true);
+          connectToHost();
+        });
+
+        guestPeer.on('disconnected', () => {
+          if (isDestroyed) return;
+          try {
+            guestPeer.reconnect();
+          } catch {
+            // ignore
           }
         });
 
@@ -354,22 +439,14 @@ export function usePlayRoom(roomId, playerName = '', isCreatorProp = false) {
       }
     }
 
-    // 4. Nếu là Khách, phát thông báo JOIN_REQUEST qua BroadcastChannel & playhtml
+    // 4. Nếu là Khách, phát thông báo JOIN_REQUEST qua BroadcastChannel ngay
+    // (JOIN qua playhtml được gửi riêng, sau khi playhtml.init() đã resolve - xem trên)
     if (!isCreator && !isHost) {
       bc.postMessage({
         type: 'JOIN_REQUEST',
         user: { id: clientId, name: effectivePlayerName },
         senderId: clientId,
       });
-
-      try {
-        playhtml.dispatchPlayEvent?.({
-          type: 'OTT_JOIN',
-          eventPayload: { user: { id: clientId, name: effectivePlayerName }, senderId: clientId },
-        });
-      } catch {
-        // ignore
-      }
     }
 
     return () => {
