@@ -1,10 +1,6 @@
 # Oẳn Tù Tì v2 (OTTv2) - Online Multiplayer Strategy Match
 
 Trò chơi cờ chiến thuật **Oẳn Tù Tì v2 (OTTv2)** trên bàn cờ **9x9** dành cho 2 người chơi thi đấu trực tuyến thời gian thực qua phòng, kèm chế độ **Người xem (Spectator)**. Dự án được tối ưu để push lên GitHub và deploy trực tiếp lên Vercel.
-
-# Link web game bài 1: https://hkoado.github.io/OOTv2-Game/
-# Link web game bài 2: https://ootv2-p5c7iq8yw-hkoados-projects.vercel.app/
-
 ---
 
 ## 1. Giới thiệu & Điểm nổi bật
