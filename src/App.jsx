@@ -7,10 +7,11 @@ import PlayerCard from './components/PlayerCard.jsx';
 import MoveHistory from './components/MoveHistory.jsx';
 import GameOverModal from './components/GameOverModal.jsx';
 import RulesModal from './components/RulesModal.jsx';
+import TournamentApp from './tournament/TournamentApp.jsx';
 import { usePlayRoom } from './sync/usePlayRoom.js';
 import { GAME_PHASES } from './game/gameState.js';
 import { PLAYERS, PIECE_TYPES } from './game/constants.js';
-import { Users, UserCheck, Copy, Swords, Sparkles, Clock, Check } from 'lucide-react';
+import { Bot, Users, UserCheck, Copy, Swords, Sparkles, Clock, Check } from 'lucide-react';
 
 // Component con cho phòng chơi, sử dụng key={roomId} để reset sạch sẽ mỗi khi đổi phòng
 function RoomView({ roomId, playerName, isCreator, onLeaveRoom, onRoleChange }) {
@@ -297,16 +298,24 @@ export default function App() {
 
   const [isRulesOpen, setIsRulesOpen] = useState(false);
 
-  // Đồng bộ URL khi vào/rời phòng
+  // Chế độ xem ngoài phòng: 'play' (Lobby chơi người thật) hoặc 'tournament' (MVP giải bot).
+  const [activeView, setActiveView] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('view') === 'tournament' ? 'tournament' : 'play';
+  });
+
+  // Đồng bộ URL khi vào/rời phòng và khi đổi chế độ xem
   useEffect(() => {
     const url = new URL(window.location.href);
     if (currentRoomId) {
       url.searchParams.set('room', currentRoomId);
     } else {
       url.searchParams.delete('room');
+      if (activeView === 'tournament') url.searchParams.set('view', 'tournament');
+      else url.searchParams.delete('view');
     }
     window.history.replaceState({}, '', url.toString());
-  }, [currentRoomId]);
+  }, [currentRoomId, activeView]);
 
   function handleJoinRoom(roomId, name, creator = false) {
     if (name) setPlayerName(name);
@@ -337,12 +346,26 @@ export default function App() {
       />
 
       <main className="main-content">
-        {!currentRoomId ? (
-          <Lobby
-            onJoinRoom={handleJoinRoom}
-            onOpenRules={() => setIsRulesOpen(true)}
-          />
-        ) : (
+        {!currentRoomId && (
+          <nav className="app-nav">
+            <button
+              type="button"
+              className={`app-tab ${activeView === 'play' ? 'app-tab--active' : ''}`}
+              onClick={() => setActiveView('play')}
+            >
+              <Swords className="w-4 h-4" /> Chơi với người
+            </button>
+            <button
+              type="button"
+              className={`app-tab ${activeView === 'tournament' ? 'app-tab--active' : ''}`}
+              onClick={() => setActiveView('tournament')}
+            >
+              <Bot className="w-4 h-4" /> Giải đấu bot
+            </button>
+          </nav>
+        )}
+
+        {currentRoomId ? (
           /* Sử dụng key={currentRoomId} để buộc React unmount và tái tạo RoomView mới toanh */
           <RoomView
             key={currentRoomId}
@@ -352,6 +375,10 @@ export default function App() {
             onLeaveRoom={handleLeaveRoom}
             onRoleChange={setActiveRole}
           />
+        ) : activeView === 'tournament' ? (
+          <TournamentApp />
+        ) : (
+          <Lobby onJoinRoom={handleJoinRoom} onOpenRules={() => setIsRulesOpen(true)} />
         )}
       </main>
 

@@ -1,0 +1,64 @@
+# AGENTS.md — Chỉ dẫn bắt buộc cho AI coding agent (OOTv2 Tournament MVP)
+
+> Mục đích: phát triển **tiếp trên repository đang mở trong VS Code**, không tạo project mới.
+> Đây là quy ước công việc dành cho DeepSeek / các code agent. Đọc toàn bộ tài liệu trước khi chỉnh code.
+
+## 1. Đọc đúng thứ tự
+
+1. `docs/01_MVP_SCOPE_ARCHITECTURE.md`: mục tiêu, hiện trạng repo, phạm vi và kiến trúc.
+2. `docs/02_BOT_WORKER_PROTOCOL.md`: giao thức Python bot, judge, giới hạn thời gian và lưu ý cô lập.
+3. `docs/03_API_DATABASE_UI.md`: dữ liệu, API, giao diện.
+4. `docs/04_IMPLEMENTATION_CHECKLIST.md`: từng giai đoạn, kiểm thử, điều kiện hoàn thành.
+5. `docs/05_AGENT_PROMPTS.md`: các prompt dùng khi triển khai từng giai đoạn.
+6. `examples/sample_bot.py`: ví dụ bot hợp lệ theo giao thức.
+
+## 2. Quy tắc không được vi phạm
+
+- Không thay thế ứng dụng Vite/React hiện tại; KHÔNG viết lại UI/game engine từ đầu.
+- Không dùng Docker, Docker Compose, Kubernetes, Redis, RabbitMQ, microservices, ORM lớn hoặc CI/CD phức tạp cho MVP.
+- Giữ nguyên chế độ 2 người chơi / phòng / spectator đang hoạt động qua `src/sync/usePlayRoom.js`.
+- Tái sử dụng logic có sẵn của `src/game/constants.js`, `src/game/rules.js`, `src/game/gameState.js` cho tournament server. **Server là nguồn xác thực cuối cùng**; bot không được tự tuyên bố thắng hoặc tự sửa state.
+- Phải giữ đúng luật OOTv2: bàn 9x9; 9 quân mỗi bên (3 rock, 3 paper, 3 scissors); Đỏ xếp trước, Xanh xếp sau và được biết vị trí xếp của Đỏ; Đỏ đi trước; 8 hướng; căn cứ thắng là chiếm nhà chính hoặc diệt sạch một loại quân đối thủ.
+- Chỉ nhận **một file Python `.py`**, dùng Python 3.12+ và thư viện chuẩn; không nhận ZIP, Python package, yêu cầu `pip install`, source URL hoặc file thực thi.
+- Worker chạy bot bằng tiến trình con riêng (không dùng `eval`, `exec`, `vm` của Node để thực thi file bot, không import code bot vào API/worker).
+- **KHÔNG gọi subprocess là sandbox an toàn.** Chế độ MVP `local-dev` chạy code của thành viên nhóm được tin tưởng trên máy thử nghiệm/VM riêng, API chỉ bind loopback; không cho phép người lạ upload qua Internet. Việc triển khai công khai là OUT OF SCOPE cho đến khi có cô lập cấp hệ điều hành đã kiểm thử.
+- Không dùng `shell: true`; không đưa filename người dùng vào đường dẫn thực thi; có timeout, giới hạn stdout/stderr, giới hạn kích thước file, cleanup process; xử lý exception không làm chết worker.
+- Không dùng `Math.random()` hoặc `Date.now()` để quyết định kết quả bốc thăm/fallback mà không lưu lại seed. Replay phải có `seed`, trạng thái ban đầu và danh sách nước đi.
+- Ưu tiên giải pháp đơn giản, dễ test; không tự ý mở rộng scope, không đổi framework nếu không bắt buộc.
+
+## 3. Quy ước làm việc với repo hiện tại
+
+1. **Kiểm tra nhánh/git status trước**; không ghi đè thay đổi chưa commit của người dùng.
+2. Mở file thật để đối chiếu API/export, không giả định README luôn phản ánh 100% code.
+3. Chạy `npm install`, `npm run build` để xác lập baseline; nếu baseline lỗi, báo rõ trước khi sửa.
+4. Mỗi lần **chỉ triển khai 1 milestone**, sửa ít file nhất có thể, báo file đã đổi và lệnh test.
+5. Không xóa các components gốc. Thêm UI Tournament bằng tab/route nhẹ phù hợp cấu trúc App đang có.
+6. Nếu cần sửa hàm trong gameState.js, đảm bảo các chế độ chơi cũ vẫn chạy; thêm kiểm thử hồi quy.
+7. Viết kiểm thử Node built-in test runner (`node --test`) để hạn chế dependency.
+8. Không thêm tính năng trước khi milestone hiện tại chạy được end-to-end.
+
+## 4. Công nghệ được chốt cho MVP
+
+- Frontend: giữ React 19 + Vite + CSS hiện tại.
+- Backend: **Node.js 22+**, JavaScript ESM, Express.
+- DB: SQLite, đề xuất `better-sqlite3` (kiểm tra tương thích Node/máy thật trước khi cài).
+- Upload: `multer` với giới hạn kích thước; lưu file ngoài `public/`, `src/`, `dist/`.
+- Worker: một tiến trình Node.js riêng, tuần tự xử lý 1 trận, polling SQLite; Python bot = process mới cho từng request.
+- Realtime MVP: frontend `fetch` polling 2–3 giây; không tạo WebSocket mới.
+- Chạy local: frontend Vite, backend API và worker là ba tiến trình dev. Không yêu cầu chạy trên Vercel cho API/worker.
+
+## 5. Cách trả lời sau mỗi milestone
+
+Báo cáo bằng tiếng Việt, ngắn gọn nhưng đủ thông tin:
+- Đã thực hiện gì? Các file nào thay đổi?
+- Lệnh đã chạy và kết quả? Có test nào chưa chạy?
+- Có vi phạm hoặc thay đổi quyết định thiết kế không?
+- Milestone kế tiếp là gì? **Dừng tại đó**, chờ lệnh tiếp theo, không tự làm tràn scope.
+
+## 6. Tiêu chuẩn Done
+
+- Có demo thao tác được bằng trình duyệt + bot mẫu.
+- Có test rule / protocol / worker / standings / knockout ở mức cần thiết.
+- Chế độ game cũ vẫn hoạt động.
+- Không để người chưa được tin cậy upload code vào server công khai.
+- Có hướng dẫn chạy cụ thể tại README (bổ sung, không xóa nội dung cũ).

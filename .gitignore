@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Dữ liệu private của MVP tournament: DB SQLite + bot upload
+data/
+.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

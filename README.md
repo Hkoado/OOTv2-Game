@@ -131,3 +131,87 @@ Dự án đã được tích hợp sẵn file `vercel.json` chuẩn cấu hình 
 npx vercel
 ```
 Làm theo hướng dẫn trên terminal để hoàn tất deploy.
+
+---
+
+## 7. Giải đấu bot (MVP — M0→M5)
+
+Song song với chế độ chơi tay 2 người ở trên, repo có thêm **chế độ Giải đấu bot**: người chơi nộp **một file Python `.py`**, judge (Node) chạy bot trong tiến trình con riêng, mỗi trận đấu do server xử lý và có **replay read-only**.
+
+> ⚠️ **Chỉ chạy local, với code của người mình tin tưởng.** Tiến trình con **không phải sandbox an toàn** cho người lạ. API chỉ bind `127.0.0.1`; không public API/worker này lên Internet. Triển khai công khai là **OUT OF SCOPE** cho tới khi có cô lập cấp hệ điều hành đã kiểm thử.
+
+### 7.1 Chuẩn bị
+
+- **Node.js 22+** (đã dùng cho Vite/React).
+- **Python 3.12+** có trên `PATH` (`python --version`). Bot chỉ được dùng **thư viện chuẩn**; không nhận ZIP/package/`pip install`.
+
+### 7.2 Chạy 3 tiến trình dev (3 terminal)
+
+```bash
+# Terminal 1 — API (Express + SQLite), mặc định http://127.0.0.1:3001
+npm run dev:api
+
+# Terminal 2 — Judge worker: chạy tuần tự từng game, poll SQLite
+npm run dev:worker
+
+# Terminal 3 — UI (Vite)
+npm run dev
+```
+
+Vite dev proxy `/api` → `127.0.0.1:3001` (xem `vite.config.js`), nên UI không cần cấu hình CORS.
+
+Mở UI, bấm tab **“Giải đấu bot”** (hoặc thêm `?view=tournament` vào URL).
+
+### 7.3 Thao tác demo end-to-end
+
+1. Tab **Đội & Bot** → tạo **8 đội**, mỗi đội upload **một file `.py`** (dùng `examples/sample_bot.py` để thử). Cột trạng thái phải hiện “Đủ điều kiện thi đấu”.
+2. Nhập **Khóa admin local** (`x-admin-key`) và **API base** (để trống nếu dùng Vite proxy) trong khối “Cấu hình local”.
+3. Tab **Giải đấu** → chọn đúng **8 đội**, đặt tên giải → **Tạo giải (draft)** → **Start**.
+   - Chia bảng theo seed: **A = 1,4,5,8 · B = 2,3,6,7**; vòng bảng 24 game (mỗi cặp 2 lượt đổi màu) + bán kết 4 game (2 cặp × 2 lượt) + chung kết 2 game = **30 game**.
+4. Worker ở Terminal 2 tự nhặt game `pending` và chạy lần lượt. UI tự làm mới mỗi **3 giây**.
+5. Trang chi tiết giải hiển thị **bracket bán kết → chung kết**, **bảng xếp hạng A/B**, **danh sách 30 game**; game đã xong có nút **Replay** (board 9x9 read-only, tua từng nước / tự chạy).
+
+### 7.4 Lệnh hữu ích
+
+```bash
+npm run worker:once    # chạy đúng 1 game rồi thoát (tiện debug)
+npm run worker:drain   # chạy tới khi hết game pending
+npm run test:server    # node --test tests/*.test.js (rule, protocol, worker, standings, knockout)
+npm run build          # kiểm tra UI build được (Vite)
+```
+
+### 7.5 Biến môi trường (tuỳ chọn)
+
+Server tự nạp file `.env` ở thư mục gốc nếu có (`process.loadEnvFile`, không cần dependency). Toàn bộ biến đều có default an toàn:
+
+| Biến (`server/config.js`) | Mặc định | Ý nghĩa |
+| --- | --- | --- |
+| `OOTV2_API_HOST` | `127.0.0.1` | Host API — **chỉ loopback** cho tới khi có sandbox cấp OS. |
+| `OOTV2_API_PORT` | `3001` | Cổng API. |
+| `OOTV2_ADMIN_KEY` | `local-dev-admin-key` | Giá trị hợp lệ của header `x-admin-key` cho route tạo/start giải. |
+| `OOTV2_DATA_DIR` | `<repo>/data` | Thư mục dữ liệu private (SQLite + bot upload), nằm ngoài `public/`, `src/`, `dist/`. |
+| `OOTV2_DB_PATH` | `<data>/ootv2.sqlite` | Đường dẫn file SQLite. |
+| `OOTV2_PYTHON_BIN` | (trống) | Lệnh Python; để trống thì tự dò `python` / `py -3` / `python3`. |
+
+Giới hạn cứng (trong `config.limits`, đổi bằng code): file bot ≤ **64 KiB**, input/output mỗi luồng ≤ **64/16 KiB**, timeout setup **3 s** và move **2 s**, tối đa **200 plies**, worker poll mỗi **1 s**.
+
+### 7.6 Bản đồ mã nguồn phần giải đấu
+
+```text
+server/
+├── index.js            # Khởi động API (bind 127.0.0.1)
+├── app.js              # Express app, mount routes, middleware lỗi
+├── db.js               # SQLite (better-sqlite3) + schema/migration
+├── config.js           # Đọc env + giới hạn (không dùng dependency)
+├── routes/             # participants, tournaments, matches, health, sample-bot
+├── services/           # nghiệp vụ: participants/tournaments/matches/submissions
+├── middleware/         # upload (multer), admin key, xử lý lỗi
+├── judge/              # gameAdapter (dùng lại engine src/game), matchRunner, pythonRunner
+└── worker.js           # worker poll match pending → chạy bot → ghi kết quả/replay
+src/tournament/         # UI giải đấu (api.js, labels.js, replay.js, *View.jsx, ReplayBoard.jsx, tournament.css)
+tests/                  # node --test: gameAdapter, pythonRunner, tournamentFlow, workerE2E, api
+examples/sample_bot.py  # bot mẫu đúng giao thức
+docs/                   # 01..05: scope, protocol, API/DB/UI, checklist, prompt triển khai
+data/                   # (tạo khi chạy) SQLite + bot đã upload — không commit
+```
+
