@@ -1,5 +1,18 @@
 # AGENTS.md — Chỉ dẫn bắt buộc cho AI coding agent (OOTv2 Tournament MVP)
 
+## Tài liệu mở rộng và thứ tự ưu tiên (22/10/2026)
+
+Đọc [mục lục docs mới](docs/README.md) và [trạng thái code](docs/07-TRANG-THAI-TRIEN-KHAI.md)
+trước danh sách MVP bên dưới. Với tính năng Campus, ưu tiên bộ `00-` đến `06-` mới;
+docs dùng `_` mô tả profile MVP lịch sử. Các quyết định mới về GitHub, 256 KiB/400 plies,
+protocol persistent, map, thể thức và quyền xem thay thế yêu cầu MVP tương ứng, có version/migration.
+Giữ nguyên nguyên tắc bảo toàn app/game phòng, framework và không mở thực thi code lạ khi thiếu sandbox.
+Mỗi đợt làm một milestone; không báo hoàn tất các tính năng mới chỉ vì đã có docs.
+
+UI tham chiếu [tích hợp repo](docs/05-TICH-HOP-UI-VA-REPO.md) và
+[style kit](docs/ui-style/README.md). Nền tảng M1 nằm ở `server/judge/campusEngine.js`,
+độc lập với runner/replay MVP; đọc trạng thái trước khi nối vào API hoặc worker.
+
 > Mục đích: phát triển **tiếp trên repository đang mở trong VS Code**, không tạo project mới.
 > Đây là quy ước công việc dành cho DeepSeek / các code agent. Đọc toàn bộ tài liệu trước khi chỉnh code.
 

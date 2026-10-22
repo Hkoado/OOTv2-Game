@@ -8,6 +8,7 @@ import {
   squareToCoords,
   coordsToSquare,
 } from './constants.js';
+import { canStep } from './geometry.js';
 
 /**
  * Kiểm tra xem một nước đi có hợp lệ hay không theo luật OTTv2
@@ -15,12 +16,14 @@ import {
  * @param {string} pieceId - ID quân cờ muốn di chuyển
  * @returns {Array<{ square: string, type: 'move' | 'capture', capturedPieceId?: string }>} Danh sách các ô có thể đi
  */
-export function getValidMoves(pieces, pieceId) {
+export function getValidMoves(pieces, pieceId, map = null) {
   const piece = pieces[pieceId];
   if (!piece || !piece.alive) return [];
 
   const { col, row } = squareToCoords(piece.square);
   const validMoves = [];
+  const blocked = new Set(map?.blocked || []);
+  const occupants = new Map(Object.values(pieces).filter((p) => p.alive).map((p) => [p.square, p]));
 
   // 8 hướng di chuyển như quân Vua (tối đa 1 ô)
   const directions = [
@@ -39,7 +42,8 @@ export function getValidMoves(pieces, pieceId) {
     }
 
     const targetSquare = coordsToSquare(targetCol, targetRow);
-    const occupant = getPieceAtSquare(pieces, targetSquare);
+    if (!canStep(piece.square, targetSquare, blocked)) continue;
+    const occupant = occupants.get(targetSquare);
 
     if (!occupant) {
       // Ô trống -> có thể di chuyển

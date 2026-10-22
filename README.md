@@ -1,4 +1,40 @@
+# OOTv2 · Cổng giải đấu bot
+
+Ứng dụng hiện **tournament-first**: mở `http://127.0.0.1:3000/` **luôn** vào màn hình đăng nhập.
+Đăng nhập bằng tài khoản BTC cấp; không có tab phòng chơi/spectator trên giao diện chính.
+
+```powershell
+node tools/cli/create-admin.js   # tạo admin đầu tiên (nếu chưa có)
+npm run build
+node tools/cli/start-local.js    # API :3001 + worker + web :3000
+```
+
+- Thông tin admin local nằm trong `data/local-admin-credentials.txt` (không commit/chia sẻ).
+- Đội: **Tổng quan**, **Đội của tôi**, **Bot & bài nộp**, **Giải đấu**, **Luật & hướng dẫn**.
+- Admin: **Tổng quan**, **Đội & tài khoản**, **Bài nộp**, **Quản lý giải**, **Luật & vận hành**.
+- UI phòng chơi tay, spectator và Tournament MVP cũ được giữ nguyên trong `src/LegacyApp.jsx`
+  nhưng **không được mount**; không còn mở bằng query string.
+- Cổng giải đấu: `src/App.jsx` → `src/tournament/portal/CampusPortal.jsx` → `LocalCore.jsx`.
+  Theme/token lấy từ `docs/ui-style/tokens.json`; CSS tại `src/tournament/portal/tournament.css`.
+- Polling 4 giây, không chồng request, tự dừng khi tab ẩn; ReplayBoard được tải theo nhu cầu.
+- Chỉ dùng bot nội bộ tin cậy trên máy thử nghiệm; chưa có sandbox, Supabase hoặc GitHub sync.
+- Core dùng profile MVP 8 đội/30 ván, không phải Campus production. API legacy không auth tắt mặc định.
+
+Hướng dẫn vận hành chi tiết: [localhost và phân công 4 người](docs/09-LOCAL-CORE-VA-BAN-GIAO-4-NGUOI.md).
+Tài liệu Campus: [mục lục](docs/README.md), [trạng thái triển khai](docs/07-TRANG-THAI-TRIEN-KHAI.md).
+
+> Các mục 1–… bên dưới mô tả luật chơi và giao diện phòng/spectator gốc. Chúng vẫn đúng về luật
+> và còn mã nguồn trong `LegacyApp.jsx`, nhưng không phải màn hình khởi động hiện tại.
+
+---
+
 # Oẳn Tù Tì v2 (OTTv2) - Online Multiplayer Strategy Match
+
+Tài liệu Campus mới: [mục lục giải đấu/UI](docs/README.md),
+[trạng thái triển khai](docs/07-TRANG-THAI-TRIEN-KHAI.md).
+Hiện có nền tảng engine `ott-campus.v1` và CLI kiểm map/replay; API/worker/UI giải đấu bên dưới
+vẫn là MVP 8 bot. Dùng `npm run test:engine` để kiểm cả luật legacy và Campus;
+`npm run map:validate -- examples/maps/campus-arena.json` để kiểm map mẫu.
 
 Trò chơi cờ chiến thuật **Oẳn Tù Tì v2 (OTTv2)** trên bàn cờ **9x9** dành cho 2 người chơi thi đấu trực tuyến thời gian thực qua phòng, kèm chế độ **Người xem (Spectator)**. Dự án được tối ưu để push lên GitHub và deploy trực tiếp lên Vercel.
 ---

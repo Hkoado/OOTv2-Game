@@ -1,0 +1,300 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, Award, Eye, RefreshCw, Swords } from 'lucide-react';
+import {
+  Alert, Badge, ConfirmAction, DataTable, Empty, Panel, Progress, Spinner,
+} from './TournamentUi.jsx';
+import {
+  eventProgress, eventStatusLabel, eventTone, formatDateTime, matchOutcome, standingFor,
+  stageLabel, stageSummary,
+} from './tournamentView.js';
+
+const STAGES = [
+  { id: 'all', label: 'Tất cả' },
+  { id: 'group', label: 'Vòng bảng' },
+  { id: 'semifinal', label: 'Bán kết' },
+  { id: 'final', label: 'Chung kết' },
+];
+
+function StandingsTable({ group, rows, highlightId, complete }) {
+  return (
+    <Panel
+      title={`Bảng ${group}`}
+      subtitle={complete ? 'Đã hoàn tất vòng bảng' : 'Đang cập nhật'}
+      actions={<Badge tone={complete ? 'success' : 'live'} dot={!complete}>{complete ? 'Xong' : 'Live'}</Badge>}
+    >
+      {rows.length ? (
+        <DataTable columns={['#', 'Đội', 'Tr', 'T', 'H', 'B', 'HS', 'Điểm']} label={`Bảng xếp hạng bảng ${group}`}>
+          {rows.map((row, index) => {
+            const mine = row.participant_id === highlightId;
+            return (
+              <tr key={row.entry_id} className={mine ? 'is-mine' : undefined}>
+                <td><span className={`tt-rank${index === 0 ? ' tt-rank--first' : ''}`}>{index + 1}</span></td>
+                <td><strong>{row.name}</strong>{mine && <span className="tt-cell-sub">đội của bạn</span>}</td>
+                <td>{row.played}</td>
+                <td>{row.wins}</td>
+                <td>{row.draws}</td>
+                <td>{row.losses}</td>
+                <td>{row.win_loss_difference > 0 ? `+${row.win_loss_difference}` : row.win_loss_difference}</td>
+                <td><strong>{row.points}</strong></td>
+              </tr>
+            );
+          })}
+        </DataTable>
+      ) : (
+        <p className="tt-muted">Bảng chưa có đội. Server sẽ điền khi giải bắt đầu.</p>
+      )}
+    </Panel>
+  );
+}
+
+function SeriesCard({ series, title }) {
+  if (!series) {
+    return (
+      <div className="tt-series tt-series--empty">
+        <span className="tt-eyebrow">{title}</span>
+        <p className="tt-muted">Chưa xác định cặp đấu.</p>
+      </div>
+    );
+  }
+  return (
+    <div className={`tt-series${series.complete ? ' tt-series--done' : ''}`}>
+      <div className="tt-series__head">
+        <span className="tt-eyebrow">{title}</span>
+        {series.winner_name ? <Badge tone="success">{series.winner_name} đi tiếp</Badge> : <Badge tone="live" dot>Chưa ngã ngũ</Badge>}
+      </div>
+      <div className="tt-series__games">
+        {(series.games || []).map((game) => (
+          <div key={game.id} className="tt-series__game">
+            <span>Lượt {game.game_no}</span>
+            <span className="tt-series__sides">
+              <em className="tt-side tt-side--red">{game.red?.name}</em>
+              <span aria-hidden="true">vs</span>
+              <em className="tt-side tt-side--blue">{game.blue?.name}</em>
+            </span>
+            <Badge tone={matchOutcome(game).tone}>{matchOutcome(game).label}</Badge>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MatchTable({ matches, onOpenReplay, highlightId }) {
+  if (!matches.length) {
+    return <Empty title="Chưa có ván ở vòng này" description="Các ván sẽ xuất hiện khi BTC bắt đầu giải hoặc khi đội đi tiếp." />;
+  }
+  return (
+    <DataTable columns={['Ván', 'Đỏ', 'Xanh', 'Kết quả', 'Số nước', 'Replay']} label="Danh sách ván đấu">
+      {matches.map((match) => {
+        const outcome = matchOutcome(match);
+        const mine = match.red?.participant_id === highlightId || match.blue?.participant_id === highlightId;
+        return (
+          <tr key={match.id} className={mine ? 'is-mine' : undefined}>
+            <td>
+              <strong>{stageLabel(match.stage)}</strong>
+              <span className="tt-cell-sub">{String(match.series_id || '').toUpperCase()} · lượt {match.game_no}</span>
+            </td>
+            <td><span className="tt-side tt-side--red">{match.red?.name}</span></td>
+            <td><span className="tt-side tt-side--blue">{match.blue?.name}</span></td>
+            <td>
+              <Badge tone={outcome.tone} dot={match.status === 'running'}>{outcome.label}</Badge>
+              {match.reason && <span className="tt-cell-sub">{match.reason}</span>}
+            </td>
+            <td>{match.ply_count ?? '—'}</td>
+            <td>
+              <button
+                type="button"
+                className="tt-btn tt-btn--ghost tt-btn--sm"
+                onClick={() => onOpenReplay(match.id)}
+                disabled={match.status !== 'finished'}
+                title={match.status === 'finished' ? 'Xem lại ván đấu' : 'Replay chỉ mở khi ván đã kết thúc'}
+              >
+                <Eye size={14} aria-hidden="true" />
+                Xem lại
+              </button>
+            </td>
+          </tr>
+        );
+      })}
+    </DataTable>
+  );
+}
+
+export default function EventDetailPage({
+  account, detail, detailLoading, detailError, eventId, busy, actions, onNavigate, onOpenReplay,
+}) {
+  const isAdmin = account.role === 'admin';
+  const [stage, setStage] = useState('all');
+
+  useEffect(() => {
+    setStage('all');
+  }, [eventId]);
+
+  const event = detail?.event?.id === eventId ? detail.event : null;
+  const standings = event ? detail.standings : null;
+  const matches = event ? detail.matches || [] : [];
+  const bracket = event ? detail.bracket || null : null;
+
+  const filtered = useMemo(
+    () => (stage === 'all' ? matches : matches.filter((match) => match.stage === stage)),
+    [matches, stage]
+  );
+  const summary = useMemo(() => stageSummary(matches), [matches]);
+  const myStanding = standingFor(standings, account.participant_id);
+  const champion = bracket?.champion || null;
+
+  const backButton = (
+    <button type="button" className="tt-back" onClick={() => onNavigate('events')}>
+      <ArrowLeft size={16} aria-hidden="true" />
+      Danh sách giải
+    </button>
+  );
+
+  if (!event) {
+    return (
+      <>
+        {backButton}
+        {detailLoading ? (
+          <Panel><Spinner label="Đang tải bảng đấu…" /></Panel>
+        ) : (
+          <Alert tone={detailError ? 'danger' : 'warning'} title="Không mở được giải">
+            {detailError || 'Giải không tồn tại hoặc tài khoản không có quyền xem.'}
+            <div className="tt-form__actions">
+              <button type="button" className="tt-btn tt-btn--sm" onClick={() => actions.refresh()}>
+                <RefreshCw size={14} aria-hidden="true" />
+                Thử lại
+              </button>
+            </div>
+          </Alert>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {backButton}
+
+      <header className="tt-page-head tt-page-head--detail">
+        <div>
+          <p className="tt-eyebrow">Giải đấu · {eventStatusLabel(event.status)}</p>
+          <h1 className="tt-page-title">{event.name}</h1>
+          <p className="tt-page-lead">
+            Tạo lúc {formatDateTime(event.created_at)} · seed <code>{String(event.seed || '').slice(0, 12)}</code> ·{' '}
+            {event.match_counts?.total ?? 0} ván đã sinh
+          </p>
+        </div>
+        <div className="tt-page-actions">
+          <Badge tone={eventTone(event.status)} dot>{eventStatusLabel(event.status)}</Badge>
+          {isAdmin && event.status === 'draft' && (
+            <ConfirmAction
+              label="Bắt đầu giải"
+              confirmLabel="Khóa bài & sinh lịch"
+              tone="primary"
+              busy={busy?.start}
+              onConfirm={() => actions.startEvent(event.id)}
+            />
+          )}
+          <button type="button" className="tt-btn tt-btn--ghost" onClick={() => actions.refresh()} disabled={detailLoading}>
+            <RefreshCw size={15} aria-hidden="true" />
+            Làm mới
+          </button>
+        </div>
+      </header>
+
+      <Panel title="Tiến độ giải" subtitle={isAdmin ? 'Worker chấm tuần tự; tiến độ làm mới mỗi 4 giây.' : 'Kết quả cập nhật tự động khi tab đang mở.'}>
+        <Progress value={eventProgress({ match_total: event.match_counts?.total, match_finished: event.match_counts?.finished })} label={`${event.match_counts?.finished ?? 0}/${event.match_counts?.total ?? 0} ván đã chấm`} />
+        <div className="tt-inline-facts">
+          <span><Swords size={15} aria-hidden="true" />Vòng bảng {summary.group.finished}/{summary.group.total}</span>
+          <span>Bán kết {summary.semifinal.finished}/{summary.semifinal.total}</span>
+          <span>Chung kết {summary.final.finished}/{summary.final.total}</span>
+          {myStanding && <Badge tone="accent">Bảng {myStanding.group} · hạng {myStanding.row.points} điểm</Badge>}
+        </div>
+      </Panel>
+
+      {champion && (
+        <div className="tt-champion">
+          <Award size={26} aria-hidden="true" />
+          <div>
+            <span className="tt-eyebrow">Vô địch</span>
+            <strong>{champion.name}</strong>
+          </div>
+          <Badge tone="success">Chung kết hoàn tất</Badge>
+        </div>
+      )}
+
+      <div className="tt-grid tt-grid--2">
+        <StandingsTable
+          group="A"
+          rows={standings?.groups?.A || []}
+          highlightId={account.participant_id}
+          complete={Boolean(standings?.group_stage_complete)}
+        />
+        <StandingsTable
+          group="B"
+          rows={standings?.groups?.B || []}
+          highlightId={account.participant_id}
+          complete={Boolean(standings?.group_stage_complete)}
+        />
+      </div>
+
+      {isAdmin && bracket && (
+        <Panel
+          title="Nhánh loại trực tiếp"
+          subtitle="Bán kết và chung kết đấu 2 ván đổi màu; hòa series thì đội seed tốt hơn đi tiếp."
+        >
+          <div className="tt-bracket">
+            <div className="tt-bracket__round">
+              <span className="tt-eyebrow">Bán kết</span>
+              {(bracket.semifinals || []).length ? (
+                bracket.semifinals.map((series, index) => (
+                  <SeriesCard key={series.series_id} series={series} title={`SF${index + 1}`} />
+                ))
+              ) : (
+                <p className="tt-muted">Bán kết được sinh khi vòng bảng hoàn tất.</p>
+              )}
+            </div>
+            <div className="tt-bracket__round">
+              <span className="tt-eyebrow">Chung kết</span>
+              <SeriesCard series={bracket.final} title="Final" />
+            </div>
+          </div>
+        </Panel>
+      )}
+
+      <Panel
+        title="Danh sách ván"
+        subtitle={isAdmin
+          ? `${matches.length} ván · chấm tuần tự, replay mở khi ván kết thúc.`
+          : 'Đội chỉ thấy các vòng mình tham gia; replay do server cấp quyền.'}
+        actions={(
+          <div className="tt-tabs" role="tablist" aria-label="Lọc theo vòng đấu">
+            {STAGES.map((tab) => {
+              const bucket = summary[tab.id];
+              const total = tab.id === 'all' ? matches.length : bucket.total;
+              const finished = tab.id === 'all'
+                ? matches.filter((match) => match.status === 'finished').length
+                : bucket.finished;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={stage === tab.id}
+                  className={`tt-tabs__item${stage === tab.id ? ' is-active' : ''}`}
+                  onClick={() => setStage(tab.id)}
+                >
+                  {tab.label}
+                  <span>{finished}/{total}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      >
+        <MatchTable matches={filtered} onOpenReplay={onOpenReplay} highlightId={account.participant_id} />
+      </Panel>
+    </>
+  );
+}
+

@@ -59,6 +59,7 @@ export async function startTestEnv({ adminKey = 'test-admin-key', withServer = t
   if (!sharedDataDir) {
     sharedDataDir = mkdtempSync(path.join(os.tmpdir(), 'ootv2-test-'));
     process.env.OOTV2_DATA_DIR = sharedDataDir;
+    process.env.OOTV2_DB_PATH = path.join(sharedDataDir, 'test.sqlite');
   }
   process.env.OOTV2_ADMIN_KEY = adminKey;
   const dataDir = sharedDataDir;
@@ -209,7 +210,7 @@ export async function startTestEnv({ adminKey = 'test-admin-key', withServer = t
   };
 
   if (withServer) {
-    const app = createApp();
+    const app = createApp({ legacyAccess: true });
     const server = app.listen(0, '127.0.0.1');
     await once(server, 'listening');
     env.server = server;

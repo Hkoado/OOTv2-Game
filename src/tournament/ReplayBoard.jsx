@@ -69,8 +69,8 @@ export default function ReplayBoard({ match, replay }) {
       <div className="replay-viewer__head">
         <div>
           <h4 className="replay-viewer__title">
-            {match.red.name} <span className="muted">(Đỏ)</span> vs {match.blue.name}{' '}
-            <span className="muted">(Xanh)</span>
+            {match.red.name} <span className="tt-muted">(Đỏ)</span> vs {match.blue.name}{' '}
+            <span className="tt-muted">(Xanh)</span>
           </h4>
           <p className="replay-viewer__meta">
             {labelOf(RESULT_LABELS, match.result)} · {labelOf(REASON_LABELS, match.reason)} ·{' '}
@@ -79,9 +79,9 @@ export default function ReplayBoard({ match, replay }) {
         </div>
       </div>
 
-      {parsed.error && <p className="notice notice--warn">{parsed.error}</p>}
+      {parsed.error && <p className="tt-alert tt-alert--warning">{parsed.error}</p>}
       {lastIndex === 0 && !parsed.error && (
-        <p className="notice">
+        <p className="tt-alert">
           Trận này kết thúc bằng quyết định của giải (bot lỗi khi xếp quân hoặc khi đi quân) nên không có
           nước đi để tua lại.
         </p>
@@ -94,7 +94,7 @@ export default function ReplayBoard({ match, replay }) {
       <div className="replay-controls">
         <button
           type="button"
-          className="btn btn--secondary btn--small"
+          className="tt-btn tt-btn--ghost tt-btn--sm"
           onClick={() => setIndex(0)}
           disabled={index === 0}
         >
@@ -102,7 +102,7 @@ export default function ReplayBoard({ match, replay }) {
         </button>
         <button
           type="button"
-          className="btn btn--secondary btn--small"
+          className="tt-btn tt-btn--ghost tt-btn--sm"
           onClick={() => setIndex((current) => Math.max(current - 1, 0))}
           disabled={index === 0}
         >
@@ -110,7 +110,7 @@ export default function ReplayBoard({ match, replay }) {
         </button>
         <button
           type="button"
-          className="btn btn--small"
+          className="tt-btn tt-btn--primary tt-btn--sm"
           onClick={() => {
             if (index >= lastIndex) setIndex(0);
             setPlaying((value) => !value);
@@ -122,7 +122,7 @@ export default function ReplayBoard({ match, replay }) {
         </button>
         <button
           type="button"
-          className="btn btn--secondary btn--small"
+          className="tt-btn tt-btn--ghost tt-btn--sm"
           onClick={() => setIndex((current) => Math.min(current + 1, lastIndex))}
           disabled={index >= lastIndex}
         >
@@ -130,13 +130,13 @@ export default function ReplayBoard({ match, replay }) {
         </button>
         <button
           type="button"
-          className="btn btn--secondary btn--small"
+          className="tt-btn tt-btn--ghost tt-btn--sm"
           onClick={() => setIndex(lastIndex)}
           disabled={index >= lastIndex}
         >
           Cuối <SkipForward className="w-4 h-4" />
         </button>
-        <button type="button" className="btn btn--secondary btn--small" onClick={() => setIndex(0)}>
+        <button type="button" className="tt-btn tt-btn--ghost tt-btn--sm" onClick={() => setIndex(0)}>
           <RotateCcw className="w-4 h-4" /> Xem lại
         </button>
       </div>
@@ -159,11 +159,11 @@ export default function ReplayBoard({ match, replay }) {
       </div>
 
       <div className="replay-dead">
-        <span className="text-xs muted">Quân đã mất</span>
-        <span className="text-xs">
+        <span className="tt-small tt-muted">Quân đã mất</span>
+        <span className="tt-small">
           Đỏ: {deadPieces.red.length ? deadPieces.red.map((type) => PIECE_LABELS[type]).join(', ') : '—'}
         </span>
-        <span className="text-xs">
+        <span className="tt-small">
           Xanh: {deadPieces.blue.length ? deadPieces.blue.map((type) => PIECE_LABELS[type]).join(', ') : '—'}
         </span>
       </div>

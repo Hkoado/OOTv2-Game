@@ -1,5 +1,8 @@
 # 03 — Data model, REST API và giao diện MVP
 
+> T?i li?u l?ch s? cho profile MVP. Khi m? r?ng Campus, ?u ti?n [docs m?i](README.md)
+> v? [tr?ng th?i tri?n khai](07-TRANG-THAI-TRIEN-KHAI.md); gi? version ?? ??c k?t qu?/replay c?.
+
 ## 1. Mô hình dữ liệu SQLite tối thiểu
 
 > Dùng SQL migration khởi tạo qua `server/db.js` hoặc 1 file `schema.sql`. Không cần ORM hay dịch vụ DB ngoài cho MVP.

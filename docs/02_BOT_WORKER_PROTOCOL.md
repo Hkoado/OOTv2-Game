@@ -1,5 +1,8 @@
 # 02 — Đặc tả Bot Protocol, Judge Worker và chế độ chạy local
 
+> T?i li?u l?ch s? cho profile MVP. Khi m? r?ng Campus, ?u ti?n [docs m?i](README.md)
+> v? [tr?ng th?i tri?n khai](07-TRANG-THAI-TRIEN-KHAI.md); gi? version ?? ??c k?t qu?/replay c?.
+
 ## 1. Quyết định quan trọng
 
 **Mỗi lần cần xếp quân hoặc đi một nước, worker khởi tạo một process Python mới** để xử lý 1 request JSON, đọc 1 response JSON, sau đó process thoát. Bot là stateless: không giữ biến qua các lần gọi. Đây là lựa chọn MVP dễ debug, dễ timeout/thu hồi process, chấp nhận overhead vì chỉ chạy 1 match một lúc.

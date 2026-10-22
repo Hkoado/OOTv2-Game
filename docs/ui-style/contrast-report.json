@@ -1,0 +1,269 @@
+{
+  "note": "Solid-color token checks only. Validate actual rendered UI, textures, custom combinations and images separately.",
+  "pairs": [
+    {
+      "theme": "light",
+      "pair": "text.primary/bg.canvas",
+      "ratio": 9.65,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "pair": "text.secondary/bg.canvas",
+      "ratio": 5.83,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "pair": "text.primary/bg.surface",
+      "ratio": 10.19,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "pair": "text.secondary/bg.surface",
+      "ratio": 6.16,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "pair": "text.primary/bg.subtle",
+      "ratio": 8.7,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "pair": "text.secondary/bg.subtle",
+      "ratio": 5.26,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "pair": "text.primary/bg.hover",
+      "ratio": 8.24,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "pair": "text.secondary/bg.hover",
+      "ratio": 4.98,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "pair": "text.primary/bg.selected",
+      "ratio": 7.62,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "pair": "text.secondary/bg.selected",
+      "ratio": 4.61,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "pair": "text.on-accent/accent.default",
+      "ratio": 6.84,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "pair": "text.on-accent/accent.hover",
+      "ratio": 9.1,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "pair": "text.on-accent/accent.pressed",
+      "ratio": 11.79,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "pair": "status.success/surface",
+      "ratio": 5.8,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "pair": "status.warning/surface",
+      "ratio": 5.62,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "pair": "status.danger/surface",
+      "ratio": 5.66,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "pair": "status.info/surface",
+      "ratio": 5.71,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "pair": "team.red/piece",
+      "ratio": 6.09,
+      "minimum": 3
+    },
+    {
+      "theme": "light",
+      "pair": "team.blue/piece",
+      "ratio": 5.91,
+      "minimum": 3
+    },
+    {
+      "theme": "light",
+      "pair": "focus/surface",
+      "ratio": 5.71,
+      "minimum": 3
+    },
+    {
+      "theme": "light",
+      "pair": "border.control/surface",
+      "ratio": 3.68,
+      "minimum": 3
+    },
+    {
+      "theme": "light",
+      "pair": "piece.ink/piece.surface",
+      "ratio": 13.66,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "pair": "text.primary/bg.canvas",
+      "ratio": 10.9,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "pair": "text.secondary/bg.canvas",
+      "ratio": 8.1,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "pair": "text.primary/bg.surface",
+      "ratio": 9.71,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "pair": "text.secondary/bg.surface",
+      "ratio": 7.22,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "pair": "text.primary/bg.subtle",
+      "ratio": 8.55,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "pair": "text.secondary/bg.subtle",
+      "ratio": 6.36,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "pair": "text.primary/bg.hover",
+      "ratio": 7.27,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "pair": "text.secondary/bg.hover",
+      "ratio": 5.4,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "pair": "text.primary/bg.selected",
+      "ratio": 6.37,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "pair": "text.secondary/bg.selected",
+      "ratio": 4.73,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "pair": "text.on-accent/accent.default",
+      "ratio": 7.37,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "pair": "text.on-accent/accent.hover",
+      "ratio": 8.9,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "pair": "text.on-accent/accent.pressed",
+      "ratio": 5.74,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "pair": "status.success/surface",
+      "ratio": 7.41,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "pair": "status.warning/surface",
+      "ratio": 7.9,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "pair": "status.danger/surface",
+      "ratio": 6.85,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "pair": "status.info/surface",
+      "ratio": 8.5,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "pair": "team.red/piece",
+      "ratio": 5.21,
+      "minimum": 3
+    },
+    {
+      "theme": "dark",
+      "pair": "team.blue/piece",
+      "ratio": 5.05,
+      "minimum": 3
+    },
+    {
+      "theme": "dark",
+      "pair": "focus/surface",
+      "ratio": 8.5,
+      "minimum": 3
+    },
+    {
+      "theme": "dark",
+      "pair": "border.control/surface",
+      "ratio": 3.96,
+      "minimum": 3
+    },
+    {
+      "theme": "dark",
+      "pair": "piece.ink/piece.surface",
+      "ratio": 11.68,
+      "minimum": 4.5
+    }
+  ]
+}

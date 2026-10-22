@@ -1,5 +1,8 @@
 # 01 — Đặc tả MVP và kiến trúc
 
+> T?i li?u l?ch s? cho profile MVP. Khi m? r?ng Campus, ?u ti?n [docs m?i](README.md)
+> v? [tr?ng th?i tri?n khai](07-TRANG-THAI-TRIEN-KHAI.md); gi? version ?? ??c k?t qu?/replay c?.
+
 ## 1. Bối cảnh đã khảo sát
 
 Repo gốc: <https://github.com/Hkoado/OOTv2-Game>, nhánh mặc định hiển thị khi khảo sát: `Ex2` (12/10/2026). Dự án hiện có React/Vite, realtime rooms qua playhtml, và game engine JavaScript trong:

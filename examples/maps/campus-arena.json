@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "map.v1",
+  "id": "campus-arena",
+  "revision": 1,
+  "width": 9,
+  "height": 9,
+  "bases": { "red": "a1", "blue": "i9" },
+  "setupZoneRule": "diagonal-28-v1",
+  "blocked": ["e4", "e6"],
+  "cornerRule": "block-if-both-orthogonals-blocked",
+  "rulesVersion": "ott-campus.v1"
+}

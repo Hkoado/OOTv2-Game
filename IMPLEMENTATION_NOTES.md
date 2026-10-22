@@ -1,5 +1,8 @@
 # IMPLEMENTATION_NOTES — Giải đấu bot OOTv2 (MVP M0→M5)
 
+> Ghi chú này mô tả profile MVP lịch sử. Hướng phát triển Campus và phần đã làm mới nằm ở
+> [docs/README.md](docs/README.md) và [trạng thái triển khai](docs/07-TRANG-THAI-TRIEN-KHAI.md).
+
 > Tài liệu này ghi lại **thiết kế đã triển khai thực tế** trong repo (không phải đề xuất):
 > backend Node/Express + SQLite, judge worker chạy bot Python, UI React trong `src/tournament/`,
 > kiểm thử bằng `node --test`. Đọc kèm `docs/01..05` và `README.md` mục 7.

@@ -65,7 +65,7 @@ export function autoPlaceRemaining(existingPlacedPieces, player) {
 /**
  * Trạng thái khởi tạo của một phòng chơi mới
  */
-export function createNewGame(roomId = 'ROOM_1') {
+export function createNewGame(roomId = 'ROOM_1', clock = Date.now) {
   return {
     roomId,
     hostId: null, // ID của chủ phòng tạo phòng
@@ -87,7 +87,7 @@ export function createNewGame(roomId = 'ROOM_1') {
     lastMove: null,      // { from, to, pieceId, capturedPieceId }
     winner: null,        // 'red' | 'blue'
     winReason: null,     // Lý do thắng
-    updatedAt: Date.now(),
+    updatedAt: clock(),
   };
 }
 
@@ -175,7 +175,7 @@ export function completeSetupBlue(state, bluePieces) {
 /**
  * Thực hiện nước đi của một người chơi
  */
-export function executeMove(state, playerId, pieceId, targetSquare) {
+export function executeMove(state, playerId, pieceId, targetSquare, { map = null, clock = Date.now } = {}) {
   if (state.phase !== GAME_PHASES.PLAYING) {
     throw new Error('Trận đấu chưa bắt đầu hoặc đã kết thúc');
   }
@@ -189,7 +189,7 @@ export function executeMove(state, playerId, pieceId, targetSquare) {
     throw new Error('Quân cờ không hợp lệ');
   }
 
-  const validMoves = getValidMoves(state.pieces, pieceId);
+  const validMoves = getValidMoves(state.pieces, pieceId, map);
   const move = validMoves.find((m) => m.square === targetSquare);
 
   if (!move) {
@@ -246,6 +246,6 @@ export function executeMove(state, playerId, pieceId, targetSquare) {
       capturedPieceId: move.capturedPieceId || null,
     },
     history: [...state.history, moveText],
-    updatedAt: Date.now(),
+    updatedAt: clock(),
   };
 }

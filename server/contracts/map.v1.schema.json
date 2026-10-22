@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MapV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "revision", "width", "height", "bases", "setupZoneRule", "blocked", "cornerRule", "rulesVersion"],
+  "properties": {
+    "schemaVersion": { "const": "map.v1" },
+    "id": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$", "not": { "pattern": "\\s" } },
+    "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "width": { "const": 9 },
+    "height": { "const": 9 },
+    "bases": {
+      "type": "object", "additionalProperties": false, "required": ["red", "blue"],
+      "properties": { "red": { "const": "a1" }, "blue": { "const": "i9" } }
+    },
+    "setupZoneRule": { "const": "diagonal-28-v1" },
+    "blocked": { "type": "array", "uniqueItems": true, "maxItems": 79, "items": { "type": "string", "minLength": 2, "maxLength": 2, "pattern": "^[a-i][1-9]$" } },
+    "cornerRule": { "const": "block-if-both-orthogonals-blocked" },
+    "rulesVersion": { "const": "ott-campus.v1" }
+  }
+}

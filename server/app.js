@@ -15,6 +15,8 @@ import { badRequest, sendError } from './lib/httpError.js';
 import participantsRouter from './routes/participants.js';
 import tournamentsRouter from './routes/tournaments.js';
 import matchesRouter from './routes/matches.js';
+import { localPortalRouter } from './routes/localPortal.js';
+import { initAccounts } from './services/localAccounts.js';
 
 /** Nội dung `examples/sample_bot.py` cho UI hướng dẫn (không phải input của bot). */
 function readSampleBot() {
@@ -22,7 +24,7 @@ function readSampleBot() {
   return fs.readFileSync(samplePath, 'utf8');
 }
 
-export function createApp() {
+export function createApp({ legacyAccess = false } = {}) {
   const app = express();
 
   app.disable('x-powered-by');
@@ -36,9 +38,13 @@ export function createApp() {
     res.type('text/plain').send(readSampleBot());
   });
 
-  app.use('/api/participants', participantsRouter);
-  app.use('/api/tournaments', tournamentsRouter);
-  app.use('/api/matches', matchesRouter);
+  initAccounts();
+  app.use('/api/local', localPortalRouter());
+  if (legacyAccess) {
+    app.use('/api/participants', participantsRouter);
+    app.use('/api/tournaments', tournamentsRouter);
+    app.use('/api/matches', matchesRouter);
+  }
 
   app.use('/api', (req, res) => {
     res.status(404).json({ error: 'endpoint_not_found', message: 'Endpoint không tồn tại' });

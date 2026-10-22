@@ -66,7 +66,7 @@ export function listMatches({ tournamentId } = {}) {
     : db
         .prepare(
           `${MATCH_SELECT}
-           ORDER BY m.created_at DESC, m.series_id, m.game_no LIMIT 200`
+           ORDER BY t.created_at DESC, m.series_id, m.game_no LIMIT 200`
         )
         .all();
   return rows.map(toMatchView);

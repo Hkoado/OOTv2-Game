@@ -1,5 +1,8 @@
 # 05 — Prompt dùng trực tiếp với DeepSeek agent trong VS Code
 
+> T?i li?u l?ch s? cho profile MVP. Khi m? r?ng Campus, ?u ti?n [docs m?i](README.md)
+> v? [tr?ng th?i tri?n khai](07-TRANG-THAI-TRIEN-KHAI.md); gi? version ?? ??c k?t qu?/replay c?.
+
 ## Hướng dẫn sử dụng
 
 1. Giải nén bộ tài liệu vào **thư mục gốc của repo OOTv2-Game** (cùng cấp `package.json`).

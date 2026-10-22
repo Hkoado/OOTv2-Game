@@ -1,5 +1,8 @@
 # 04 — Roadmap cho coding agent (triển khai TỪNG MILESTONE)
 
+> T?i li?u l?ch s? cho profile MVP. Khi m? r?ng Campus, ?u ti?n [docs m?i](README.md)
+> v? [tr?ng th?i tri?n khai](07-TRANG-THAI-TRIEN-KHAI.md); gi? version ?? ??c k?t qu?/replay c?.
+
 > Không làm toàn bộ kế hoạch trong một prompt. Sau mỗi milestone: chạy test, nêu file thay đổi, chờ yêu cầu tiếp.
 
 ## M0 — Khảo sát repo & baseline (không viết tính năng)

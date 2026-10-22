@@ -12,6 +12,10 @@
     "worker:once": "node server/worker.js --once",
     "worker:drain": "node server/worker.js --drain",
     "test:server": "node --test tests/*.test.js",
+    "test:engine": "node --test tests/gameAdapter.test.js tests/campusEngine.test.js",
+    "map:validate": "node tools/cli/validate-map.js",
+    "replay:verify": "node tools/cli/verify-replay.js",
+    "demo:campus": "node tools/cli/demo-campus.js",
     "test": "node --test tests/*.test.js"
   },
   "dependencies": {
