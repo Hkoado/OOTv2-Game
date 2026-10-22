@@ -17,6 +17,8 @@ import tournamentsRouter from './routes/tournaments.js';
 import matchesRouter from './routes/matches.js';
 import { localPortalRouter } from './routes/localPortal.js';
 import { initAccounts } from './services/localAccounts.js';
+import { sharedEnabled, health } from './shared/client.js';
+import { sharedRouter } from './shared/router.js';
 
 /** Nội dung `examples/sample_bot.py` cho UI hướng dẫn (không phải input của bot). */
 function readSampleBot() {
@@ -30,17 +32,17 @@ export function createApp({ legacyAccess = false } = {}) {
   app.disable('x-powered-by');
   app.use(express.json({ limit: '64kb' }));
 
-  app.get('/api/health', (req, res) => {
-    res.json({ ok: true, service: 'ootv2-tournament-api' });
+  app.get('/api/health', async (req, res) => {
+    res.json({ ok: true, service: 'ootv2-tournament-api', ...(sharedEnabled ? await health() : { driver: 'sqlite' }) });
   });
 
   app.get('/api/sample-bot', (req, res) => {
     res.type('text/plain').send(readSampleBot());
   });
 
-  initAccounts();
-  app.use('/api/local', localPortalRouter());
-  if (legacyAccess) {
+  if (!sharedEnabled) initAccounts();
+  app.use('/api/local', sharedEnabled ? sharedRouter() : localPortalRouter());
+  if (legacyAccess && !sharedEnabled) {
     app.use('/api/participants', participantsRouter);
     app.use('/api/tournaments', tournamentsRouter);
     app.use('/api/matches', matchesRouter);

@@ -1,5 +1,14 @@
 # Trạng thái triển khai Campus — 22/10/2026
 
+## Cập nhật runtime shared MVP
+
+API/worker MVP đã nối Supabase qua các bảng `mvp_*`, độc lập 13 bảng Campus.
+Đã import 9 đội/2 tài khoản/1 giải/7 entries, giữ hash mật khẩu, không nhập session.
+Bucket bot private; DB lease/heartbeat/token fencing cho nhiều worker.
+Đây không phải hoàn tất Campus M2–M7, sandbox hay đồng bộ offline.
+Xem `d:\OOTv2-Game\docs\12-SUPABASE-DATABASE.md` cho hướng dẫn và giới hạn kiểm chứng.
+Các ghi chú SQLite bên dưới mô tả mốc lịch sử/legacy.
+
 Phát triển tiếp `tournament/initial` trên nhánh `codex/campus-engine-foundation`.
 Bộ đặc tả mới là đích sản phẩm; bảng dưới phân biệt code chạy được và phần chưa triển khai.
 Đợt này triển khai milestone M1 nền tảng engine theo `04-HUONG-DAN-AGENT-CODE.md`.

@@ -1,10 +1,34 @@
 # OOTv2 · Cổng giải đấu bot
 
+## Runtime Supabase dùng chung (22/10/2026)
+
+API/worker mặc định dùng Supabase, không tự fallback SQLite. Đọc
+[hướng dẫn DB và migration](docs/12-SUPABASE-DATABASE.md) trước khi chạy.
+Sao chép `.env.example` thành `.env` và điền credential **backend-only** trên máy BTC
+tin cậy; tuyệt đối không đặt service-role key trong biến `VITE_*` hoặc gửi cho bot.
+
+Từ thư mục repository, chạy ba terminal: `npm run dev`, `npm run dev:api`,
+`npm run dev:worker`. Có thể chạy nhiều worker trên các máy tin cậy với cùng DB;
+API vẫn chỉ bind loopback vì chưa có sandbox OS. Không cần chép SQLite giữa máy.
+Tài khoản và password hash cũ được giữ, session cũ bị bỏ: đăng nhập lại.
+Test/legacy offline dùng `OOTV2_DB_DRIVER=sqlite`; không dùng chế độ đó làm writer
+song song sau cutover. Bucket bot private giữ giới hạn profile MVP 64 KiB/200 plies;
+không thay luật hoặc runner sang Campus trong đợt này.
+
+## Nền tảng DB Supabase (22/10/2026)
+
+Đã tạo 13 bảng quản lý người chơi/đội/giải/vòng/trận trên project OTTv2-G5.
+Xem [schema, quyền truy cập và kiểm thử](docs/12-SUPABASE-DATABASE.md).
+API/worker MVP dùng các bảng `mvp_*` riêng; chưa tích hợp runtime Campus hoặc đồng bộ offline.
+Migration nằm trong `supabase/migrations/`; SQL smoke trong `supabase/tests/` chạy
+toàn bộ bằng SQL Editor và tự rollback dữ liệu thử. Không chạy lại migration đã áp dụng.
+
 ## Chơi thử và chuẩn bị giải
 
 - Trang đăng nhập có **Chơi offline**: hai người cùng máy, không tài khoản/API, ba map mẫu.
-- Admin tạo giải bằng tên, thêm đội/map sau. Mỗi giải có snapshot riêng tại `data/events/<id>/`.
-- SQLite là nguồn chính; thư mục snapshot chưa phải bundle backup. Worker MVP chỉ chạy map không ô cản.
+- Admin tạo giải bằng tên, thêm đội/map sau. Runtime shared lưu DB Supabase;
+  `data/events/<id>/` chỉ là snapshot chuẩn bị của chế độ SQLite legacy.
+- Thư mục snapshot chưa phải bundle backup. Worker MVP chỉ chạy map không ô cản.
 - [Bàn giao và chia việc tiếp theo](docs/10-BAN-GIAO-OFFLINE-VA-THU-MUC-GIAI.md).
 
 Ứng dụng hiện **tournament-first**: mở `http://127.0.0.1:3000/` **luôn** vào màn hình đăng nhập.
@@ -24,7 +48,7 @@ node tools/cli/start-local.js    # API :3001 + worker + web :3000
 - Cổng giải đấu: `src/App.jsx` → `src/tournament/portal/CampusPortal.jsx` → `LocalCore.jsx`.
   Theme/token lấy từ `docs/ui-style/tokens.json`; CSS tại `src/tournament/portal/tournament.css`.
 - Polling 4 giây, không chồng request, tự dừng khi tab ẩn; ReplayBoard được tải theo nhu cầu.
-- Chỉ dùng bot nội bộ tin cậy trên máy thử nghiệm; chưa có sandbox, Supabase hoặc GitHub sync.
+- Chỉ dùng bot nội bộ tin cậy trên máy thử nghiệm; chưa có sandbox, tích hợp runtime Supabase hoặc GitHub sync.
 - Core dùng profile MVP 8 đội/30 ván, không phải Campus production. API legacy không auth tắt mặc định.
 
 Hướng dẫn vận hành chi tiết: [localhost và phân công 4 người](docs/09-LOCAL-CORE-VA-BAN-GIAO-4-NGUOI.md).

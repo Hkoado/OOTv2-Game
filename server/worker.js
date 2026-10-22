@@ -17,6 +17,8 @@ import { getDb, initDb, nowIso, recoverUnfinishedMatches } from './db.js';
 import { REASONS, RESULTS, PROTOCOL_VERSION } from './judge/gameAdapter.js';
 import { runMatch } from './judge/matchRunner.js';
 import { advanceTournament, computeBracket, getTournament } from './services/tournaments.js';
+import { sharedEnabled } from './shared/client.js';
+import { runSharedWorker } from './shared/worker.js';
 
 const STAGE_FOR_STATUS = {
   group_running: 'group',
@@ -179,6 +181,7 @@ function sleep(ms) {
 }
 
 export async function runWorker({ once = false, drain = false } = {}) {
+  if (sharedEnabled) return runSharedWorker({ once, drain });
   initDb();
   const recovered = recoverUnfinishedMatches();
   if (recovered > 0) {

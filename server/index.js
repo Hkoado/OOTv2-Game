@@ -8,12 +8,13 @@ import { pathToFileURL } from 'node:url';
 import config from './config.js';
 import { initDb } from './db.js';
 import { createApp } from './app.js';
+import { sharedEnabled } from './shared/client.js';
 
 export function startServer({ port = config.port, host = config.host } = {}) {
   if (!['127.0.0.1', '::1', 'localhost'].includes(host)) {
     throw new Error('Core local chưa có sandbox OS: chỉ cho phép bind loopback.');
   }
-  initDb();
+  if (!sharedEnabled) initDb();
   const app = createApp();
   const server = app.listen(port, host, () => {
     console.log(`[api] OOTv2 tournament API: http://${host}:${port} (loopback only)`);
