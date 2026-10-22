@@ -120,6 +120,7 @@ export default function ReplayBoard({ match, replay }) {
         min={0}
         max={Math.max(lastIndex, 0)}
         value={index}
+        aria-label={"Tua replay: " + index + " / " + lastIndex}
         onChange={(event) => setIndex(Number(event.target.value))}
       />
 

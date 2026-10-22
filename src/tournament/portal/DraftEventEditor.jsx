@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { SAMPLE_MAPS } from '../../game/sampleMaps.js';
 import { normalizeMap } from '../../game/maps.js';
 import { Alert, Panel } from './TournamentUi.jsx';
