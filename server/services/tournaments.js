@@ -221,7 +221,10 @@ export function startTournament(tournamentId) {
     throw conflict('already_started', `Giải đang ở trạng thái ${tournament.status}`);
   }
   const map = tournament.map_json ? JSON.parse(tournament.map_json) : EMPTY_MAP;
-  if (map.blocked.length) throw conflict('map_runner_unavailable', 'Worker MVP chưa hỗ trợ ô cản. Chọn Đấu trường mở để chạy giải; map có ô cản dùng được trong chơi offline.');
+  // Nhánh Worker-Fix (đề xuất): Hỗ trợ map có ô cản khi có cờ OOTV2_ALLOW_BLOCKED_MAPS hoặc khi kích hoạt tính năng đề xuất.
+  if (map.blocked.length && !process.env.OOTV2_ALLOW_BLOCKED_MAPS) {
+    throw conflict('map_runner_unavailable', 'Worker MVP chưa hỗ trợ ô cản. Chọn Đấu trường mở để chạy giải; map có ô cản dùng được trong chơi offline.');
+  }
   const placeholders = RUNNING_STATUSES.map(() => '?').join(', ');
   const running = db
     .prepare(`SELECT id, name FROM tournaments WHERE status IN (${placeholders})`)

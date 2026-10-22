@@ -16,6 +16,7 @@ import { pathToFileURL } from 'node:url';
 import config from './config.js';
 import { getDb, initDb, nowIso, recoverUnfinishedMatches } from './db.js';
 import { REASONS, RESULTS, PROTOCOL_VERSION } from './judge/gameAdapter.js';
+import { EMPTY_MAP } from '../src/game/maps.js';
 import { runMatch } from './judge/matchRunner.js';
 import { advanceTournament, computeBracket, getTournament } from './services/tournaments.js';
 import { sharedEnabled } from './shared/client.js';
@@ -44,9 +45,11 @@ function loadMatch(matchId) {
   return getDb()
     .prepare(
       `SELECT m.id, m.tournament_id, m.stage, m.series_id, m.game_no, m.seed,
+              t.map_json,
               rp.name AS red_name, bp.name AS blue_name,
               rs.storage_path AS red_path, bs.storage_path AS blue_path
        FROM matches m
+       JOIN tournaments t ON t.id = m.tournament_id
        JOIN tournament_entries re ON re.id = m.red_entry_id
        JOIN participants rp ON rp.id = re.participant_id
        LEFT JOIN submissions rs ON rs.id = re.submission_id
@@ -145,11 +148,17 @@ export async function processOneMatch({ verbose = true } = {}) {
     outcome = brokenMatchOutcome(match, 'Thiếu submission snapshot cho match');
   } else {
     try {
+      let matchMap = EMPTY_MAP;
+      const rawMap = match.map_json || tournament.map_json;
+      if (rawMap) {
+        try { matchMap = JSON.parse(rawMap); } catch {}
+      }
       outcome = await runMatch({
         matchId: match.id,
         seed: match.seed,
         red: { name: match.red_name, filePath: match.red_path },
         blue: { name: match.blue_name, filePath: match.blue_path },
+        map: matchMap,
       });
     } catch (error) {
       outcome = brokenMatchOutcome(match, `runMatch throw: ${error.message}`);

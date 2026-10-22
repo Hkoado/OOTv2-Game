@@ -7,6 +7,7 @@
  */
 
 import config from '../config.js';
+import { EMPTY_MAP } from '../../src/game/maps.js';
 import { runBotRequest } from './botRunner.js';
 import { GAME_PHASES } from '../../src/game/gameState.js';
 import {
@@ -29,11 +30,12 @@ import {
   replayMatchesResult,
 } from './gameAdapter.js';
 
-function emptyReplay(matchId, seed, pieces, result, reason) {
+function emptyReplay(matchId, seed, pieces, result, reason, map = EMPTY_MAP) {
   return {
     protocol_version: PROTOCOL_VERSION,
     match_id: matchId,
     seed,
+    map: map || EMPTY_MAP,
     initial_pieces: pieces,
     events: [],
     result: result || null,
@@ -47,7 +49,8 @@ function emptyReplay(matchId, seed, pieces, result, reason) {
  * @returns {Promise<{result: string, reason: string, winner: string|null, ply_count: number,
  *                    replay: object, notes: string[]}>}
  */
-export async function runMatch({ matchId, seed, red, blue, onProgress }) {
+export async function runMatch({ matchId, seed, red, blue, map = EMPTY_MAP, onProgress }) {
+  const activeMap = map || EMPTY_MAP;
   const notes = [];
   const bots = {
     [PLAYERS.RED]: red,
@@ -58,12 +61,12 @@ export async function runMatch({ matchId, seed, red, blue, onProgress }) {
     runBotRequest({ filePath: bots[player].filePath, payload, timeoutMs });
 
   try {
-    let state = createTournamentGame(matchId);
+    let state = createTournamentGame(matchId, activeMap);
 
     // --- Setup Đỏ trước ---
     const redSetup = await callBot(
       PLAYERS.RED,
-      buildSetupRequest(state, PLAYERS.RED, seed),
+      buildSetupRequest(state, PLAYERS.RED, seed, activeMap),
       config.limits.setupTimeoutMs
     );
     if (!redSetup.ok) {
@@ -73,11 +76,11 @@ export async function runMatch({ matchId, seed, red, blue, onProgress }) {
         reason: REASONS.FORFEIT_SETUP,
         winner: PLAYERS.BLUE,
         ply_count: 0,
-        replay: emptyReplay(matchId, seed, getPiecesArray(state), RESULTS.BLUE_WIN, REASONS.FORFEIT_SETUP),
+        replay: emptyReplay(matchId, seed, getPiecesArray(state), RESULTS.BLUE_WIN, REASONS.FORFEIT_SETUP, activeMap),
         notes,
       };
     }
-    const redCheck = validatePlacements(PLAYERS.RED, redSetup.response.placements);
+    const redCheck = validatePlacements(PLAYERS.RED, redSetup.response.placements, activeMap);
     if (!redCheck.ok) {
       notes.push(`setup Đỏ không hợp lệ (${redCheck.error}): ${redCheck.message}`);
       return {
@@ -85,7 +88,7 @@ export async function runMatch({ matchId, seed, red, blue, onProgress }) {
         reason: REASONS.FORFEIT_SETUP,
         winner: PLAYERS.BLUE,
         ply_count: 0,
-        replay: emptyReplay(matchId, seed, getPiecesArray(state), RESULTS.BLUE_WIN, REASONS.FORFEIT_SETUP),
+        replay: emptyReplay(matchId, seed, getPiecesArray(state), RESULTS.BLUE_WIN, REASONS.FORFEIT_SETUP, activeMap),
         notes,
       };
     }
@@ -94,7 +97,7 @@ export async function runMatch({ matchId, seed, red, blue, onProgress }) {
     // --- Setup Xanh (thấy đội hình Đỏ) ---
     const blueSetup = await callBot(
       PLAYERS.BLUE,
-      buildSetupRequest(state, PLAYERS.BLUE, seed),
+      buildSetupRequest(state, PLAYERS.BLUE, seed, activeMap),
       config.limits.setupTimeoutMs
     );
     if (!blueSetup.ok) {
@@ -104,11 +107,11 @@ export async function runMatch({ matchId, seed, red, blue, onProgress }) {
         reason: REASONS.FORFEIT_SETUP,
         winner: PLAYERS.RED,
         ply_count: 0,
-        replay: emptyReplay(matchId, seed, getPiecesArray(state), RESULTS.RED_WIN, REASONS.FORFEIT_SETUP),
+        replay: emptyReplay(matchId, seed, getPiecesArray(state), RESULTS.RED_WIN, REASONS.FORFEIT_SETUP, activeMap),
         notes,
       };
     }
-    const blueCheck = validatePlacements(PLAYERS.BLUE, blueSetup.response.placements);
+    const blueCheck = validatePlacements(PLAYERS.BLUE, blueSetup.response.placements, activeMap);
     if (!blueCheck.ok) {
       notes.push(`setup Xanh không hợp lệ (${blueCheck.error}): ${blueCheck.message}`);
       return {
@@ -116,7 +119,7 @@ export async function runMatch({ matchId, seed, red, blue, onProgress }) {
         reason: REASONS.FORFEIT_SETUP,
         winner: PLAYERS.RED,
         ply_count: 0,
-        replay: emptyReplay(matchId, seed, getPiecesArray(state), RESULTS.RED_WIN, REASONS.FORFEIT_SETUP),
+        replay: emptyReplay(matchId, seed, getPiecesArray(state), RESULTS.RED_WIN, REASONS.FORFEIT_SETUP, activeMap),
         notes,
       };
     }
@@ -131,6 +134,7 @@ export async function runMatch({ matchId, seed, red, blue, onProgress }) {
       initialPieces,
       matchId,
       seed,
+      map: activeMap,
       callBot,
       notes,
       onProgress,
@@ -143,17 +147,18 @@ export async function runMatch({ matchId, seed, red, blue, onProgress }) {
       reason: REASONS.INTERNAL_ERROR,
       winner: null,
       ply_count: 0,
-      replay: emptyReplay(matchId, seed, [], RESULTS.DRAW, REASONS.INTERNAL_ERROR),
+      replay: emptyReplay(matchId, seed, [], RESULTS.DRAW, REASONS.INTERNAL_ERROR, activeMap),
       notes,
     };
   }
 }
 
-function buildFinished(matchId, seed, initialPieces, events, result, reason, notes) {
+function buildFinished(matchId, seed, initialPieces, events, result, reason, notes, map = EMPTY_MAP) {
   const replay = {
     protocol_version: PROTOCOL_VERSION,
     match_id: matchId,
     seed,
+    map: map || EMPTY_MAP,
     initial_pieces: initialPieces,
     events,
     result,
@@ -180,12 +185,13 @@ function buildFinished(matchId, seed, initialPieces, events, result, reason, not
 }
 
 /** Vòng lặp nước đi: engine kiểm tra từng nước, giới hạn MAX_PLIES. */
-async function playLoop({ state, events, initialPieces, matchId, seed, callBot, notes, onProgress }) {
+async function playLoop({ state, events, initialPieces, matchId, seed, map = EMPTY_MAP, callBot, notes, onProgress }) {
   let current = state;
+  const activeMap = map || EMPTY_MAP;
 
   for (let ply = 1; ply <= MAX_PLIES; ply += 1) {
     const player = current.turn;
-    const legalMoves = listAllLegalMoves(current, player);
+    const legalMoves = listAllLegalMoves(current, player, activeMap);
 
     if (legalMoves.length === 0) {
       notes.push(`${player} không còn nước đi hợp lệ`);
@@ -194,13 +200,14 @@ async function playLoop({ state, events, initialPieces, matchId, seed, callBot, 
         matchId, seed, initialPieces, events,
         winnerPlayerToResult(winner),
         REASONS.NO_LEGAL_MOVE,
-        notes
+        notes,
+        activeMap
       );
     }
 
     const live = await callBot(
       player,
-      buildMoveRequest(current, player, seed, ply),
+      buildMoveRequest(current, player, seed, ply, activeMap),
       config.limits.moveTimeoutMs
     );
     if (!live.ok) {
@@ -210,13 +217,14 @@ async function playLoop({ state, events, initialPieces, matchId, seed, callBot, 
         matchId, seed, initialPieces, events,
         winnerPlayerToResult(winner),
         REASONS.FORFEIT_MOVE,
-        notes
+        notes,
+        activeMap
       );
     }
 
     let applied;
     try {
-      applied = applyValidatedMove(current, player, live.response);
+      applied = applyValidatedMove(current, player, live.response, activeMap);
     } catch (error) {
       notes.push(`bot ${player} trả nước không hợp lệ: ${error.message}`);
       const winner = otherPlayer(player);
@@ -224,7 +232,8 @@ async function playLoop({ state, events, initialPieces, matchId, seed, callBot, 
         matchId, seed, initialPieces, events,
         winnerPlayerToResult(winner),
         REASONS.FORFEIT_MOVE,
-        notes
+        notes,
+        activeMap
       );
     }
 
@@ -238,13 +247,14 @@ async function playLoop({ state, events, initialPieces, matchId, seed, callBot, 
         matchId, seed, initialPieces, events,
         winnerPlayerToResult(current.winner),
         reason,
-        notes
+        notes,
+        activeMap
       );
     }
   }
 
   notes.push(`đạt giới hạn ${MAX_PLIES} plies`);
-  return buildFinished(matchId, seed, initialPieces, events, RESULTS.DRAW, REASONS.MOVE_LIMIT, notes);
+  return buildFinished(matchId, seed, initialPieces, events, RESULTS.DRAW, REASONS.MOVE_LIMIT, notes, activeMap);
 }
 
 export default { runMatch };

@@ -27,6 +27,7 @@ import {
   executeMove,
 } from '../../src/game/gameState.js';
 import { getValidMoves, getPieceAtSquare } from '../../src/game/rules.js';
+import { EMPTY_MAP } from '../../src/game/maps.js';
 
 // Re-export các hằng số engine mà tầng tournament hay dùng, để nơi khác chỉ cần
 // import từ adapter (một cửa duy nhất vào engine) và tránh lệch đường dẫn.
