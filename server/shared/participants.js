@@ -4,6 +4,7 @@ import { temporaryBot, hashBuffer, uploadArtifact } from './artifacts.js';
 import { normalizeParticipantName } from '../services/participants.js';
 import { validateBotFile } from '../services/botValidation.js';
 import { HttpError } from '../lib/httpError.js';
+import config from '../config.js';
 
 export async function createParticipant(raw) {
   const name=normalizeParticipantName(raw);
@@ -23,7 +24,7 @@ export async function listSubmissions(id) {
 export async function createSubmission(id,upload) {
   uuid(id);
   if (!(await rows('participants',`id=eq.${id}`)).length) throw new HttpError(404,'participant_not_found','Không tìm thấy đội.');
-  if (!Buffer.isBuffer(upload?.buffer)||upload.buffer.length>65536) throw new HttpError(400,'bad_file','Thiếu file hoặc quá 64 KiB cho profile MVP.');
+  if (!Buffer.isBuffer(upload?.buffer)||upload.buffer.length>config.limits.maxSourceBytes) throw new HttpError(400,'bad_file',`Thiếu file hoặc quá ${config.limits.maxSourceBytes/1024} KiB.`);
   const local=temporaryBot(upload.buffer),submissionId=randomUUID();let validation;
   try {validation=await validateBotFile(local.file);} finally {local.cleanup();}
   // Source is private and available to all trusted workers, never a local path.

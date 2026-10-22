@@ -5,7 +5,7 @@ import {
   botState, formatDateTime, shortSha, submissionFreeze, submissionState, teamBotState,
 } from './tournamentView.js';
 
-const MAX_BYTES = 64 * 1024;
+const MAX_BYTES = 256 * 1024;
 
 export default function SubmissionsPage({ account, events, teams, submissions, teamFilter, onSelectTeam, actions, busy }) {
   const isAdmin = account.role === 'admin';
@@ -30,7 +30,7 @@ export default function SubmissionsPage({ account, events, teams, submissions, t
       return;
     }
     if (file.size > MAX_BYTES) {
-      setError(`File ${Math.ceil(file.size / 1024)} KiB vượt giới hạn 64 KiB.`);
+      setError(`File ${Math.ceil(file.size / 1024)} KiB vượt giới hạn ${MAX_BYTES / 1024} KiB.`);
       return;
     }
     setError('');
@@ -102,7 +102,7 @@ export default function SubmissionsPage({ account, events, teams, submissions, t
       <div className="tt-grid tt-grid--2 tt-grid--form">
         <Panel title="Nộp bot" subtitle="Nộp bài mới không xóa lịch sử; hệ thống dùng bài hợp lệ mới nhất khi giải bắt đầu.">
           <form className="tt-form" ref={formRef} onSubmit={handleUpload}>
-            <Field label="File bot (.py)" hint="Tối đa 64 KiB. Validation chạy code trên máy BTC, không có sandbox.">
+            <Field label="File bot (.py)" hint="Tối đa 256 KiB. Validation chạy code trên máy BTC, không có sandbox.">
               <input type="file" name="file" accept=".py" required disabled={!canUpload || busy?.upload} />
             </Field>
             {error && <Alert tone="danger">{error}</Alert>}

@@ -6,9 +6,11 @@ import {
   eventProgress,
   eventTone,
   formatDateTime,
+  formatDuration,
   initials,
   matchOutcome,
   parseHashRoute,
+  reasonLabel,
   routeHash,
   stageSummary,
   standingFor,
@@ -20,7 +22,7 @@ import {
 
 test('role navigation exposes separate team/admin catalogs without privileged fallback', () => {
   assert.deepEqual(tournamentNavigation('team').map((item) => item.id), ['overview', 'team', 'bot', 'events', 'guide']);
-  assert.deepEqual(tournamentNavigation('admin').map((item) => item.id), ['overview', 'teams', 'bot', 'events', 'guide']);
+  assert.deepEqual(tournamentNavigation('admin').map((item) => item.id), ['overview', 'teams', 'bot', 'events', 'judge', 'guide']);
   for (const role of [null, '', 'operator', '__proto__', 'constructor']) {
     assert.deepEqual(tournamentNavigation(role), []);
   }
@@ -31,12 +33,25 @@ test('hash routes never grant a page outside the role catalog', () => {
   assert.deepEqual(parseHashRoute('#/events/abc_123-XYZ', 'admin'), { page: 'events', eventId: 'abc_123-XYZ' });
   assert.deepEqual(parseHashRoute('#/teams', 'team'), { page: 'overview', eventId: null });
   assert.deepEqual(parseHashRoute('#/team', 'admin'), { page: 'overview', eventId: null });
+  assert.deepEqual(parseHashRoute('#/judge', 'admin'), { page: 'judge', eventId: null });
+  assert.deepEqual(parseHashRoute('#/judge', 'team'), { page: 'overview', eventId: null });
   assert.deepEqual(parseHashRoute('#/events/%3Cscript%3E', 'admin'), { page: 'events', eventId: null });
   assert.deepEqual(parseHashRoute('#/events/ok/nested', 'admin'), { page: 'overview', eventId: null });
   assert.deepEqual(parseHashRoute('#/bot', 'admin'), { page: 'bot', eventId: null });
   assert.deepEqual(parseHashRoute('#/events', null), { page: 'overview', eventId: null });
   assert.deepEqual(parseHashRoute(undefined, 'team'), { page: 'overview', eventId: null });
 });
+
+test('judge labels keep unknown reasons visible and durations readable', () => {
+  assert.equal(reasonLabel('forfeit_move'), 'Bot đi nước không hợp lệ (xử thua)');
+  assert.equal(reasonLabel(null), '—');
+  assert.equal(reasonLabel('future_reason'), 'future_reason');
+  assert.equal(formatDuration(950), '950 ms');
+  assert.equal(formatDuration(4200), '4.2 s');
+  assert.equal(formatDuration(65000), '1 ph 5 s');
+  assert.equal(formatDuration(null), '—');
+});
+
 
 test('routeHash round-trips the supported shapes', () => {
   assert.equal(routeHash({ page: 'events', eventId: 'abc' }), '#/events/abc');

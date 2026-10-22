@@ -73,7 +73,7 @@ export default function GuidePage({ account }) {
       <div className="tt-grid tt-grid--2">
         <Panel title="Nộp bot đúng chuẩn" subtitle="MVP stateless, không phải Campus persistent.">
           <ul className="tt-bullets">
-            <li>Đúng một file <code>.py</code>, tối đa 64 KiB, Python 3.12+.</li>
+            <li>Đúng một file <code>.py</code>, tối đa 256 KiB, Python 3.12+.</li>
             <li>Chỉ thư viện chuẩn; không <code>pip install</code>, không đọc file ngoài.</li>
             <li>Nhận JSON qua stdin, trả JSON qua stdout; không in log lẫn vào kết quả.</li>
             <li>Không giữ trạng thái giữa các nước; mỗi request là tiến trình mới.</li>

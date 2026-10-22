@@ -46,7 +46,7 @@ try {
     for (const s of receipt ? [] : bundle.submissions) {
       if (s.status === 'valid') {
         const data = readFileSync(s.storage_path);
-        if (data.length > 65536 || hashBuffer(data) !== s.sha256) throw new Error('Local artifact integrity check failed. Import aborted.');
+        if (data.length > config.limits.maxSourceBytes || hashBuffer(data) !== s.sha256) throw new Error('Local artifact integrity check failed. Import aborted.');
         s.storage_path = await uploadArtifact(s.id,data);
       } else s.storage_path = `${s.id}.py`;
     }

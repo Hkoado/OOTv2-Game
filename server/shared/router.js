@@ -5,9 +5,14 @@ import { acceptBotUpload } from '../middleware/upload.js';
 import * as accounts from './accounts.js';
 import * as participants from './participants.js';
 import * as tournaments from './tournaments.js';
+import { getSharedJudgeMatch, getSharedJudgeOverview } from './judgeMonitor.js';
 import { rows, uuid } from './client.js';
+import { isAllowedOrigin } from '../lib/origin.js';
 
 const forbidden=()=>new HttpError(403,'scope_denied','Không có quyền truy cập dữ liệu này.');
+/** Cookie session: HttpOnly + SameSite=strict, thêm `Secure` khi request đi qua HTTPS. */
+const cookieOptions=(req)=>({httpOnly:true,sameSite:'strict',path:'/api/local',maxAge:accounts.SESSION_MS,secure:req.secure});
+const clearCookieOptions=(req)=>({httpOnly:true,sameSite:'strict',path:'/api/local',secure:req.secure});
 export async function checkStage(account,id,stage=null) {
   uuid(id);
   if (account.role==='admin') return;
@@ -23,22 +28,22 @@ export function sharedRouter() {
   router.use((req,res,next)=>{
     res.set('Cache-Control','no-store');
     const origin=req.get('origin');
-    if (!['GET','HEAD','OPTIONS'].includes(req.method)&&origin) {
-      try {const url=new URL(origin);if (!['localhost','127.0.0.1','[::1]'].includes(url.hostname)||!['http:','https:'].includes(url.protocol)) throw forbidden();} catch {return next(forbidden());}
-    }
+    if (!['GET','HEAD','OPTIONS'].includes(req.method)&&origin&&!isAllowedOrigin(req,origin)) return next(forbidden());
     next();
   });
   router.post('/login',async(req,res)=>{
     const now=Date.now();for (const [k,v] of attempts) if (v.until<now) attempts.delete(k);
-    const entry=attempts.get(req.ip)||{count:0,until:now+60000};attempts.set(req.ip,entry);
+    // `req.ip` là IP thật sau `trust proxy`; dùng socket làm fallback khi proxy tắt.
+    const key=req.ip||req.socket.remoteAddress;
+    const entry=attempts.get(key)||{count:0,until:now+60000};attempts.set(key,entry);
     if (++entry.count>15) throw new HttpError(429,'login_rate_limit','Thử lại sau một phút.');
-    const result=await accounts.login(req.body?.username,req.body?.password);attempts.delete(req.ip);
-    res.cookie(accounts.COOKIE_NAME,result.token,{httpOnly:true,sameSite:'strict',path:'/api/local',maxAge:accounts.SESSION_MS});
+    const result=await accounts.login(req.body?.username,req.body?.password);attempts.delete(key);
+    res.cookie(accounts.COOKIE_NAME,result.token,cookieOptions(req));
     res.json({account:result.account,csrf:result.csrf});
   });
   router.use(accounts.requireSession);
   router.get('/me',(req,res)=>res.json({account:req.account,csrf:req.session.csrf}));
-  router.post('/logout',async(req,res)=>{await accounts.logout(req.session);res.clearCookie(accounts.COOKIE_NAME,{path:'/api/local',sameSite:'strict',httpOnly:true});res.json({ok:true});});
+  router.post('/logout',async(req,res)=>{await accounts.logout(req.session);res.clearCookie(accounts.COOKIE_NAME,clearCookieOptions(req));res.json({ok:true});});
   router.put('/profile',async(req,res)=>res.json({account:await accounts.updateProfile(req.account.id,req.body||{})}));
   router.get('/teams',requireLocalAdmin,async(req,res)=>{
     const [a,p]=await Promise.all([accounts.listAccounts(),participants.listParticipants()]);res.json({accounts:a,participants:p});
@@ -58,6 +63,9 @@ export function sharedRouter() {
     }
     next();
   },acceptBotUpload,async(req,res)=>res.status(201).json(await participants.createSubmission(req.params.team,req.file)));
+  // Quan sát chấm bài (chỉ admin, chỉ đọc): cùng shape với driver SQLite.
+  router.get('/admin/judge',requireLocalAdmin,async(req,res)=>res.json(await getSharedJudgeOverview({eventId:typeof req.query.event==='string'&&req.query.event?req.query.event:null})));
+  router.get('/admin/judge/matches/:id',requireLocalAdmin,async(req,res)=>res.json(await getSharedJudgeMatch(req.params.id)));
   router.get('/events',async(req,res)=>{
     let events=await tournaments.listTournaments();
     if (req.account.role!=='admin') {const entries=await rows('tournament_entries',`participant_id=eq.${uuid(req.account.participant_id)}`);events=events.filter((t)=>entries.some((e)=>e.tournament_id===t.id));}

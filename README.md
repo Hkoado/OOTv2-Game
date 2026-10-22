@@ -12,7 +12,8 @@ Từ thư mục repository, chạy ba terminal: `npm run dev`, `npm run dev:api`
 API vẫn chỉ bind loopback vì chưa có sandbox OS. Không cần chép SQLite giữa máy.
 Tài khoản và password hash cũ được giữ, session cũ bị bỏ: đăng nhập lại.
 Test/legacy offline dùng `OOTV2_DB_DRIVER=sqlite`; không dùng chế độ đó làm writer
-song song sau cutover. Bucket bot private giữ giới hạn profile MVP 64 KiB/200 plies;
+song song sau cutover. Bucket bot private giữ profile MVP **256 KiB/200 plies** (nâng từ 64 KiB
+theo quyết định `bot.v1`, xem `docs/07-TRANG-THAI-TRIEN-KHAI.md`);
 không thay luật hoặc runner sang Campus trong đợt này.
 
 ## Nền tảng DB Supabase (22/10/2026)
@@ -259,8 +260,10 @@ Server tự nạp file `.env` ở thư mục gốc nếu có (`process.loadEnvFi
 | `OOTV2_DATA_DIR` | `<repo>/data` | Thư mục dữ liệu private (SQLite + bot upload), nằm ngoài `public/`, `src/`, `dist/`. |
 | `OOTV2_DB_PATH` | `<data>/ootv2.sqlite` | Đường dẫn file SQLite. |
 | `OOTV2_PYTHON_BIN` | (trống) | Lệnh Python; để trống thì tự dò `python` / `py -3` / `python3`. |
+| `OOTV2_PUBLIC_ORIGIN` | (trống) | Origin HTTPS của web khi chạy sau reverse proxy, phân tách bằng dấu phẩy (guard same-origin). Same-origin qua proxy vẫn được chấp nhận nếu không khai báo. |
+| `OOTV2_TRUST_PROXY` | `loopback` | Tin `X-Forwarded-For`/`X-Forwarded-Proto` từ proxy cùng máy; `0` để tắt, số hop nếu proxy ở máy khác. |
 
-Giới hạn cứng (trong `config.limits`, đổi bằng code): file bot ≤ **64 KiB**, input/output mỗi luồng ≤ **64/16 KiB**, timeout setup **3 s** và move **2 s**, tối đa **200 plies**, worker poll mỗi **1 s**.
+Giới hạn cứng (trong `config.limits`, đổi bằng code): file bot ≤ **256 KiB**, input/output mỗi luồng ≤ **64/16 KiB**, timeout setup **3 s** và move **2 s**, tối đa **200 plies**, worker poll mỗi **1 s**.
 
 ### 7.6 Bản đồ mã nguồn phần giải đấu
 

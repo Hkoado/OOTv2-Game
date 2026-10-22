@@ -73,7 +73,27 @@ CREATE TABLE IF NOT EXISTS matches (
 CREATE INDEX IF NOT EXISTS idx_matches_status ON matches(status);
 CREATE INDEX IF NOT EXISTS idx_matches_tournament ON matches(tournament_id, stage, status);
 CREATE INDEX IF NOT EXISTS idx_matches_series ON matches(series_id);
+
+-- Nhật ký chấm bài (Mức 2): ghi chú/lỗi/thời gian của từng ván, ghi trong cùng
+-- transaction với kết quả. Không chứa source code hay đường dẫn file bot.
+CREATE TABLE IF NOT EXISTS match_logs (
+  match_id   TEXT PRIMARY KEY REFERENCES matches(id) ON DELETE CASCADE,
+  notes_json TEXT NOT NULL DEFAULT '[]',
+  error      TEXT,
+  worker     TEXT,
+  elapsed_ms INTEGER,
+  created_at TEXT NOT NULL
+);
+
+-- Nhịp tim worker để portal admin biết tiến trình chấm còn sống hay đã dừng.
+CREATE TABLE IF NOT EXISTS worker_state (
+  worker_id     TEXT PRIMARY KEY,
+  started_at    TEXT NOT NULL,
+  heartbeat_at  TEXT NOT NULL,
+  last_match_id TEXT
+);
 `;
+
 
 let db = null;
 

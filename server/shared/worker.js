@@ -5,6 +5,8 @@ import { rpc, rows, health } from './client.js';
 import { materialize } from './artifacts.js';
 import { runMatch } from '../judge/matchRunner.js';
 import { advanceTournament } from './tournaments.js';
+import { recordSharedMatchLog } from './judgeMonitor.js';
+import { FAILURE_REASONS } from '../services/judgeView.js';
 
 export async function processSharedMatch({workerId,run=runMatch,verbose=true}) {
   const match=await rpc('mvp_claim',{p_worker:workerId});
@@ -33,7 +35,19 @@ export async function processSharedMatch({workerId,run=runMatch,verbose=true}) {
     await beat();
     if (lost) return {processed:true,recorded:false,reason:'lease_lost'};
     const recorded=await rpc('mvp_finish',{p_id:match.id,p_token:token,p_outcome:outcome});
-    if (recorded) await advanceTournament(match.tournament_id);
+    if (recorded) {
+      // Quan sát (Mức 2): nhật ký là best-effort, không được đổi kết quả trận.
+      const failed=FAILURE_REASONS.includes(outcome.reason);
+      const startedAt=Date.parse(match.started_at||'');
+      await recordSharedMatchLog({
+        matchId:match.id,
+        notes:Array.isArray(outcome.notes)?outcome.notes:[],
+        error:failed?outcome.notes?.[0]||outcome.reason:null,
+        worker:workerId,
+        elapsedMs:Number.isFinite(startedAt)?Date.now()-startedAt:null,
+      }).catch(()=>console.warn('[shared-worker] không ghi được nhật ký chấm; kiểm tra migration 20261022150000_judge_monitor.sql'));
+      await advanceTournament(match.tournament_id);
+    }
     if (verbose) console.log(`[shared-worker] ${match.id}: ${recorded?'accepted':'stale lease'}`);
     return {processed:true,recorded,matchId:match.id};
   } catch {

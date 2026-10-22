@@ -9,6 +9,43 @@ Bucket bot private; DB lease/heartbeat/token fencing cho nhiều worker.
 Xem `d:\OOTv2-Game\docs\12-SUPABASE-DATABASE.md` cho hướng dẫn và giới hạn kiểm chứng.
 Các ghi chú SQLite bên dưới mô tả mốc lịch sử/legacy.
 
+## Hardening trước khi mở web công khai (22/10/2026)
+
+Đã sửa 4 điểm chặn code để API chạy được sau reverse proxy HTTPS:
+
+- Guard same-origin (`server/lib/origin.js`) dùng chung cho `/api/local`: chấp nhận localhost (dev),
+  origin HTTPS trùng `Host`/`X-Forwarded-Host`, và origin khai báo trong `OOTV2_PUBLIC_ORIGIN`.
+- `trust proxy` cấu hình qua `OOTV2_TRUST_PROXY` (mặc định `loopback`) để rate limit login dùng IP thật
+  và `req.secure` phản ánh HTTPS.
+- Cookie session thêm `Secure` khi request đã qua HTTPS; dev HTTP vẫn đăng nhập được.
+- Giới hạn upload nâng 64 KiB → **256 KiB** (`bot.v1`) ở config, multer, artifact, UI và CLI;
+  `node tools/cli/setup-shared-storage.js` tự nâng bucket private `ootv2-bots` từ 65536 lên 262144.
+
+Chưa làm: rate limit toàn cục/WAF ở tầng Caddy, sandbox cấp OS, GitHub sync, queue Campus.
+API vẫn chỉ bind loopback; chỉ mở qua Caddy/Nginx cùng máy.
+
+## Quan sát chấm bài cho admin — Mức 1 + Mức 2 (22/10/2026)
+
+Cổng admin có thêm trang **Chấm bài** (`#/judge`): mặt quan sát **chỉ đọc**, không đổi kết quả
+trận, không mở thêm đường chạy code bot. Vẫn dùng session cookie + CSRF và `requireLocalAdmin`.
+
+- `GET /api/local/admin/judge[?event=<id>]`: tổng ván theo trạng thái (chờ/đang/xong/sự cố),
+  tiến độ 3 vòng, ván đang chấm kèm thời gian, 8 ván vừa xong, tối đa 12 ván có sự cố,
+  nhịp tim worker và giới hạn judge (`max_plies`, timeout, 256 KiB).
+- `GET /api/local/admin/judge/matches/:id`: nhật ký của một ván (ghi chú, lỗi, thời gian, worker).
+- Mức 2 lưu nhật ký vào bảng mới `match_logs` (SQLite) / `mvp_match_logs` (Supabase):
+  ghi chú của worker, lỗi đầu tiên, `elapsed_ms` và nhãn worker `hostname:pid`.
+  Bản SQLite ghi **trong cùng transaction** với `recordResult` nên kết quả và nhật ký không lệch.
+- Ghi chú bị lọc đường dẫn tuyệt đối (`C:\...`, `/tmp/...` → `[path]`), gộp xuống dòng,
+  cắt 400 ký tự, tối đa 20 dòng. API không trả source code, SHA-256 hay storage path.
+- Nhịp tim: `worker_state` cập nhật mỗi vòng poll; UI cảnh báo khi còn ván chờ mà nhịp tim
+  cũ hơn 5 chu kỳ (tối thiểu 10 s). Chế độ Supabase dùng `worker_id` + `lease_until` (lease 60 s).
+- Supabase: chạy thêm `supabase/migrations/20261022150000_judge_monitor.sql`. Chưa chạy migration
+  thì trang vẫn hiển thị tiến độ, chỉ trả `logs_available: false` thay vì làm sập màn hình.
+- UI polling 3 s, tạm dừng khi tab ẩn; ván chấm trước bản này không có nhật ký (UI nói rõ).
+- Giới hạn đã biết: chưa huỷ/retry ván từ UI, chỉ trích tối đa 400 ký tự stderr trong thông điệp lỗi,
+  và vẫn không phải sandbox cấp OS.
+
 Phát triển tiếp `tournament/initial` trên nhánh `codex/campus-engine-foundation`.
 Bộ đặc tả mới là đích sản phẩm; bảng dưới phân biệt code chạy được và phần chưa triển khai.
 Đợt này triển khai milestone M1 nền tảng engine theo `04-HUONG-DAN-AGENT-CODE.md`.
@@ -94,7 +131,7 @@ ván chưa kết thúc; verifier trả `finished:false` cùng trạng thái đã
 - `src/App.jsx` chỉ mount `CampusPortal`; mở ứng dụng luôn vào màn hình đăng nhập, không auto-restore phiên.
 - UI phòng chơi/spectator/Tournament MVP cũ giữ nguyên trong `src/LegacyApp.jsx`, không được import vào bundle chính.
 - Vai trò đội: Tổng quan, Đội của tôi, Bot & bài nộp, Giải đấu, Luật & hướng dẫn.
-- Vai trò admin: Tổng quan, Đội & tài khoản, Bài nộp, Quản lý giải, Luật & vận hành.
+- Vai trò admin: Tổng quan, Đội & tài khoản, Bài nộp, Quản lý giải, Chấm bài, Luật & vận hành.
 - Điều hướng bằng hash (`#/events/:id`), kiểm lại theo vai trò ở client; server vẫn là nguồn quyền cuối cùng.
 - Polling 4 giây không chồng request, tạm dừng khi tab ẩn; ReplayBoard tách chunk và tải khi mở replay.
 - Theme sáng/tối dùng token trong `docs/ui-style/tokens.json`, lưu lựa chọn ở `localStorage`.

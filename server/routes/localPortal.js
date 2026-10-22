@@ -7,8 +7,13 @@ import { createSubmission, listParticipants, listSubmissions } from '../services
 import { createTournament, updateTournamentDraft, startTournament, listTournaments, getTournament, computeStandings, computeBracket, listMatches } from '../services/tournaments.js';
 import { getMatchDetail, getMatchReplay } from '../services/matches.js';
 import { COOKIE_NAME, SESSION_MS, login, logout, requireSession, requireLocalAdmin, listAccounts, createAccount, resetPassword, updateProfile } from '../services/localAccounts.js';
+import { getJudgeMatch, getJudgeOverview } from '../services/judgeMonitor.js';
+import { isAllowedOrigin } from '../lib/origin.js';
 
 const forbidden = () => new HttpError(403, 'scope_denied', 'Không có quyền truy cập dữ liệu này.');
+/** Cookie session: HttpOnly + SameSite=strict, thêm `Secure` khi request đi qua HTTPS. */
+const cookieOptions = (req) => ({ httpOnly: true, sameSite: 'strict', path: '/api/local', maxAge: SESSION_MS, secure: req.secure });
+const clearCookieOptions = (req) => ({ httpOnly: true, sameSite: 'strict', path: '/api/local', secure: req.secure });
 
 function checkStage(account, tournamentId, stage = null) {
   if (account.role === 'admin') return;
@@ -26,31 +31,27 @@ export function localPortalRouter() {
   router.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
     const origin = req.get('origin');
-    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && origin) {
-      try {
-        const url = new URL(origin);
-        if (!['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) || !['http:', 'https:'].includes(url.protocol)) throw forbidden();
-      } catch { return next(forbidden()); }
-    }
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && origin && !isAllowedOrigin(req, origin)) return next(forbidden());
     next();
   });
   router.post('/login', asyncHandler(async (req, res) => {
     const now = Date.now();
     for (const [key, value] of attempts) if (value.until < now) attempts.delete(key);
-    const key = req.ip;
+    // `req.ip` là IP thật sau `trust proxy`; dùng socket làm fallback khi proxy tắt.
+    const key = req.ip || req.socket.remoteAddress;
     const attempt = attempts.get(key) || { count: 0, until: now + 60000 };
     if (++attempt.count > 15) throw new HttpError(429, 'login_rate_limit', 'Quá nhiều lần đăng nhập. Thử lại sau một phút.');
     attempts.set(key, attempt);
     const result = await login(req.body?.username, req.body?.password);
     attempts.delete(key);
-    res.cookie(COOKIE_NAME, result.token, { httpOnly: true, sameSite: 'strict', path: '/api/local', maxAge: SESSION_MS });
+    res.cookie(COOKIE_NAME, result.token, cookieOptions(req));
     res.json({ account: result.account, csrf: result.csrf });
   }));
   router.use(requireSession);
   router.get('/me', (req, res) => res.json({ account: req.account, csrf: req.session.csrf }));
   router.post('/logout', (req, res) => {
     logout(req.session);
-    res.clearCookie(COOKIE_NAME, { path: '/api/local', sameSite: 'strict', httpOnly: true });
+    res.clearCookie(COOKIE_NAME, clearCookieOptions(req));
     res.json({ ok: true });
   });
   router.put('/profile', (req, res) => res.json({ account: updateProfile(req.account.id, req.body || {}) }));
@@ -61,6 +62,14 @@ export function localPortalRouter() {
     res.json({ ok: true });
   }));
   router.get('/submissions', (req, res) => res.json({ submissions: listSubmissions(req.account.role === 'admin' ? String(req.query.team || '') : req.account.participant_id) }));
+  // Quan sát chấm bài (chỉ đọc, chỉ admin): tiến độ, worker, sự cố và nhật ký từng ván.
+  router.get('/admin/judge', requireLocalAdmin, (req, res) => {
+    const eventId = typeof req.query.event === 'string' && req.query.event ? req.query.event : null;
+    res.json(getJudgeOverview({ eventId }));
+  });
+  router.get('/admin/judge/matches/:id', requireLocalAdmin, (req, res) => {
+    res.json(getJudgeMatch(req.params.id));
+  });
   router.post('/submissions/:team', (req, res, next) => {
     if (req.account.role !== 'admin' && req.account.participant_id !== req.params.team) return next(forbidden());
     if (req.account.role !== 'admin' && getDb().prepare(`SELECT e.id FROM tournament_entries e JOIN tournaments t ON t.id=e.tournament_id

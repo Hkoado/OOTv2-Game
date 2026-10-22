@@ -137,6 +137,13 @@ test('M4 worker: chạy hết giải 8 bot (30 game) và tìm ra vô địch', {
   assert.notEqual(bracket.champion.name, 'Bot phạm luật');
   assert.ok(participants.some((participant) => participant.name === bracket.champion.name));
 
+  // Mức 2: mỗi ván đã chấm có nhật ký, nhãn worker, không lưu đường dẫn file bot.
+  const logs = env.getDb().prepare('SELECT notes_json, worker FROM match_logs').all();
+  assert.equal(logs.length, 30, 'phải có nhật ký cho đủ 30 ván');
+  assert.ok(logs.every((row) => row.worker && row.worker.includes(':')), 'mỗi nhật ký phải có nhãn worker');
+  assert.ok(logs.every((row) => Array.isArray(JSON.parse(row.notes_json))));
+  assert.ok(logs.every((row) => !row.notes_json.includes('submissions')), 'không lưu đường dẫn file bot');
+
   // Không đụng dữ liệu thật của repo: mọi thứ nằm trong thư mục tạm.
   assert.equal(snapshotDataDir(), dataBefore, 'test không được ghi vào data/ của repo');
 });
@@ -203,4 +210,8 @@ test('M4 worker: recovery match running + ghi kết quả không đúp điểm',
   assert.equal(once.recorded, true);
   assert.ok(once.match.id !== reclaimed.id, '--once phải lấy match pending kế tiếp');
   assert.equal(env.tournamentsService.getTournament(tournamentId).match_counts.finished, 2);
+  // Nhật ký vẫn ghi đủ cho ván ghi trực tiếp (worker=null) và ván do worker chấm.
+  const recoveryLogs = env.getDb().prepare('SELECT worker FROM match_logs').all();
+  assert.equal(recoveryLogs.length, 2);
+  assert.ok(recoveryLogs.some((row) => row.worker && row.worker.includes(':')));
 });

@@ -397,7 +397,7 @@ export default function LocalCore({ theme, onToggleTheme }) {
       replay={replay}
       onOpenReplay={openReplay}
       onCloseReplay={closeReplay}
-      actions={{ refresh, saveProfile, createTeam, resetPassword, uploadBot, createEvent, saveEvent, startEvent }}
+      actions={{ refresh, saveProfile, createTeam, resetPassword, uploadBot, createEvent, saveEvent, startEvent, onSessionExpired: expireSession }}
     />
   );
 }

@@ -10,6 +10,7 @@
  * để chạy tối đa 1 trận (dùng cho test), `--drain` để chạy tới khi hết việc.
  */
 
+import { hostname } from 'node:os';
 import { pathToFileURL } from 'node:url';
 
 import config from './config.js';
@@ -17,8 +18,16 @@ import { getDb, initDb, nowIso, recoverUnfinishedMatches } from './db.js';
 import { REASONS, RESULTS, PROTOCOL_VERSION } from './judge/gameAdapter.js';
 import { runMatch } from './judge/matchRunner.js';
 import { advanceTournament, computeBracket, getTournament } from './services/tournaments.js';
+import { heartbeatWorker, recordMatchLog } from './services/judgeMonitor.js';
+import { FAILURE_REASONS } from './services/judgeView.js';
 import { sharedEnabled } from './shared/client.js';
 import { runSharedWorker } from './shared/worker.js';
+
+/** Nhãn worker hiển thị trong portal admin: `hostname:pid` (không phải bí mật). */
+export function workerLabel() {
+  return `${hostname().slice(0, 40)}:${process.pid}`;
+}
+
 
 const STAGE_FOR_STATUS = {
   group_running: 'group',
@@ -41,7 +50,7 @@ export function currentRunningTournament() {
 function loadMatch(matchId) {
   return getDb()
     .prepare(
-      `SELECT m.id, m.tournament_id, m.stage, m.series_id, m.game_no, m.seed,
+      `SELECT m.id, m.tournament_id, m.stage, m.series_id, m.game_no, m.seed, m.started_at,
               rp.name AS red_name, bp.name AS blue_name,
               rs.storage_path AS red_path, bs.storage_path AS blue_path
        FROM matches m
@@ -80,8 +89,12 @@ export function claimNextMatch(tournament) {
   return claim();
 }
 
-/** Ghi kết quả + replay trong transaction, chỉ khi match còn `running` (chống đúp điểm). */
-export function recordResult(matchId, outcome) {
+/**
+ * Ghi kết quả + replay + nhật ký chấm trong transaction, chỉ khi match còn `running`
+ * (chống đúp điểm). `meta.worker`/`meta.elapsedMs` là thông tin quan sát, không ảnh
+ * hưởng kết quả trận.
+ */
+export function recordResult(matchId, outcome, { worker = null, elapsedMs = null } = {}) {
   const db = getDb();
   const finish = db.transaction(() => {
     const info = db
@@ -98,7 +111,16 @@ export function recordResult(matchId, outcome) {
         nowIso(),
         matchId
       );
-    return info.changes === 1;
+    if (info.changes !== 1) return false;
+    const failed = FAILURE_REASONS.includes(outcome.reason);
+    recordMatchLog({
+      matchId,
+      notes: Array.isArray(outcome.notes) ? outcome.notes : [],
+      error: failed ? outcome.notes?.[0] || outcome.reason : null,
+      worker,
+      elapsedMs,
+    });
+    return true;
   });
   return finish();
 }
@@ -124,6 +146,8 @@ function brokenMatchOutcome(match, message) {
 
 /** Chạy tối đa 1 trận. Trả về `{ processed, reason }` để vòng lặp quyết định sleep/dừng. */
 export async function processOneMatch({ verbose = true } = {}) {
+  const worker = workerLabel();
+  heartbeatWorker({ workerId: worker });
   const tournament = currentRunningTournament();
   if (!tournament) {
     return { processed: false, reason: 'no_running_tournament' };
@@ -137,6 +161,9 @@ export async function processOneMatch({ verbose = true } = {}) {
     }
     return { processed: false, reason: 'no_pending_match', advanced };
   }
+
+  const startedAt = Date.parse(match.started_at || '');
+  const elapsed = () => (Number.isFinite(startedAt) ? Math.max(0, Date.now() - startedAt) : null);
 
   let outcome;
   if (!match.red_path || !match.blue_path) {
@@ -154,7 +181,8 @@ export async function processOneMatch({ verbose = true } = {}) {
     }
   }
 
-  const recorded = recordResult(match.id, outcome);
+  const recorded = recordResult(match.id, outcome, { worker, elapsedMs: elapsed() });
+  heartbeatWorker({ workerId: worker, lastMatchId: match.id });
   const advanced = advanceTournament(tournament.id);
 
   if (verbose) {

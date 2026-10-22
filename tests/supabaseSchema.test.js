@@ -26,6 +26,17 @@ test('Supabase migration preserves cross-team and cross-round constraints', () =
   assert.match(sql, /BETWEEN 1 AND 262144/);
 });
 
+test('judge monitor migration keeps match logs private and bounded', () => {
+  const judge = readFileSync(new URL('../supabase/migrations/20261022150000_judge_monitor.sql', import.meta.url), 'utf8');
+  assert.match(judge, /CREATE TABLE public\.mvp_match_logs/);
+  assert.match(judge, /match_id\s+uuid PRIMARY KEY REFERENCES public\.mvp_matches\(id\)/);
+  assert.match(judge, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(judge, /REVOKE ALL ON public\.mvp_match_logs FROM PUBLIC, anon, authenticated/);
+  assert.match(judge, /GRANT SELECT, INSERT, UPDATE ON public\.mvp_match_logs TO service_role/);
+  assert.match(judge, /length\(notes_json\) BETWEEN 2 AND 16384/);
+  assert.match(judge, /elapsed_ms integer CHECK\(elapsed_ms IS NULL OR elapsed_ms >= 0\)/);
+});
+
 test('Postgres smoke tests are transactional and test actual client roles', () => {
   assert.match(smoke, /BEGIN;/);
   assert.match(smoke, /ROLLBACK;/);

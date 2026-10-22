@@ -88,7 +88,8 @@ test('M3 API: upload sai đuôi, thiếu file, quá lớn hoặc lỗi cú pháp
   assert.equal(noFile.status, 400);
   assert.equal(noFile.body.error, 'missing_file');
 
-  const bigBytes = new Uint8Array(70 * 1024);
+  // Vượt hạn mức của profile `bot.v1` (256 KiB) -> multer trả `file_too_large`.
+  const bigBytes = new Uint8Array(env.config.limits.maxSourceBytes + 1024);
   bigBytes.fill(32);
   const form = new FormData();
   form.append('file', new Blob([bigBytes], { type: 'text/x-python' }), 'big.py');

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  BookOpen, ChevronRight, LayoutDashboard, LogOut, Menu, Moon, Sun, Trophy, UploadCloud, Users, X,
+  BookOpen, ChevronRight, LayoutDashboard, LogOut, Menu, Moon, Sun, Trophy, UploadCloud, Users, X, Activity,
 } from 'lucide-react';
 import { navTitle, tournamentNavigation, isEventRunning, initials } from './tournamentView.js';
 import { Badge } from './TournamentUi.jsx';
@@ -11,6 +11,7 @@ import TeamsPage from './TeamsPage.jsx';
 import SubmissionsPage from './SubmissionsPage.jsx';
 import EventsPage from './EventsPage.jsx';
 import EventDetailPage from './EventDetailPage.jsx';
+import JudgePage from './JudgePage.jsx';
 import GuidePage from './GuidePage.jsx';
 
 const ICONS = {
@@ -18,6 +19,7 @@ const ICONS = {
   team: Users,
   bot: UploadCloud,
   events: Trophy,
+  judge: Activity,
   guide: BookOpen,
 };
 
@@ -183,6 +185,7 @@ export default function TournamentWorkspace({
           {route.page === 'events' && (route.eventId
             ? <EventDetailPage {...pageProps} eventId={route.eventId} onOpenReplay={onOpenReplay} />
             : <EventsPage {...pageProps} />)}
+          {route.page === 'judge' && isAdmin && <JudgePage actions={actions} onOpenReplay={onOpenReplay} />}
           {route.page === 'guide' && <GuidePage account={account} />}
         </main>
 

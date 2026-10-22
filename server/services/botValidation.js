@@ -50,7 +50,7 @@ export function checkPythonSyntax(filePath) {
   return { ok: true };
 }
 
-/** Kiểm tra file là text UTF-8 hợp lệ (không NUL byte), trong giới hạn 64 KiB. */
+/** Kiểm tra file là text UTF-8 hợp lệ (không NUL byte), trong giới hạn `limits.maxSourceBytes`. */
 export function checkSourceFile(filePath) {
   const stat = statSync(filePath);
   if (!stat.isFile()) {

@@ -87,7 +87,7 @@ export default function ParticipantsView({
         </div>
 
         <p className="panel__hint">
-          Chỉ nhận <strong>một file .py</strong> (≤ 64 KiB, Python 3.12+, thư viện chuẩn). Không nhận ZIP,
+          Chỉ nhận <strong>một file .py</strong> (≤ 256 KiB, Python 3.12+, thư viện chuẩn). Không nhận ZIP,
           package hay file thực thi. Bot chỉ được chạy trên máy local tin cậy.
         </p>
 

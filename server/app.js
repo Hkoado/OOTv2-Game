@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
 
-import { ROOT_DIR } from './config.js';
+import config, { ROOT_DIR } from './config.js';
 import { badRequest, sendError } from './lib/httpError.js';
 import participantsRouter from './routes/participants.js';
 import tournamentsRouter from './routes/tournaments.js';
@@ -30,6 +30,9 @@ export function createApp({ legacyAccess = false } = {}) {
   const app = express();
 
   app.disable('x-powered-by');
+  // Reverse proxy cùng máy (Caddy/Nginx) gửi `X-Forwarded-For`/`X-Forwarded-Proto`:
+  // cần biết IP thật cho rate limit và biết request là HTTPS để đặt cookie `Secure`.
+  app.set('trust proxy', config.trustProxy);
   app.use(express.json({ limit: '64kb' }));
 
   app.get('/api/health', async (req, res) => {

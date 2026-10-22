@@ -1101,3 +1101,46 @@
 .tt-login__legal, .tt-foot { color: var(--ott-color-text-secondary); font-size: 12px; }
 .tt-brand__mark { overflow: hidden; }
 .tt-brand__mark img { display: block; width: 28px; height: 28px; object-fit: contain; }
+
+/* Judge monitor (Mức 1 + Mức 2): chỉ dùng token của kit, không đổi bố cục chung. */
+.tt-kv {
+  display: grid;
+  grid-template-columns: minmax(96px, max-content) minmax(0, 1fr);
+  gap: var(--ott-space-2) var(--ott-space-4);
+  font-size: var(--ott-type-label-size);
+  align-items: baseline;
+}
+.tt-kv dt { color: var(--ott-color-text-secondary); }
+.tt-kv dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.tt-log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ott-space-2);
+  font-size: var(--ott-type-label-size);
+}
+.tt-log li {
+  border-left: 2px solid var(--ott-color-border-subtle);
+  padding: var(--ott-space-1) 0 var(--ott-space-1) var(--ott-space-3);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.tt-log__error-text { font-size: var(--ott-type-label-size); overflow-wrap: anywhere; }
+.tt-active-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ott-space-4);
+  flex-wrap: wrap;
+}
+.tt-inline-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ott-space-2);
+  font-size: var(--ott-type-caption-size);
+  color: var(--ott-color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.tt-clip { display: block; max-width: 34ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-dialog__actions { display: flex; flex-wrap: wrap; gap: var(--ott-space-3); justify-content: flex-end; }
+.tt-spin { animation: tt-spin 900ms linear infinite; }
+

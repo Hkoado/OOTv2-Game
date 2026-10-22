@@ -18,6 +18,9 @@ Migration DDL dùng kết nối quản trị đã xác thực.
 - Migration `20261022125205_shared_mvp_runtime_tables` và
   `20261022125322_shared_mvp_runtime_functions` đã áp dụng, 9 bảng bật RLS,
   chỉ service_role có quyền; 13 bảng Campus không thay đổi.
+- Quan sát chấm bài (Mức 2): migration `20261022150000_judge_monitor` thêm bảng
+  `mvp_match_logs` (RLS, chỉ service_role đọc/ghi; API vẫn gate `requireLocalAdmin`).
+  Chưa áp dụng thì trang Chấm bài vẫn hiển thị tiến độ nhưng trả `logs_available: false`.
 - Đã nhập 9 participants, 2 accounts, 1 tournament, 7 entries; không có submission/match.
   Password hash giữ nguyên, bỏ session cũ: mọi người đăng nhập lại.
 - SQLite có ID TEXT không phải UUID (`draft-bay-doi`): CLI ánh xạ tất định sang UUID,
