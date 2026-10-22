@@ -96,6 +96,10 @@ export function initDb({ dbPath = config.dbPath, submissionsDir = config.submiss
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA_SQL);
+  // Additive migration: old events retain the open-board MVP profile.
+  if (!db.prepare('PRAGMA table_info(tournaments)').all().some((column) => column.name === 'map_json')) {
+    db.exec('ALTER TABLE tournaments ADD COLUMN map_json TEXT');
+  }
   return db;
 }
 

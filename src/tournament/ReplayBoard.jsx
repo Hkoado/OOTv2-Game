@@ -1,14 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Pause, Play, RotateCcw, SkipBack, SkipForward } from 'lucide-react';
-import Square from '../components/Square.jsx';
-import Piece from '../components/Piece.jsx';
-import { FILES, PIECE_LABELS, PLAYERS, coordsToSquare, getSquareZone } from '../game/constants.js';
-import { buildReplayFrames, pieceAtSquare } from './replay.js';
+import GameBoard from '../ui/GameBoard.jsx';
+import { PIECE_LABELS, PLAYERS } from '../game/constants.js';
+import { buildReplayFrames } from './replay.js';
 import { REASON_LABELS, RESULT_LABELS, labelOf } from './labels.js';
 
 /**
  * Board read-only để xem lại trận đã kết thúc.
- * Dùng lại `Square`/`Piece` sẵn có (bàn cờ 9x9) nhưng KHÔNG truyền handler click,
+ * Dùng component OTTBoard qua adapter chung và KHÔNG truyền handler click,
  * nên người xem không thể đi quân.
  */
 export default function ReplayBoard({ match, replay }) {
@@ -40,30 +39,6 @@ export default function ReplayBoard({ match, replay }) {
     return buckets;
   }, [frame]);
 
-  const rows = [];
-  for (let row = 9; row >= 1; row -= 1) {
-    const cols = [];
-    for (let col = 1; col <= 9; col += 1) {
-      const square = coordsToSquare(col, row);
-      const piece = pieceAtSquare(frame?.pieces, square);
-      cols.push(
-        <Square
-          key={square}
-          square={square}
-          zone={getSquareZone(square)}
-          piece={piece}
-          isLastMoveFrom={frame?.lastMove?.from === square}
-          isLastMoveTo={frame?.lastMove?.to === square}
-          fileLabel={row === 1 ? FILES[col - 1] : null}
-          rankLabel={col === 1 ? row : null}
-        >
-          {piece && <Piece piece={piece} />}
-        </Square>
-      );
-    }
-    rows.push(cols);
-  }
-
   return (
     <div className="replay-viewer">
       <div className="replay-viewer__head">
@@ -87,9 +62,7 @@ export default function ReplayBoard({ match, replay }) {
         </p>
       )}
 
-      <div className="board-wrapper">
-        <div className="board-grid">{rows.flat()}</div>
-      </div>
+      <div className="replay-board-layout"><GameBoard pieces={frame?.pieces} lastMove={frame?.lastMove} map={replay?.map} readOnly /></div>
 
       <div className="replay-controls">
         <button

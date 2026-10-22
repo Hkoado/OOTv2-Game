@@ -16,6 +16,7 @@ export default function Square({
   fileLabel,
   rankLabel,
   children,
+  isBlocked = false,
 }) {
   const isRedBase = square === BASES[PLAYERS.RED];
   const isBlueBase = square === BASES[PLAYERS.BLUE];
@@ -26,14 +27,20 @@ export default function Square({
 
   return (
     <div
-      onClick={onClick}
-      className={`square ${zoneClass} ${isSetupHome ? 'square--setup-home' : ''} ${isSelected ? 'square--selected' : ''} ${
+      onClick={isBlocked ? undefined : onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick && !isBlocked ? 0 : undefined}
+      aria-label={onClick ? `${square}${isBlocked ? ' · Ô cản' : ''}` : undefined}
+      aria-disabled={isBlocked || undefined}
+      onKeyDown={onClick && !isBlocked ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onClick(event); } } : undefined}
+      className={`square ${isBlocked ? 'square--blocked' : zoneClass} ${isSetupHome && !isBlocked ? 'square--setup-home' : ''} ${isSelected ? 'square--selected' : ''} ${
         isValidTarget ? `square--valid-target square--target-${targetType}` : ''
       } ${isLastMoveFrom ? 'square--last-from' : ''} ${
         isLastMoveTo ? 'square--last-to' : ''
       }`}
       data-square={square}
     >
+      {isBlocked && <span aria-hidden="true" className="square__obstacle">▧</span>}
       {/* Tọa độ cờ vua (Góc chữ cái & số) */}
       {fileLabel && <span className="square__file-label">{fileLabel}</span>}
       {rankLabel && <span className="square__rank-label">{rankLabel}</span>}

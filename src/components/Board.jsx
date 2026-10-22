@@ -1,13 +1,8 @@
 import React, { useState } from 'react';
-import Square from './Square.jsx';
-import Piece from './Piece.jsx';
+import GameBoard from '../ui/GameBoard.jsx';
+
 import {
-  BOARD_SIZE,
-  FILES,
-  RANKS,
-  coordsToSquare,
   getSquareZone,
-  PLAYERS,
 } from '../game/constants.js';
 import { getValidMoves } from '../game/rules.js';
 import { GAME_PHASES } from '../game/gameState.js';
@@ -28,6 +23,7 @@ export default function Board({
     pieces = {},
     turn,
     lastMove,
+    map = null,
   } = gameState || {};
 
   const isPlaying = phase === GAME_PHASES.PLAYING;
@@ -38,12 +34,13 @@ export default function Board({
   const allowedSetupZone = isRedSetup ? 'red-home' : isBlueSetup ? 'blue-home' : null;
 
   // Tính các nước đi hợp lệ cho quân đang chọn trong giai đoạn thi đấu
-  const validMoves = isMyTurn && selectedPieceId ? getValidMoves(pieces, selectedPieceId) : [];
+  const validMoves = isMyTurn && selectedPieceId ? getValidMoves(pieces, selectedPieceId, map) : [];
   const validMoveMap = new Map();
   validMoves.forEach((m) => validMoveMap.set(m.square, m));
 
   // Xử lý khi click vào 1 ô trên bàn cờ
   function handleSquareClick(square, zone) {
+    if (map?.blocked?.includes(square)) return;
     // 1. GIAI ĐOẠN XẾP QUÂN
     if (isSetupMode) {
       if (zone !== allowedSetupZone) return;
@@ -100,71 +97,13 @@ export default function Board({
     }
   }
 
-  // Tạo ma trận các ô cờ 9x9 (Hàng từ 9 xuống 1, cột từ a đến i)
-  const rows = [];
-  for (let r = 9; r >= 1; r--) {
-    const cols = [];
-    for (let c = 1; c <= 9; c++) {
-      const square = coordsToSquare(c, r);
-      const zone = getSquareZone(square);
-      const piece = Object.values(pieces).find((p) => p.alive && p.square === square);
-
-      const isSetupSelected = selectedSetupPieceId && piece?.id === selectedSetupPieceId;
-      const isPlaySelected = selectedPieceId && piece?.id === selectedPieceId;
-      const isSelected = isSetupSelected || isPlaySelected;
-
-      const isPlaySelectable = isMyTurn && piece?.player === role;
-      const isSetupSelectable = isSetupMode && piece?.player === role;
-      const isSelectable = isPlaySelectable || isSetupSelectable;
-
-      const validTarget = validMoveMap.get(square);
-      const isSetupHome = isSetupMode && zone === allowedSetupZone;
-
-      const isLastMoveFrom = lastMove?.from === square;
-      const isLastMoveTo = lastMove?.to === square;
-
-      // Nhãn tọa độ mép bàn cờ
-      const fileLabel = r === 1 ? FILES[c - 1] : null;
-      const rankLabel = c === 1 ? r : null;
-
-      cols.push(
-        <Square
-          key={square}
-          square={square}
-          zone={zone}
-          piece={piece}
-          isSelected={isSelected}
-          isValidTarget={!!validTarget}
-          targetType={validTarget?.type}
-          isLastMoveFrom={isLastMoveFrom}
-          isLastMoveTo={isLastMoveTo}
-          fileLabel={fileLabel}
-          rankLabel={rankLabel}
-          isSetupHome={isSetupHome}
-          onClick={() => handleSquareClick(square, zone)}
-        >
-          {piece && (
-            <Piece
-              piece={piece}
-              isSelected={isSelected}
-              isSelectable={isSelectable}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleSquareClick(square, zone);
-              }}
-            />
-          )}
-        </Square>
-      );
-    }
-    rows.push(cols);
-  }
-
   return (
-    <div className="board-wrapper">
-      <div className="board-grid">
-        {rows.flat()}
-      </div>
+    <div className="game-board-layout">
+      <GameBoard pieces={pieces} map={map} lastMove={lastMove}
+        selectedSquare={pieces[isSetupMode ? selectedSetupPieceId : selectedPieceId]?.square || null}
+        validMoves={validMoves} orientation={role === 'blue' ? 'blue' : 'red'}
+        readOnly={!isMyTurn && !isSetupMode}
+        onSquareClick={(square) => handleSquareClick(square, getSquareZone(square))} />
 
       {/* Chú thích hướng dẫn thao tác trong lúc xếp quân */}
       {isSetupMode && selectedSetupPieceId && (

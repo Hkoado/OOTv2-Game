@@ -1,5 +1,5 @@
 import React from 'react';
-import { CalendarDays, ChevronRight } from 'lucide-react';
+import { Folder, ChevronRight } from 'lucide-react';
 import { Badge, Empty, Progress } from './TournamentUi.jsx';
 import {
   eventProgress, eventStatusLabel, eventTone, formatDateTime, isEventRunning,
@@ -13,10 +13,10 @@ export function EventCard({ event, onOpen, actions }) {
         <div className="tt-event__identity">
           <h3 className="tt-event__name">{event.name}</h3>
           <p className="tt-event__meta">
-            <CalendarDays size={14} aria-hidden="true" />
+            <Folder size={16} aria-hidden="true" />
             <span>{formatDateTime(event.created_at)}</span>
             <span aria-hidden="true">·</span>
-            <span>seed {String(event.seed || '—').slice(0, 10)}</span>
+            <span>{event.status === 'draft' ? 'Đội / Map / Lịch đấu' : 'Kết quả / Replay'}</span>
           </p>
         </div>
         <Badge tone={eventTone(event.status)} dot={running}>{eventStatusLabel(event.status)}</Badge>
@@ -27,7 +27,7 @@ export function EventCard({ event, onOpen, actions }) {
       />
       <div className="tt-event__foot">
         <span className="tt-event__hint">
-          {running ? 'Bài nộp đang bị khóa cho tới khi giải kết thúc.' : event.status === 'finished' ? 'Giải đã kết thúc, replay mở cho các đội tham gia.' : 'Giải chưa bắt đầu; BTC có thể khóa bài và xếp lịch.'}
+          {running ? 'Đang thi đấu' : event.status === 'finished' ? 'Đã hoàn tất' : 'Bổ sung đội và map trong thư mục giải.'}
         </span>
         <div className="tt-event__actions">
           {actions}

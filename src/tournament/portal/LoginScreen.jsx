@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import {
-  ArrowRight, Eye, EyeOff, FileCode2, KeyRound, Loader2, Moon, ShieldCheck, Sun, Target, Trophy, Wifi, WifiOff,
+  ArrowRight, Eye, EyeOff, KeyRound, Loader2, Moon, Sun, Trophy, Wifi, WifiOff,
 } from 'lucide-react';
+import GameBoard from '../../ui/GameBoard.jsx';
+import { SAMPLE_MAPS } from '../../game/sampleMaps.js';
+import { createOfflineGame, fillOfflineSetup, confirmOfflineSetup } from '../../game/offlineGame.js';
+const previewMap = SAMPLE_MAPS[1].map;
+const previewState = fillOfflineSetup(confirmOfflineSetup(fillOfflineSetup(createOfflineGame(previewMap))));
 import { Alert, Field } from './TournamentUi.jsx';
 
 const STATUS_COPY = {
@@ -10,7 +15,7 @@ const STATUS_COPY = {
   offline: { text: 'Chưa kết nối được API local', tone: 'offline', icon: WifiOff },
 };
 
-export default function LoginScreen({ onSubmit, busy, error, notice, serverStatus = 'checking', theme, onToggleTheme }) {
+export default function LoginScreen({ onSubmit, onOffline, busy, error, notice, serverStatus = 'checking', theme, onToggleTheme }) {
   const [showPassword, setShowPassword] = useState(false);
   const status = STATUS_COPY[serverStatus] || STATUS_COPY.checking;
   const StatusIcon = status.icon;
@@ -30,7 +35,7 @@ export default function LoginScreen({ onSubmit, busy, error, notice, serverStatu
         <section className="tt-login__hero" aria-labelledby="tt-login-title">
           <header className="tt-login__top">
             <div className="tt-brand">
-              <span className="tt-brand__mark" aria-hidden="true"><Trophy size={20} /></span>
+              <span className="tt-brand__mark"><img src="/logo.png" alt="OOTv2" /></span>
               <span className="tt-brand__text"><strong>OOTv2</strong><span>Bot League</span></span>
             </div>
             <button
@@ -48,25 +53,11 @@ export default function LoginScreen({ onSubmit, busy, error, notice, serverStatu
             Viết bot. Vào bảng.<br />Đấu bằng thuật toán.
           </h1>
           <p className="tt-login__lead">
-            Cổng thi đấu dành cho 8 đội: nộp một file Python, khóa phiên bản khi giải bắt đầu và theo dõi
-            toàn bộ 30 ván trên cùng một màn hình. Trọng tài là server, không phải bot.
+            Luyện cờ trên cùng một máy, hoặc đăng nhập để tham gia giải đấu bot.
           </p>
 
-          <ul className="tt-login__facts">
-            <li>
-              <span className="tt-login__fact-icon" aria-hidden="true"><Target size={18} /></span>
-              <span><strong>8 đội · 30 ván</strong><em>2 bảng, bán kết, chung kết; đổi màu mỗi cặp</em></span>
-            </li>
-            <li>
-              <span className="tt-login__fact-icon" aria-hidden="true"><FileCode2 size={18} /></span>
-              <span><strong>1 file Python</strong><em>Python 3.12+ · chỉ thư viện chuẩn · tối đa 64 KiB</em></span>
-            </li>
-            <li>
-              <span className="tt-login__fact-icon" aria-hidden="true"><ShieldCheck size={18} /></span>
-              <span><strong>Replay có seed</strong><em>Trạng thái ban đầu và từng nước đi do server ghi lại</em></span>
-            </li>
-          </ul>
-
+          <div className="tt-login__board"><GameBoard pieces={previewState.pieces} map={previewMap} title="Bàn luyện tập" readOnly /></div>
+          <button type="button" className="tt-btn tt-btn--info tt-btn--block" onClick={onOffline}>Chơi offline · Không cần đăng nhập</button>
           <div className={`tt-login__status tt-login__status--${status.tone}`}>
             <StatusIcon size={16} className={serverStatus === 'checking' ? 'tt-spinner__icon' : undefined} aria-hidden="true" />
             <span>{status.text}</span>
@@ -87,7 +78,7 @@ export default function LoginScreen({ onSubmit, busy, error, notice, serverStatu
           {notice && <Alert tone="success">{notice}</Alert>}
 
           <form className="tt-form" onSubmit={handleSubmit}>
-            <Field label="Tên đăng nhập" hint="3–40 ký tự chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.">
+            <Field label="Tên đăng nhập">
               <input
                 name="username"
                 autoComplete="username"
@@ -128,7 +119,7 @@ export default function LoginScreen({ onSubmit, busy, error, notice, serverStatu
           </form>
 
           <p className="tt-login__help">
-            Quên mật khẩu? Liên hệ BTC để đặt lại. Phiên đăng nhập kéo dài 8 giờ và dùng cookie HttpOnly.
+            Quên mật khẩu? Liên hệ BTC.
           </p>
           <p className="tt-login__legal">
             Chỉ dành cho thành viên tin cậy trên máy BTC. Bot chạy bằng tiến trình riêng, không có sandbox cấp hệ điều hành.

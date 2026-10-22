@@ -1,0 +1,26 @@
+{
+  "name": "OTT-v2 UI Kit",
+  "version": "1.0.0",
+  "purpose": "Reuse approved visual components in a new outer application layout.",
+  "entrypoints": {"css":"ui-kit.css","dom":"components.mjs","board":"board.mjs","react":"react/index.mjs"},
+  "root": {"class":"ott-ui","themeAttribute":"data-theme","themes":["light","dark"]},
+  "controlledBoard": {
+    "size":9,
+    "coordinatePattern":"^[a-i][1-9]$",
+    "pieceTypes":["rock","paper","scissors"],
+    "pieceOwnerField":"player",
+    "teams":["red","blue"],
+    "terrainTypes":["fire","water","bush","chasm"],
+    "moveTypes":["move","capture"],
+    "callback":"onSquareClick(square)",
+    "ownsRules":false,
+    "ownsState":false,
+    "ownsAuthorization":false
+  },
+  "preserve":["board frame","square geometry","axes","piece artwork","terrain artwork","art aspect ratio","UI state styles"],
+  "customize":["outer layout","application routes","panel grouping","real state adapters","callbacks","board container width"],
+  "forbidden":["redraw board from scratch","replace assets with emoji","stretch images","CSS filters on assets","import showcase code into production","use fixtures as authoritative state","infer game rules from terrain artwork"],
+  "offline":{"bundledFonts":true,"externalRuntimeRequests":false},
+  "assetAtlas":{"file":"assets/ott-elements-simple.png","width":1254,"height":1254,"alpha":true,"manifest":"assets.mjs"},
+  "fontLicenses":["fonts/BeVietnamPro-OFL.txt","fonts/NotoSerif-OFL.txt"]
+}

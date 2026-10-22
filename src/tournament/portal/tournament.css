@@ -1,14 +1,12 @@
 /* tournament.css — hệ UI thống nhất cho cổng giải đấu OOTv2.
-   Chỉ dùng token trong docs/ui-style/tokens.json; không style theo component của game cũ. */
+   Dùng token runtime từ src/ui/ott-v2-ui-kit/tokens.json. */
 
 .tournament-app {
   --tt-max: 1320px;
   --tt-border: 1px solid var(--ott-color-border-subtle);
   min-height: 100vh;
   background-color: var(--ott-color-bg-canvas);
-  background-image:
-    radial-gradient(circle at 10% -10%, color-mix(in srgb, var(--ott-color-accent-default) 6%, transparent), transparent 42%),
-    radial-gradient(circle at 96% 0%, color-mix(in srgb, var(--ott-color-team-blue) 6%, transparent), transparent 38%);
+  background-image: url('../../ui/ott-v2-ui-kit/assets/manuscript.svg');
   color: var(--ott-color-text-primary);
   font-family: var(--ott-font-body);
   font-size: var(--ott-type-body-size);
@@ -172,17 +170,14 @@
   border: 1px solid var(--ott-color-border-subtle);
   border-radius: var(--ott-radius-small);
   background: var(--ott-color-bg-surface);
-  box-shadow: 0 32px 80px -48px rgba(0, 0, 0, 0.65);
+  box-shadow: none;
   overflow: hidden;
 }
 .tt-login__hero {
   position: relative;
   padding: var(--ott-space-9) var(--ott-space-9) var(--ott-space-8);
   border-right: 1px solid var(--ott-color-border-subtle);
-  background-image:
-    linear-gradient(color-mix(in srgb, var(--ott-color-border-subtle) 30%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--ott-color-border-subtle) 30%, transparent) 1px, transparent 1px);
-  background-size: 56px 56px;
+  background-image: none;
   background-position: center;
   display: flex;
   flex-direction: column;
@@ -192,7 +187,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(160deg, transparent 10%, var(--ott-color-bg-surface) 78%);
+  background: transparent;
   pointer-events: none;
 }
 .tt-login__hero > * { position: relative; z-index: 1; }
@@ -368,7 +363,7 @@
   height: 7px;
   border-radius: var(--ott-radius-round);
   background: var(--ott-color-status-success);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ott-color-status-success) 22%, transparent);
+  box-shadow: none;
 }
 .tt-live--idle .tt-live__dot { background: var(--ott-color-text-disabled); box-shadow: none; }
 .tt-live__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -517,7 +512,7 @@
 .tt-progress__fill {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, var(--ott-color-accent-default), var(--ott-color-team-blue));
+  background: transparent;
   transition: width var(--ott-motion-normal) var(--ott-motion-ease);
 }
 
@@ -893,7 +888,7 @@
   border: 1px solid var(--ott-color-border-control);
   border-left: 2px solid var(--ott-color-status-info);
   background: var(--ott-color-bg-surface);
-  box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.7);
+  box-shadow: none;
   font-size: var(--ott-type-label-size);
 }
 .tt-toast--success { border-left-color: var(--ott-color-status-success); }
@@ -929,7 +924,7 @@
   overflow: auto;
   border: 1px solid var(--ott-color-border-control);
   background: var(--ott-color-bg-surface);
-  box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.8);
+  box-shadow: none;
 }
 .tt-dialog__head {
   position: sticky;
@@ -947,13 +942,7 @@
 .tt-dialog__meta { font-size: var(--ott-type-caption-size); color: var(--ott-color-text-secondary); margin-top: 3px; }
 .tt-dialog__body { padding: var(--ott-space-5); display: flex; flex-direction: column; gap: var(--ott-space-4); }
 
-/* ReplayBoard dùng component game gốc: chỉnh khung cho hợp theme cổng giải đấu. */
-.tt-dialog .board-wrapper {
-  background: var(--ott-color-bg-subtle);
-  border-color: var(--ott-color-border-control);
-  box-shadow: none;
-}
-.tt-dialog .replay-viewer { color: var(--ott-color-text-primary); }
+.replay-viewer { color: var(--ott-color-text-primary); }
 .tt-dialog .notice { border-radius: var(--ott-radius-small); }
 .tt-dialog .btn { min-height: var(--ott-control-height-dense); border-radius: var(--ott-radius-small); font-family: var(--ott-font-body); }
 
@@ -961,9 +950,27 @@
 .replay-viewer__head { display: flex; justify-content: space-between; gap: var(--ott-space-4); padding-bottom: var(--ott-space-3); border-bottom: 1px solid var(--ott-color-border-subtle); }
 .replay-viewer__title { font-family: var(--ott-font-display); font-size: var(--ott-type-heading-small-size); line-height: 1.3; }
 .replay-viewer__meta { margin-top: 3px; font-size: var(--ott-type-caption-size); color: var(--ott-color-text-secondary); }
-.replay-viewer .board-wrapper { align-self: center; max-width: 100%; overflow-x: auto; }
 .replay-controls { display: flex; flex-wrap: wrap; gap: var(--ott-space-3); }
 .replay-range { width: 100%; }
+
+.tt-login__snapshot { display: block; width: min(100%, 340px); height: auto; margin: 18px auto; border: 1px solid var(--ott-color-border-control); }
+.tt-login__facts[hidden] { display: none; }
+
+.tournament-app .tt-btn--info { background: var(--ott-color-status-info); border-color: var(--ott-color-status-info); color: var(--ott-color-bg-canvas); }
+.tournament-app .tt-btn--danger { background: var(--ott-color-status-danger); border-color: var(--ott-color-status-danger); color: var(--ott-color-bg-canvas); }
+.tt-offline { max-width: 1240px; margin: auto; }
+.tt-offline__layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 24px; align-items: start; }
+.tt-offline .board-legend { display: none; }
+.tt-offline .square { min-width: 0; aspect-ratio: 1; }
+.tt-offline__pieces { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.tt-offline__history { max-height: 260px; overflow: auto; padding-left: 0; list-style: none; font-size: 13px; }
+.tt-offline__history li { padding: 5px 0; border-bottom: 1px solid var(--ott-color-border-subtle); }
+.tt-turn { font-weight: 700; padding: 12px 0; }
+.tt-turn--red { color: var(--ott-color-status-danger); }
+.tt-turn--blue { color: var(--ott-color-status-info); }
+.tt-map-preview { margin: 16px 0; }
+.tt-map-preview figcaption { font-size: 12px; color: var(--ott-color-text-secondary); margin-top: 6px; }
+@media (max-width: 800px) { .tt-offline__layout { grid-template-columns: 1fr; } .tt-offline .piece-symbol { font-size: clamp(14px, 5vw, 32px); } }
 .tournament-app input[type="range"] {
   min-height: var(--ott-control-height-dense);
   padding: 0;
@@ -998,7 +1005,7 @@
     width: min(312px, 86vw);
     transform: translateX(-104%);
     transition: transform var(--ott-motion-normal) var(--ott-motion-ease);
-    box-shadow: 24px 0 60px -40px rgba(0, 0, 0, 0.9);
+    box-shadow: none;
   }
   .tt-sidebar.is-open { transform: none; }
   .tt-sidebar__close { display: inline-flex; }
@@ -1061,3 +1068,36 @@
 
 
 
+
+/* Product layout around the approved kit; never override board internals. */
+.tournament-app[data-theme="dark"] { background-image: none; }
+.tt-panel, .tt-login__frame, .tt-event, .tt-stat, .tt-dialog {
+  border-radius: var(--ott-radius-small);
+  box-shadow: none;
+}
+.tt-panel { border-width: 2px; }
+.tournament-app[data-theme="light"] :is(.tt-panel, .tt-login__frame) {
+  background-image: url('../../ui/ott-v2-ui-kit/assets/manuscript.svg');
+}
+.game-board-layout { width: 100%; min-width: 0; }
+.replay-board-layout { width: min(100%, 600px); align-self: center; }
+.tt-map-preview { width: min(100%, 360px); }
+.tt-map-preview figcaption { margin-top: 8px; font-size: 12px; }
+.tt-login__board { width: min(100%, 340px); margin: 18px auto; }
+.tt-offline__pieces { display: grid; grid-template-columns: 1fr; }
+.tt-match-players { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 760px) {
+  .tt-offline__layout, .tt-match-players { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Keep entry actions visible on desktop without shrinking text or kit geometry. */
+@media (min-width: 981px) {
+  .tt-login { padding: 20px; }
+  .tt-login__hero { padding: 24px; gap: 12px; }
+  .tt-login__title { font-size: 32px; max-width: 24ch; }
+  .tt-login__lead { font-size: 14px; }
+  .tt-login__board { width: min(100%, 270px); margin: 0 auto; }
+}
+.tt-login__legal, .tt-foot { color: var(--ott-color-text-secondary); font-size: 12px; }
+.tt-brand__mark { overflow: hidden; }
+.tt-brand__mark img { display: block; width: 28px; height: 28px; object-fit: contain; }

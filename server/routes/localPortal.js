@@ -4,7 +4,7 @@ import { HttpError } from '../lib/httpError.js';
 import { getDb } from '../db.js';
 import { acceptBotUpload } from '../middleware/upload.js';
 import { createSubmission, listParticipants, listSubmissions } from '../services/participants.js';
-import { createTournament, startTournament, listTournaments, getTournament, computeStandings, computeBracket, listMatches } from '../services/tournaments.js';
+import { createTournament, updateTournamentDraft, startTournament, listTournaments, getTournament, computeStandings, computeBracket, listMatches } from '../services/tournaments.js';
 import { getMatchDetail, getMatchReplay } from '../services/matches.js';
 import { COOKIE_NAME, SESSION_MS, login, logout, requireSession, requireLocalAdmin, listAccounts, createAccount, resetPassword, updateProfile } from '../services/localAccounts.js';
 
@@ -77,6 +77,7 @@ export function localPortalRouter() {
     res.json({ events });
   });
   router.post('/events', requireLocalAdmin, (req, res) => res.status(201).json(createTournament(req.body || {})));
+  router.put('/events/:id', requireLocalAdmin, (req, res) => res.json(updateTournamentDraft(req.params.id, req.body || {})));
   router.post('/events/:id/start', requireLocalAdmin, (req, res) => res.json(startTournament(req.params.id)));
   router.get('/events/:id', (req, res) => {
     checkStage(req.account, req.params.id);

@@ -8,6 +8,8 @@ import { getDb, newId, nowIso } from '../db.js';
 import { badRequest, conflict, notFound } from '../lib/httpError.js';
 import { deriveSeed, randomSeed } from '../judge/rng.js';
 import { RESULTS, REASONS } from '../judge/gameAdapter.js';
+import { EMPTY_MAP, normalizeMap } from '../../src/game/maps.js';
+import { writeEventFolder } from './eventFolder.js';
 
 /** Chia bảng theo seed: A = 1,4,5,8 — B = 2,3,6,7 (chuẩn cho 8 đội). */
 export const GROUP_SEEDS = {
@@ -30,44 +32,36 @@ export function groupPairs() {
   return pairs;
 }
 
-export function createTournament({ name, participantIds }) {
+export function createTournament({ name, participantIds = [], map = EMPTY_MAP }) {
   const db = getDb();
   const trimmedName = typeof name === 'string' ? name.trim() : '';
   if (trimmedName.length < 1 || trimmedName.length > 80) {
     throw badRequest('bad_name', 'Tên giải phải từ 1 đến 80 ký tự');
   }
-  if (!Array.isArray(participantIds) || participantIds.length !== 8) {
-    throw badRequest('bad_participants', 'Cần đúng 8 participantIds');
+  if (!Array.isArray(participantIds) || participantIds.length > 8) {
+    throw badRequest('bad_participants', 'Chọn tối đa 8 đội.');
   }
   const uniqueIds = new Set(participantIds);
-  if (uniqueIds.size !== 8) {
+  if (uniqueIds.size !== participantIds.length) {
     throw badRequest('bad_participants', 'participantIds bị trùng');
   }
 
+  let normalizedMap;
+  try { normalizedMap = normalizeMap(map); } catch { throw badRequest('bad_map', 'Map không hợp lệ.'); }
   const seed = randomSeed();
   const tournamentId = newId();
   const createdAt = nowIso();
-  const findValidSubmission = db.prepare(
-    `SELECT id FROM submissions WHERE participant_id = ? AND status = 'valid'
-     ORDER BY created_at DESC, rowid DESC LIMIT 1`
-  );
   const findParticipant = db.prepare('SELECT id, name FROM participants WHERE id = ?');
 
   const create = db.transaction(() => {
     db.prepare(
-      `INSERT INTO tournaments (id, name, status, seed, created_at) VALUES (?, ?, 'draft', ?, ?)`
-    ).run(tournamentId, trimmedName, seed, createdAt);
+      `INSERT INTO tournaments (id, name, status, seed, created_at, map_json) VALUES (?, ?, 'draft', ?, ?, ?)`
+    ).run(tournamentId, trimmedName, seed, createdAt, JSON.stringify(normalizedMap));
 
     participantIds.forEach((participantId, index) => {
       const participant = findParticipant.get(participantId);
       if (!participant) {
         throw badRequest('unknown_participant', `Không tìm thấy đội: ${participantId}`);
-      }
-      if (!findValidSubmission.get(participantId)) {
-        throw badRequest(
-          'missing_valid_submission',
-          `Đội ${participant.name} chưa có submission hợp lệ`
-        );
       }
       db.prepare(
         `INSERT INTO tournament_entries (id, tournament_id, participant_id, submission_id, seed_order, group_name)
@@ -77,7 +71,25 @@ export function createTournament({ name, participantIds }) {
   });
 
   create();
-  return getTournament(tournamentId);
+  return writeEventFolder(getTournament(tournamentId));
+}
+
+/** Replace a draft's roster and map atomically. Never modify frozen entries. */
+export function updateTournamentDraft(tournamentId, { participantIds, map }) {
+  const db = getDb();
+  return db.transaction(() => {
+    const event = getTournament(tournamentId);
+    if (event.status !== 'draft') throw conflict('event_frozen', 'Giải đã bắt đầu, không thể đổi đội/map.');
+    const ids = participantIds ?? event.entries.map((entry) => entry.participant_id);
+    if (!Array.isArray(ids) || ids.length > 8 || new Set(ids).size !== ids.length) throw badRequest('bad_participants', 'Chọn tối đa 8 đội, không trùng.');
+    let normalized;
+    try { normalized = normalizeMap(map ?? event.map); } catch { throw badRequest('bad_map', 'Map không hợp lệ.'); }
+    for (const id of ids) if (!db.prepare('SELECT id FROM participants WHERE id=?').get(id)) throw badRequest('unknown_participant', 'Đội không tồn tại.');
+    db.prepare('DELETE FROM tournament_entries WHERE tournament_id=?').run(tournamentId);
+    ids.forEach((id, index) => db.prepare('INSERT INTO tournament_entries(id,tournament_id,participant_id,seed_order) VALUES(?,?,?,?)').run(newId(), tournamentId, id, index + 1));
+    db.prepare('UPDATE tournaments SET map_json=? WHERE id=?').run(JSON.stringify(normalized), tournamentId);
+    return writeEventFolder(getTournament(tournamentId));
+  })();
 }
 
 function entryRows(tournamentId) {
@@ -112,6 +124,7 @@ export function getTournament(tournamentId) {
     .get(tournamentId);
   return {
     ...tournament,
+    map: tournament.map_json ? JSON.parse(tournament.map_json) : EMPTY_MAP,
     entries,
     match_counts: {
       total: counts.total || 0,
@@ -206,6 +219,8 @@ export function startTournament(tournamentId) {
   if (tournament.status !== 'draft') {
     throw conflict('already_started', `Giải đang ở trạng thái ${tournament.status}`);
   }
+  const map = tournament.map_json ? JSON.parse(tournament.map_json) : EMPTY_MAP;
+  if (map.blocked.length) throw conflict('map_runner_unavailable', 'Worker MVP chưa hỗ trợ ô cản. Chọn Đấu trường mở để chạy giải; map có ô cản dùng được trong chơi offline.');
   const placeholders = RUNNING_STATUSES.map(() => '?').join(', ');
   const running = db
     .prepare(`SELECT id, name FROM tournaments WHERE status IN (${placeholders})`)
@@ -227,7 +242,7 @@ export function startTournament(tournamentId) {
   });
   start();
 
-  return getTournament(tournamentId);
+  return writeEventFolder(getTournament(tournamentId));
 }
 
 function matchRows(tournamentId, stage) {

@@ -5,6 +5,7 @@
  * làm tham chiếu/hồi quy cho game engine; mọi component gốc vẫn nguyên vẹn.
  * Không import file này vào bundle chính.
  */
+import './ui/ott-v2-ui-kit/ui-kit.css';
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header.jsx';
 import Lobby from './components/Lobby.jsx';
@@ -342,7 +343,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-container">
+    <div className="ott-ui app-container">
       {/* Element ẩn cho playhtml data binding */}
       <div id="ottv2-shared-sync" can-play style={{ display: 'none' }} />
 

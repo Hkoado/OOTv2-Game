@@ -47,6 +47,21 @@ test('local core: real login, session/CSRF, team isolation, persistence and MVP 
     }
     const team = await signIn('team0', 'trusted-team-password');
     assert.equal((await api('/local/teams', { session: team })).status, 403);
+    const draft = await api('/local/events', { method: 'POST', session: admin, body: { name: 'Empty folder' } });
+    assert.equal(draft.status, 'draft'); assert.equal(draft.entries.length, 0);
+    assert.equal((await api(`/local/events/${draft.id}/start`, { method: 'POST', session: admin })).status, 400);
+    assert.equal((await api(`/local/events/${draft.id}`, { method: 'PUT', session: team, body: { participantIds: [ids[0]] } })).status, 403);
+    assert.equal((await api(`/local/events/${draft.id}`, { method: 'PUT', session: { ...admin, csrf: 'bad' }, body: {} })).status, 403);
+    const { SAMPLE_MAPS } = await import('../src/game/sampleMaps.js');
+    const updated = await api(`/local/events/${draft.id}`, { method: 'PUT', session: admin, body: { participantIds: [ids[0]], map: SAMPLE_MAPS[1].map } });
+    assert.equal(updated.entries.length, 1); assert.deepEqual(updated.map.blocked, ['e4', 'e6']);
+    assert.equal((await api(`/local/events/${draft.id}`, { session: team })).event.id, draft.id);
+    assert.equal((await api(`/local/events/${draft.id}/start`, { method: 'POST', session: admin })).error, 'map_runner_unavailable');
+    assert.equal((await api(`/local/events/${draft.id}`, { method: 'PUT', session: admin, body: { participantIds: [ids[0], ids[0]] } })).status, 400);
+    assert.equal((await api(`/local/events/${draft.id}`, { method: 'PUT', session: admin, body: { map: { ...SAMPLE_MAPS[0].map, blocked: ['a1'] } } })).status, 400);
+    const { existsSync, readFileSync: readSnapshot } = await import('node:fs');
+    assert(existsSync(path.join(dir, 'events', draft.id, 'event.json')));
+    assert.equal(JSON.parse(readSnapshot(path.join(dir, 'events', draft.id, 'teams', 'roster.json'))).length, 1);
     assert.equal((await api('/local/profile', { method: 'PUT', session: { ...team, csrf: 'wrong' }, body: {} })).status, 403);
     assert.equal((await api(`/local/submissions/${ids[1]}`, { method: 'POST', session: team })).status, 403);
     const profile = { members: 'A · SV01\nB · SV02', contact: 'team@example.test', repository: 'https://github.com/team/bot', branch: 'main' };
@@ -65,6 +80,7 @@ test('local core: real login, session/CSRF, team isolation, persistence and MVP 
     const event = await api('/local/events', { method: 'POST', session: admin, body: { name: 'Core local test', participantIds: ids } });
     assert.equal(event.status, 'draft');
     await api(`/local/events/${event.id}/start`, { method: 'POST', session: admin });
+    assert.equal((await api(`/local/events/${event.id}`, { method: 'PUT', session: admin, body: { participantIds: [] } })).status, 409);
     assert.equal((await api(`/local/events/${event.id}`, { session: team })).matches.length, 24);
     const { processOneMatch } = await import('../server/worker.js');
     let steps = 0;

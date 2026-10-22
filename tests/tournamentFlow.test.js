@@ -286,11 +286,11 @@ test('M3 API match: chi tiết an toàn và replay chỉ có khi match kết th�
 });
 
 
-test('M4 API giải đấu: chặn tạo/start khi không đủ 8 đội (T3)', async (t) => {
+test('M4 API giải đấu: tạo nháp thiếu đội/bot, chặn start khi chưa sẵn sàng (T3)', async (t) => {
   const env = await startTestEnv();
   t.after(() => env.cleanup());
 
-  // 7 đội: create phải từ chối ngay (đúng 8 participantIds mới hợp lệ).
+  // Draft được phép chưa đủ đội; start vẫn phải đủ tám.
   const seven = [];
   for (let index = 1; index <= 7; index += 1) {
     seven.push(env.participantsService.createParticipant(`Đội ${index}`));
@@ -300,10 +300,10 @@ test('M4 API giải đấu: chặn tạo/start khi không đủ 8 đội (T3)', 
     admin: true,
     body: { name: 'Giải 7 đội', participantIds: seven.map((participant) => participant.id) },
   });
-  assert.equal(tooFew.status, 400);
-  assert.equal(tooFew.body.error, 'bad_participants');
+  assert.equal(tooFew.status, 201);
+  assert.equal((await env.api(`/api/tournaments/${tooFew.body.id}/start`, { method: 'POST', admin: true })).body.error, 'need_eight_entries');
 
-  // 8 đội nhưng 1 đội chưa upload bot: create phải báo thiếu submission hợp lệ.
+  // Bot được bổ sung sau khi tạo, nhưng không thể start khi thiếu bot.
   const eighth = env.participantsService.createParticipant('Đội 8');
   const missingBot = await env.api('/api/tournaments', {
     method: 'POST',
@@ -313,8 +313,8 @@ test('M4 API giải đấu: chặn tạo/start khi không đủ 8 đội (T3)', 
       participantIds: [...seven, eighth].map((participant) => participant.id),
     },
   });
-  assert.equal(missingBot.status, 400);
-  assert.equal(missingBot.body.error, 'missing_valid_submission');
+  assert.equal(missingBot.status, 201);
+  assert.equal((await env.api(`/api/tournaments/${missingBot.body.id}/start`, { method: 'POST', admin: true })).body.error, 'missing_valid_submission');
 
   // Start khi mới có 7 đội (draft 7 entry) phải bị chặn bởi guard `need_eight_entries`.
   const db = env.db.getDb();

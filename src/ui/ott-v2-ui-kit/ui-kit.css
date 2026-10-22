@@ -1,0 +1,53 @@
+@import './tokens.css';
+@font-face{font-family:'Be Vietnam Pro';src:url('./fonts/BeVietnamPro-Regular.ttf') format('truetype');font-style:normal;font-weight:400;font-display:swap}
+@font-face{font-family:'Be Vietnam Pro';src:url('./fonts/BeVietnamPro-SemiBold.ttf') format('truetype');font-style:normal;font-weight:500 800;font-display:swap}
+@font-face{font-family:'Noto Serif';src:url('./fonts/NotoSerif-Variable.ttf') format('truetype');font-style:normal;font-weight:100 900;font-display:swap}
+.ott-ui{font-family:var(--ott-font-body);font-size:14px;line-height:1.5;color:var(--ott-color-text-primary);background:var(--ott-color-bg-canvas);--ott-board-tile:#e8d9b8;--ott-board-tile-alt:#d9c7a1;--ott-board-red:#e6cfb0;--ott-board-red-alt:#ddc5a4;--ott-board-blue:#cdd4bd;--ott-board-blue-alt:#c1cbb1;--ott-board-map:#e5d2ab;--ott-board-ink:#65543c;--ott-board-grid:#9c8967}
+.ott-ui[data-theme="dark"]{--ott-board-tile:#424944;--ott-board-tile-alt:#383f3d;--ott-board-red:#4f4540;--ott-board-red-alt:#473d39;--ott-board-blue:#3b4c4c;--ott-board-blue-alt:#344344;--ott-board-map:#303735;--ott-board-ink:#bcb29b;--ott-board-grid:#697064}
+.ott-ui *,.ott-ui *::before,.ott-ui *::after{box-sizing:border-box}
+.ott-inline{display:inline-flex;vertical-align:middle}
+.ott-ui button,.ott-ui input,.ott-ui select{font:inherit}.ott-ui button{cursor:pointer}.ott-ui button:disabled{cursor:default}
+.ott-ui :where(button,a,input,select):focus-visible{outline:2px solid var(--ott-color-focus);outline-offset:3px}
+.ott-heading{font-family:var(--ott-font-display);font-weight:600;color:var(--ott-color-text-primary);line-height:1.35;margin:0}
+.ott-caption{font-size:12px;color:var(--ott-color-text-secondary);line-height:1.5}.ott-label{font-size:13px;font-weight:600}
+.ott-panel{border:2px solid var(--ott-color-border-subtle);background:var(--ott-color-bg-surface);padding:16px;box-shadow:none;border-radius:0}
+.ott-ui[data-theme="light"] .ott-panel,.ott-ui[data-theme="light"] .ott-board-frame{background-image:url('./assets/manuscript.svg');background-size:800px 624px}
+.ott-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:8px 14px;border:1px solid var(--ott-color-border-control);border-radius:0;background:var(--ott-color-bg-surface);color:var(--ott-color-text-primary);font-weight:600;font-size:13px;transition:background-color var(--ott-motion-fast)}
+.ott-button:hover:not(:disabled){background:var(--ott-color-bg-hover)}.ott-button:active:not(:disabled){background:var(--ott-color-bg-selected)}
+.ott-button--primary{background:var(--ott-color-accent-default);border-color:var(--ott-color-accent-default);color:var(--ott-color-text-on-accent)}
+.ott-button--primary:hover:not(:disabled){background:var(--ott-color-accent-hover)}.ott-button--primary:active:not(:disabled){background:var(--ott-color-accent-pressed)}
+.ott-button:disabled,.ott-unit:disabled{background:var(--ott-color-bg-disabled);color:var(--ott-color-text-disabled);border-color:var(--ott-color-border-subtle)}
+.ott-icon-button{display:inline-grid;place-items:center;min-width:36px;min-height:36px;background:transparent;color:var(--ott-color-text-secondary);border:1px solid transparent;font-size:23px;line-height:1;padding:4px}
+.ott-icon-button:hover:not(:disabled){background:var(--ott-color-bg-hover);border-color:var(--ott-color-border-subtle)}.ott-icon-button:disabled{color:var(--ott-color-text-disabled)}
+.ott-art{display:grid;place-items:center;position:relative;width:100%;height:100%;pointer-events:none;filter:none;mix-blend-mode:normal}
+.ott-art__crop{position:relative;display:block;overflow:hidden}.ott-art__crop img{position:absolute;display:block;max-width:none!important;height:auto!important;object-fit:contain;filter:none;opacity:1;image-rendering:auto}
+.ott-piece{display:grid;place-items:center;position:relative;flex:none;width:48px;height:48px;aspect-ratio:1;border-radius:50%;border:1.5px solid var(--ott-color-team-red);outline:1px solid var(--ott-color-team-red);outline-offset:1px;background:var(--ott-color-piece-surface);box-shadow:none}
+.ott-piece--blue{border-color:var(--ott-color-team-blue);outline-color:var(--ott-color-team-blue)}.ott-piece.is-selected{outline:3px solid var(--ott-color-accent-default);outline-offset:3px}
+.ott-piece>.ott-art{width:100%;height:100%}.ott-terrain{position:relative;display:block;overflow:hidden;aspect-ratio:1;width:56px;height:56px}
+.ott-terrain--fire{background:var(--ott-color-terrain-surface-fire)}.ott-terrain--water{background:var(--ott-color-terrain-surface-water)}.ott-terrain--bush{background:var(--ott-color-terrain-surface-bush)}.ott-terrain--chasm{background:var(--ott-color-terrain-surface-chasm)}
+.ott-square{position:relative;isolation:isolate;display:grid;place-items:center;aspect-ratio:1;width:100%;min-width:0;min-height:0;padding:0;border:0;border-radius:0;background:var(--ott-board-tile);color:var(--ott-board-ink)}
+.ott-square:nth-child(odd){background:var(--ott-board-tile-alt)}.ott-square--red{background:var(--ott-board-red)}.ott-square--red:nth-child(odd){background:var(--ott-board-red-alt)}.ott-square--blue{background:var(--ott-board-blue)}.ott-square--blue:nth-child(odd){background:var(--ott-board-blue-alt)}
+.ott-square>.ott-terrain{position:absolute;inset:0;width:100%;height:100%;z-index:0}.ott-square>.ott-piece{width:82%;height:82%;z-index:2}
+.ott-square__base{position:absolute;width:84%;height:84%;z-index:1}.ott-square:hover:not(:disabled){outline:1px dashed var(--ott-board-ink);outline-offset:-3px}
+.ott-square.is-last-move{box-shadow:inset 0 0 0 2px var(--ott-color-border-strong)}.ott-square.is-selected{outline:3px solid var(--ott-color-accent-default);outline-offset:-3px;z-index:3}
+.ott-square.is-available::after{content:'';position:absolute;z-index:4;width:15%;height:15%;border:2px solid #526542;background:#f2e2a9;border-radius:50%;pointer-events:none}
+.ott-square.is-capture{box-shadow:inset 0 0 0 3px var(--ott-color-status-danger)}.ott-square.is-capture::after{inset:4px;width:auto;height:auto;border:2px dashed var(--ott-color-status-danger);border-radius:50%;background:transparent}
+.ott-square:focus-visible{outline:3px solid var(--ott-color-focus);outline-offset:-3px;z-index:5}.ott-square:disabled{cursor:default;outline:1px dashed var(--ott-color-border-control);outline-offset:-4px}.ott-square:disabled::before{content:'×';position:absolute;right:3px;top:0;font-size:15px;z-index:5;background:var(--ott-color-bg-surface);color:var(--ott-color-text-primary);line-height:1}
+.ott-board-frame{position:relative;width:100%;padding:0 8px 12px;background:var(--ott-board-map);border:2px solid var(--ott-board-ink);outline:1px solid var(--ott-color-border-subtle);outline-offset:3px;border-radius:0}
+.ott-board-frame__title{height:32px;display:flex;align-items:center;justify-content:center;gap:18px;font-family:var(--ott-font-display);font-size:11px;font-weight:600;letter-spacing:2px;color:var(--ott-board-ink)}
+.ott-board-frame__title::before,.ott-board-frame__title::after{content:'✦';font-size:12px}
+.ott-board-wrap{position:relative;padding:18px}.ott-board{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:1px;aspect-ratio:1;border:2px solid var(--ott-board-ink);background:var(--ott-board-grid)}
+.ott-axis{position:absolute;display:flex;justify-content:space-around;color:var(--ott-board-ink);font-family:var(--ott-font-display);font-size:11px;font-weight:600;line-height:1}
+.ott-axis--top,.ott-axis--bottom{left:18px;right:18px}.ott-axis--top{top:0}.ott-axis--bottom{bottom:0}.ott-axis--left,.ott-axis--right{flex-direction:column;top:18px;bottom:18px;text-align:center}.ott-axis--left{left:1px}.ott-axis--right{right:1px}
+.ott-board-frame.is-readonly .ott-square{cursor:default}.ott-board-frame.is-readonly .ott-square:hover:not(:focus-visible){outline:0}
+.ott-player{position:relative}.ott-player.is-active{border-color:var(--ott-color-accent-default)}.ott-player__top{display:flex;align-items:center;gap:10px}.ott-player__info{min-width:0}.ott-player__name{font-family:var(--ott-font-display);font-weight:600;font-size:18px;margin:0 0 4px;overflow-wrap:anywhere}
+.ott-player__bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--ott-color-border-subtle)}
+.ott-player__status{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ott-color-text-secondary)}.ott-player__status::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor}.ott-player.is-active .ott-player__status{color:var(--ott-color-accent-default)}
+.ott-unit{display:flex;align-items:center;gap:10px;width:100%;min-height:68px;padding:8px 10px;background:transparent;border:1px solid var(--ott-color-border-subtle);border-bottom-width:2px;color:var(--ott-color-text-primary);border-radius:0}
+.ott-unit:hover:not(:disabled){background:var(--ott-color-bg-hover)}.ott-unit.is-selected{background:var(--ott-color-bg-selected);border-color:var(--ott-color-accent-default)}.ott-unit__label{font-family:var(--ott-font-display);font-size:14px;font-weight:600}.ott-unit__count{margin-left:auto;font-family:var(--ott-font-display);font-size:24px}
+.ott-terrain-list{display:grid;gap:12px}.ott-terrain-row{display:flex;gap:12px;align-items:center}.ott-terrain-row__text{display:grid;gap:3px}.ott-terrain-row>.ott-terrain{border:1px solid var(--ott-color-border-subtle);flex:none}
+.ott-turn{display:flex;align-items:center;gap:9px}.ott-turn__dot{width:6px;height:6px;border-radius:50%;background:var(--ott-color-accent-default)}.ott-badge{display:inline-flex;align-items:center;border:1px solid var(--ott-color-border-subtle);padding:3px 7px;background:var(--ott-color-bg-subtle);font-size:11px;letter-spacing:1px}
+.ott-action-bar{display:flex;align-items:center;gap:10px;padding:8px 10px;border:2px solid var(--ott-color-border-subtle);background:var(--ott-color-bg-surface)}.ott-action-bar__message{font-size:13px;flex:1;min-width:0}.ott-action-bar__buttons{display:flex;gap:3px;flex:none}
+.ott-history{list-style:none;margin:0;padding:0;max-height:210px;overflow:auto;scrollbar-width:thin}.ott-history__row{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:11px 0;border-bottom:1px solid var(--ott-color-border-subtle)}.ott-history__row:last-child{border-bottom:0}.ott-empty{font-size:12px;color:var(--ott-color-text-secondary);padding:14px 0}
+.ott-team-marker{display:inline-block;width:8px;height:8px;transform:rotate(45deg);background:var(--ott-color-team-red);border:1px solid var(--ott-color-piece-surface)}.ott-team-marker--blue{background:var(--ott-color-team-blue)}
+@media(prefers-reduced-motion:reduce){.ott-ui *{transition-duration:0ms!important;animation:none!important}}

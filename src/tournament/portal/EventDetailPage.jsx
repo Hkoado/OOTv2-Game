@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Award, Eye, RefreshCw, Swords } from 'lucide-react';
+import DraftEventEditor from './DraftEventEditor.jsx';
+import MapPreview from './MapPreview.jsx';
 import {
   Alert, Badge, ConfirmAction, DataTable, Empty, Panel, Progress, Spinner,
 } from './TournamentUi.jsx';
@@ -121,7 +123,7 @@ function MatchTable({ matches, onOpenReplay, highlightId }) {
 }
 
 export default function EventDetailPage({
-  account, detail, detailLoading, detailError, eventId, busy, actions, onNavigate, onOpenReplay,
+  account, teams, detail, detailLoading, detailError, eventId, busy, actions, onNavigate, onOpenReplay,
 }) {
   const isAdmin = account.role === 'admin';
   const [stage, setStage] = useState('all');
@@ -186,7 +188,7 @@ export default function EventDetailPage({
         </div>
         <div className="tt-page-actions">
           <Badge tone={eventTone(event.status)} dot>{eventStatusLabel(event.status)}</Badge>
-          {isAdmin && event.status === 'draft' && (
+          {isAdmin && event.status === 'draft' && event.entries.length === 8 && !event.map.blocked.length && (
             <ConfirmAction
               label="Bắt đầu giải"
               confirmLabel="Khóa bài & sinh lịch"
@@ -202,6 +204,9 @@ export default function EventDetailPage({
         </div>
       </header>
 
+      {event.status === 'draft' && isAdmin && <DraftEventEditor key={event.id} event={event} teams={teams} actions={actions} busy={busy} />}
+      {event.status === 'draft' && <Panel title="Nội dung thư mục giải"><p>{event.entries.length}/8 đội · {event.map.id}</p><p className="tt-muted">Chỉ xếp lịch khi đủ 8 đội có bot hợp lệ và map được worker hỗ trợ.</p></Panel>}
+      {event.status !== 'draft' && <Panel title="Map thi đấu"><MapPreview map={event.map} /></Panel>}
       <Panel title="Tiến độ giải" subtitle={isAdmin ? 'Worker chấm tuần tự; tiến độ làm mới mỗi 4 giây.' : 'Kết quả cập nhật tự động khi tab đang mở.'}>
         <Progress value={eventProgress({ match_total: event.match_counts?.total, match_finished: event.match_counts?.finished })} label={`${event.match_counts?.finished ?? 0}/${event.match_counts?.total ?? 0} ván đã chấm`} />
         <div className="tt-inline-facts">

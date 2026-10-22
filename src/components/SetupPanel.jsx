@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PLAYERS, PIECE_TYPES, PIECE_LABELS } from '../game/constants.js';
 import { GAME_PHASES } from '../game/gameState.js';
-import { PieceSvg } from './PieceIcons.jsx';
+import { OTTUnitButton } from '../ui/ott-v2-ui-kit/react/index.mjs';
 import { Dices, Check, Clock } from 'lucide-react';
 
 export default function SetupPanel({
@@ -88,28 +88,7 @@ export default function SetupPanel({
               const isSelected = selectedSetupType === type && count > 0;
               const isDepleted = count === 0;
 
-              return (
-                <div
-                  key={type}
-                  onClick={() => count > 0 && onSelectSetupType(type)}
-                  className={`selector-item ${isSelected ? 'selector-item--selected' : ''} ${
-                    isDepleted ? 'selector-item--depleted' : ''
-                  }`}
-                  title={`${label}: còn ${count} quân`}
-                >
-                  <div
-                    className={`selector-circle ${
-                      isRed ? 'selector-circle--red' : 'selector-circle--blue'
-                    }`}
-                  >
-                    <PieceSvg type={type} className="selector-svg" />
-                  </div>
-
-                  <div className="selector-info">
-                    <span className="selector-count">* {count}</span>
-                  </div>
-                </div>
-              );
+              return <OTTUnitButton key={type} type={type} team={activePlayer} count={count} selected={isSelected} disabled={isDepleted} onClick={onSelectSetupType} />;
             })}
           </div>
 

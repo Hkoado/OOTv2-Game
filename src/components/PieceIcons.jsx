@@ -1,16 +1,7 @@
-import React from 'react';
-import { PIECE_ICONS } from '../game/constants.js';
-
-/**
- * Icon quân cờ Oẳn Tù Tì gốc (✊, ✋, ✌️)
- * Không viền, không hiệu ứng
- */
-export function PieceSvg({ type, className = "" }) {
-  const icon = PIECE_ICONS[type] || '';
-  return (
-    <span className={`piece-symbol ${className}`} role="img" aria-label={type}>
-      {icon}
-    </span>
-  );
+import React, { useLayoutEffect, useRef } from 'react';
+import { createAsset } from '../ui/ott-v2-ui-kit/assets.mjs';
+export function PieceSvg({ type, className = '' }) {
+  const host = useRef(null);
+  useLayoutEffect(() => { host.current.replaceChildren(createAsset(type, { label: type })); }, [type]);
+  return <span className={`piece-symbol ${className}`} ref={host} />;
 }
-

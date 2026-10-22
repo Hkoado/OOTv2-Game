@@ -1,5 +1,12 @@
 # OOTv2 · Cổng giải đấu bot
 
+## Chơi thử và chuẩn bị giải
+
+- Trang đăng nhập có **Chơi offline**: hai người cùng máy, không tài khoản/API, ba map mẫu.
+- Admin tạo giải bằng tên, thêm đội/map sau. Mỗi giải có snapshot riêng tại `data/events/<id>/`.
+- SQLite là nguồn chính; thư mục snapshot chưa phải bundle backup. Worker MVP chỉ chạy map không ô cản.
+- [Bàn giao và chia việc tiếp theo](docs/10-BAN-GIAO-OFFLINE-VA-THU-MUC-GIAI.md).
+
 Ứng dụng hiện **tournament-first**: mở `http://127.0.0.1:3000/` **luôn** vào màn hình đăng nhập.
 Đăng nhập bằng tài khoản BTC cấp; không có tab phòng chơi/spectator trên giao diện chính.
 
@@ -251,3 +258,9 @@ docs/                   # 01..05: scope, protocol, API/DB/UI, checklist, prompt 
 data/                   # (tạo khi chạy) SQLite + bot đã upload — không commit
 ```
 
+
+## UI Kit tích hợp (22/10/2026)
+
+Component bàn cờ, atlas và font offline nằm trong src/ui/ott-v2-ui-kit/.
+Đọc [bàn giao UI kit](docs/11-TICH-HOP-UI-KIT.md) về adapter, kiểm thử và giới hạn QA.
+Dự án không phụ thuộc thư mục UI Kit ngoài repository.

@@ -3,6 +3,7 @@ import { apiRequest, isSessionError, resetApiState } from './portalApi.js';
 import { parseHashRoute, routeHash } from './tournamentView.js';
 import LoginScreen from './LoginScreen.jsx';
 import TournamentWorkspace from './TournamentWorkspace.jsx';
+import OfflinePlay from './OfflinePlay.jsx';
 
 const EMPTY_BUSY = {
   login: false,
@@ -17,6 +18,7 @@ const EMPTY_BUSY = {
 const CLOSED_REPLAY = { open: false, state: 'idle', data: null, error: '' };
 
 export default function LocalCore({ theme, onToggleTheme }) {
+  const [offline, setOffline] = useState(false);
   const [account, setAccount] = useState(null);
   const [events, setEvents] = useState([]);
   const [teams, setTeams] = useState([]);
@@ -323,7 +325,14 @@ export default function LocalCore({ theme, onToggleTheme }) {
     const event = await apiRequest('/events', { method: 'POST', body: values });
     await loadRoleData();
     if (event?.id) navigate('events', event.id);
-  }, 'Đã tạo giải và sinh 30 ván.'), [loadRoleData, navigate, runAction]);
+  }, 'Đã tạo thư mục giải. Có thể thêm đội và map sau.'), [loadRoleData, navigate, runAction]);
+
+  const saveEvent = useCallback((eventId, values) => runAction('event', async () => {
+    await apiRequest(`/events/${encodeURIComponent(eventId)}`, { method: 'PUT', body: values });
+    const data = await apiRequest(`/events/${encodeURIComponent(eventId)}`);
+    setDetail(data);
+    await loadRoleData();
+  }, 'Đã lưu đội và map của giải.'), [loadRoleData, runAction]);
 
   const startEvent = useCallback((eventId) => runAction('start', async () => {
     await apiRequest(`/events/${encodeURIComponent(eventId)}/start`, { method: 'POST' });
@@ -349,10 +358,12 @@ export default function LocalCore({ theme, onToggleTheme }) {
 
   const closeReplay = useCallback(() => setReplay(CLOSED_REPLAY), []);
 
+  if (!account && offline) return <OfflinePlay onBack={() => setOffline(false)} />;
   if (!account) {
     return (
       <LoginScreen
         onSubmit={signIn}
+        onOffline={() => setOffline(true)}
         busy={busy.login}
         error={loginError}
         notice={loginNotice}
@@ -386,7 +397,7 @@ export default function LocalCore({ theme, onToggleTheme }) {
       replay={replay}
       onOpenReplay={openReplay}
       onCloseReplay={closeReplay}
-      actions={{ refresh, saveProfile, createTeam, resetPassword, uploadBot, createEvent, startEvent }}
+      actions={{ refresh, saveProfile, createTeam, resetPassword, uploadBot, createEvent, saveEvent, startEvent }}
     />
   );
 }

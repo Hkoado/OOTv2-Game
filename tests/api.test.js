@@ -135,16 +135,20 @@ test('M3 API: route giải đấu cần x-admin-key và báo lỗi JSON rõ ràn
     admin: true,
     body: { name: 'Giải thiếu bot', participantIds: bodies },
   });
-  assert.equal(missingSubmission.status, 400);
-  assert.equal(missingSubmission.body.error, 'missing_valid_submission');
+  assert.equal(missingSubmission.status, 201);
+  const startWithoutBots = await env.api(`/api/tournaments/${missingSubmission.body.id}/start`, { method: 'POST', admin: true });
+  assert.equal(startWithoutBots.status, 400);
+  assert.equal(startWithoutBots.body.error, 'missing_valid_submission');
 
   const badParticipants = await env.api('/api/tournaments', {
     method: 'POST',
     admin: true,
     body: { name: 'Thiếu đội', participantIds: bodies.slice(0, 7) },
   });
-  assert.equal(badParticipants.status, 400);
-  assert.equal(badParticipants.body.error, 'bad_participants');
+  assert.equal(badParticipants.status, 201);
+  const startWithSeven = await env.api(`/api/tournaments/${badParticipants.body.id}/start`, { method: 'POST', admin: true });
+  assert.equal(startWithSeven.status, 400);
+  assert.equal(startWithSeven.body.error, 'need_eight_entries');
 
   const badJson = await env.api('/api/tournaments', {
     method: 'POST',

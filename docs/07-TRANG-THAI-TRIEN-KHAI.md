@@ -95,7 +95,23 @@ ván chưa kết thúc; verifier trả `finished:false` cùng trạng thái đã
 
 ## Công việc tiếp theo
 
+### Bổ sung offline và giải nháp — 22/10/2026
+
+- Login có chơi tay offline không tài khoản/API; ba map mẫu và snapshot SVG.
+- Tạo giải trống, sửa đội/map sau qua admin API; map_json migration additive.
+- data/events/<id> chứa preparation snapshot đội/map riêng, SQLite vẫn authoritative; chưa phải backup.
+- Worker MVP chưa hỗ trợ ô cản: server chặn start map có ô cản, không chạy ngầm map khác.
+- Xem [bàn giao/chia việc](10-BAN-GIAO-OFFLINE-VA-THU-MUC-GIAI.md) cho giới hạn/tiêu chí Done.
+
 M2: protocol `bot.v1` persistent + SDK Python + Linux supervisor/nsjail/cgroups và host preflight
 theo đặc tả mới. Sau đó M3 scheduler/standings/vé, M4 auth/snapshot/GitHub/queue,
 M5 UI hai theme/map editor/viewer, M6 offline bundles và M7 diễn tập tải.
 Không dùng subprocess legacy để tuyên bố đã đạt sandbox production.
+
+### UI Kit runtime — 22/10/2026
+
+Đã tích hợp component bàn cờ có sẵn, adapter state thật cho chơi tay/replay/map/login, font offline và theme kit.
+Build pass; regression 70/70, kit tests 4/4 và adapter tests 5/5 (5 adapter tests đã tính trong 70).
+Token generator: 44 cặp màu. Edge smoke: 81 ô, hai theme, setup, move, bàn phím, responsive desktop/mobile.
+Chưa nghiệm thu lại P2P hai máy hoặc toàn bộ màn admin/replay bằng trình duyệt.
+Xem [bàn giao UI](11-TICH-HOP-UI-KIT.md); đây không phải hoàn tất M2–M7 Campus.

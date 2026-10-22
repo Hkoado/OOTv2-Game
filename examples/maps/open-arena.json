@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "map.v1",
+  "width": 9,
+  "height": 9,
+  "setupZoneRule": "diagonal-28-v1",
+  "cornerRule": "block-if-both-orthogonals-blocked",
+  "rulesVersion": "ott-campus.v1",
+  "id": "open-arena",
+  "revision": 1,
+  "bases": {
+    "red": "a1",
+    "blue": "i9"
+  },
+  "blocked": []
+}
