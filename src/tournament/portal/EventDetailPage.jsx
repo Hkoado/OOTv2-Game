@@ -207,17 +207,7 @@ export default function EventDetailPage({
 
       {event.status === 'draft' && isAdmin && <DraftEventEditor key={event.id} event={event} teams={teams} actions={actions} busy={busy} />}
       {event.status === 'draft' && <Panel title="Nội dung thư mục giải"><p>{event.entries.length}/8 đội · {event.map.id}</p><p className="tt-muted">Chỉ xếp lịch khi đủ 8 đội có bot hợp lệ và map được worker hỗ trợ.</p></Panel>}
-      {event.status !== 'draft' && (
-        <Panel title="Map thi đấu">
-          {event.map?.blocked?.length > 0 && (
-            <Alert tone="warning">
-              Map này có ô cản. Worker MVP chưa hỗ trợ — giải sẽ không thể bắt đầu chấm ván.
-              Liên hệ BTC nếu đây là lỗi ngoài ý muốn.
-            </Alert>
-          )}
-          <MapPreview map={event.map} />
-        </Panel>
-      )}
+      {event.status !== 'draft' && <Panel title="Map thi đấu"><MapPreview map={event.map} /></Panel>}
       <Panel title="Tiến độ giải" subtitle={isAdmin ? 'Worker chấm tuần tự; tiến độ làm mới mỗi 4 giây.' : 'Kết quả cập nhật tự động khi tab đang mở.'}>
         <Progress value={eventProgress({ match_total: event.match_counts?.total, match_finished: event.match_counts?.finished })} label={`${event.match_counts?.finished ?? 0}/${event.match_counts?.total ?? 0} ván đã chấm`} />
         <div className="tt-inline-facts">

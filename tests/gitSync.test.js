@@ -36,7 +36,6 @@ test('gitSync: pulls sample bot from mock git repo, validates it and saves submi
     const { initAccounts, createAccount } = await import('../server/services/localAccounts.js');
     initAccounts();
 
-    const participant = createParticipant('Git Team A');
     const account = await createAccount({
       username: 'gitteama',
       password: 'password123456',
@@ -45,7 +44,7 @@ test('gitSync: pulls sample bot from mock git repo, validates it and saves submi
     });
 
     const res = await syncBotFromGit({
-      participantId: participant.id,
+      participantId: account.participant_id,
       repositoryUrl: 'https://github.com/mock/sample-bot',
       branch: 'master',
       accountId: account.id,
