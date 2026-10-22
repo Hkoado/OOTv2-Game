@@ -20,6 +20,13 @@ import { runMatch } from './judge/matchRunner.js';
 import { advanceTournament, computeBracket, getTournament } from './services/tournaments.js';
 import { heartbeatWorker, recordMatchLog } from './services/judgeMonitor.js';
 import { FAILURE_REASONS } from './services/judgeView.js';
+import {
+  pruneLiveHistory,
+  recordBotOutput,
+  recordLiveMove,
+  recordLiveTerminal,
+  startLiveMatch,
+} from './services/liveEvents.js';
 import { sharedEnabled } from './shared/client.js';
 import { runSharedWorker } from './shared/worker.js';
 
@@ -165,6 +172,18 @@ export async function processOneMatch({ verbose = true } = {}) {
   const startedAt = Date.parse(match.started_at || '');
   const elapsed = () => (Number.isFinite(startedAt) ? Math.max(0, Date.now() - startedAt) : null);
 
+  // Ghi live là best-effort: observer lỗi không được làm hỏng kết quả ván.
+  const onLive = (event) => {
+    if (event?.kind === 'initial') {
+      startLiveMatch(match.id, { initialPieces: event.initialPieces, seed: event.seed });
+    } else if (event?.kind === 'move') {
+      recordLiveMove(match.id, event);
+    }
+  };
+  const onBotOutput = config.live.botOutput
+    ? (chunk) => recordBotOutput(match.id, chunk.side, chunk.stream, chunk.text)
+    : undefined;
+
   let outcome;
   if (!match.red_path || !match.blue_path) {
     outcome = brokenMatchOutcome(match, 'Thiếu submission snapshot cho match');
@@ -175,6 +194,8 @@ export async function processOneMatch({ verbose = true } = {}) {
         seed: match.seed,
         red: { name: match.red_name, filePath: match.red_path },
         blue: { name: match.blue_name, filePath: match.blue_path },
+        onLive,
+        onBotOutput,
       });
     } catch (error) {
       outcome = brokenMatchOutcome(match, `runMatch throw: ${error.message}`);
@@ -182,6 +203,16 @@ export async function processOneMatch({ verbose = true } = {}) {
   }
 
   const recorded = recordResult(match.id, outcome, { worker, elapsedMs: elapsed() });
+  // Mốc kết thúc cho khán giả (kể cả ván bị forfeit/thiếu dữ liệu), sau khi đã ghi kết quả.
+  try {
+    recordLiveTerminal(match.id, {
+      result: outcome.result,
+      reason: outcome.reason,
+      ply_count: outcome.ply_count,
+    });
+  } catch (error) {
+    if (verbose) console.log(`[worker] không ghi được mốc live của ${match.id}: ${error.message}`);
+  }
   heartbeatWorker({ workerId: worker, lastMatchId: match.id });
   const advanced = advanceTournament(tournament.id);
 
@@ -215,6 +246,11 @@ export async function runWorker({ once = false, drain = false } = {}) {
   if (recovered > 0) {
     console.log(`[worker] khôi phục ${recovered} match 'running' chưa có kết quả về 'pending'`);
   }
+  try {
+    pruneLiveHistory();
+  } catch (error) {
+    console.log(`[worker] bỏ qua dọn dữ liệu live: ${error.message}`);
+  }
 
   let stopping = false;
   const stop = () => {
@@ -224,14 +260,31 @@ export async function runWorker({ once = false, drain = false } = {}) {
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
 
+  // Nhịp tim định kỳ: một ván dài (tới 200 nước, ~vài phút) không được làm portal
+  // tưởng worker đã chết. Ghi bằng cùng connection SQLite nên rất nhẹ.
+  const workerId = workerLabel();
+  const beat = setInterval(() => {
+    try {
+      heartbeatWorker({ workerId });
+    } catch {
+      /* DB bận: nhịp sau sẽ thử lại */
+    }
+  }, 5000);
+
   while (!stopping) {
     const result = await processOneMatch();
 
     if (once) break;
     if (drain && !result.processed && !result.advanced) break;
 
-    if (!result.processed) await sleep(config.limits.workerPollMs);
+    if (!result.processed) {
+      await sleep(config.limits.workerPollMs);
+    } else if (Number(config.limits.workerPauseMs) > 0) {
+      // Chế độ demo: nghỉ giữa hai trận để khán giả xem kịp (mặc định 0 = không nghỉ).
+      await sleep(Number(config.limits.workerPauseMs));
+    }
   }
+  clearInterval(beat);
 
   const tournament = currentRunningTournament();
   if (tournament) {

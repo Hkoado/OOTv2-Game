@@ -92,6 +92,30 @@ CREATE TABLE IF NOT EXISTS worker_state (
   heartbeat_at  TEXT NOT NULL,
   last_match_id TEXT
 );
+
+-- Sự kiện trực tiếp của một ván (L1 — công khai, ẩn danh): seq 0 là thế trận
+-- ban đầu sau khi hai đội xếp quân, seq 1..n là từng nước, cuối cùng là 'terminal'.
+-- Chỉ chứa dữ liệu engine sinh ra; không chứa đường dẫn file bot hay ghi chú nội bộ.
+CREATE TABLE IF NOT EXISTS match_events (
+  match_id     TEXT NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+  seq          INTEGER NOT NULL,
+  kind         TEXT NOT NULL CHECK (kind IN ('initial','move','terminal')),
+  payload_json TEXT NOT NULL,
+  created_at   TEXT NOT NULL,
+  PRIMARY KEY (match_id, seq)
+);
+
+-- stdout/stderr của bot (L2 — chỉ đội sở hữu + admin). Bảng riêng để không trộn
+-- thứ tự event công khai với log riêng tư và để ACL áp dụng độc lập.
+CREATE TABLE IF NOT EXISTS match_bot_output (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  match_id   TEXT NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+  side       TEXT NOT NULL CHECK (side IN ('red','blue')),
+  stream     TEXT NOT NULL CHECK (stream IN ('stdout','stderr')),
+  line       TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_match_bot_output_match ON match_bot_output(match_id, id);
 `;
 
 
@@ -115,6 +139,8 @@ export function initDb({ dbPath = config.dbPath, submissionsDir = config.submiss
   db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
+  // API đọc DB trong khi worker ghi từng nước: chờ thay vì ném SQLITE_BUSY.
+  db.pragma('busy_timeout = 5000');
   db.exec(SCHEMA_SQL);
   // Additive migration: old events retain the open-board MVP profile.
   if (!db.prepare('PRAGMA table_info(tournaments)').all().some((column) => column.name === 'map_json')) {
@@ -142,16 +168,26 @@ export function closeDb() {
 /**
  * Khôi phục sau crash: mọi match `running` chưa có kết quả trả về `pending`.
  * Chạy lại bằng đúng seed + submission snapshot cũ nên không đúp điểm.
+ * Sự kiện live của các ván bị chạy lại cũng bị xoá để người xem không thấy
+ * bàn cờ cũ trộn với ván mới.
  */
 export function recoverUnfinishedMatches() {
   const database = getDb();
-  const info = database
-    .prepare(
-      `UPDATE matches SET status = 'pending', started_at = NULL
-       WHERE status = 'running' AND result IS NULL`
-    )
-    .run();
-  return info.changes;
+  const recover = database.transaction(() => {
+    const info = database
+      .prepare(
+        `UPDATE matches SET status = 'pending', started_at = NULL
+         WHERE status = 'running' AND result IS NULL`
+      )
+      .run();
+    // Match `pending` chưa từng chạy nên không có dữ liệu live hợp lệ để giữ.
+    database.exec(
+      `DELETE FROM match_events WHERE match_id IN (SELECT id FROM matches WHERE status = 'pending');
+       DELETE FROM match_bot_output WHERE match_id IN (SELECT id FROM matches WHERE status = 'pending');`
+    );
+    return info.changes;
+  });
+  return recover();
 }
 
 export default { initDb, getDb, closeDb, newId, nowIso, recoverUnfinishedMatches };

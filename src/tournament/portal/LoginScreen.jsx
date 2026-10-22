@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  ArrowRight, Eye, EyeOff, KeyRound, Loader2, Moon, Sun, Trophy, Wifi, WifiOff,
+  ArrowRight, Eye, EyeOff, KeyRound, Loader2, Moon, Play, Sun, Trophy, Wifi, WifiOff,
 } from 'lucide-react';
 import GameBoard from '../../ui/GameBoard.jsx';
 import { SAMPLE_MAPS } from '../../game/sampleMaps.js';
@@ -15,7 +15,7 @@ const STATUS_COPY = {
   offline: { text: 'Chưa kết nối được API local', tone: 'offline', icon: WifiOff },
 };
 
-export default function LoginScreen({ onSubmit, onOffline, busy, error, notice, serverStatus = 'checking', theme, onToggleTheme }) {
+export default function LoginScreen({ onSubmit, onOffline, onLive, busy, error, notice, serverStatus = 'checking', theme, onToggleTheme }) {
   const [showPassword, setShowPassword] = useState(false);
   const status = STATUS_COPY[serverStatus] || STATUS_COPY.checking;
   const StatusIcon = status.icon;
@@ -53,11 +53,18 @@ export default function LoginScreen({ onSubmit, onOffline, busy, error, notice, 
             Viết bot. Vào bảng.<br />Đấu bằng thuật toán.
           </h1>
           <p className="tt-login__lead">
-            Luyện cờ trên cùng một máy, hoặc đăng nhập để tham gia giải đấu bot.
+            Luyện cờ trên cùng một máy, xem trực tiếp các trận đang đấu, hoặc đăng nhập để tham gia giải đấu bot.
           </p>
 
           <div className="tt-login__board"><GameBoard pieces={previewState.pieces} map={previewMap} title="Bàn luyện tập" readOnly /></div>
-          <button type="button" className="tt-btn tt-btn--info tt-btn--block" onClick={onOffline}>Chơi offline · Không cần đăng nhập</button>
+          <div className="tt-login__choices">
+            <button type="button" className="tt-btn tt-btn--primary tt-btn--block" onClick={onLive}>
+              <Play size={18} aria-hidden="true" /> Xem trực tiếp các trận đang đấu
+            </button>
+            <button type="button" className="tt-btn tt-btn--info tt-btn--block" onClick={onOffline}>
+              Chơi offline · Không cần đăng nhập
+            </button>
+          </div>
           <div className={`tt-login__status tt-login__status--${status.tone}`}>
             <StatusIcon size={16} className={serverStatus === 'checking' ? 'tt-spinner__icon' : undefined} aria-hidden="true" />
             <span>{status.text}</span>

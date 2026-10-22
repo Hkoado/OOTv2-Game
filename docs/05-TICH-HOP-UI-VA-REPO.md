@@ -171,7 +171,7 @@ Quân đơn sắc trên nền trung tính, viền và nhãn Đỏ/Xanh. Hai ki�
 
 ## 9. Player và quyền xem
 
-Server là nguồn quyền và kết quả. Team chỉ xem online thuộc đúng `eventId,roundId` trong `round_participants`; đội cùng vòng xem mọi trận vòng đó, đội bị loại không tự xem vòng sau. BTC/judge theo scope. Không có spectator public cho giải chính thức. Replay offline giữ btc_only/judge sau khi sync online.
+Server là nguồn quyền và kết quả. Team chỉ xem online thuộc đúng `eventId,roundId` trong `round_participants`; đội cùng vòng xem mọi trận vòng đó, đội bị loại không tự xem vòng sau. BTC/judge theo scope. **Cập nhật 22/10/2026:** bàn cờ (L1: thế trận + nước đi) được công khai ẩn danh tại `/#/live`; log stdout/stderr của bot (L2) vẫn chỉ đội sở hữu đúng bên và admin xem được. Replay offline giữ btc_only/judge sau khi sync online.
 
 Viewer lấy snapshot seq N rồi event N+1; kiểm attempt/resultVersion, dedup, gap/hash và reset theo file03. Board là read-only; tạm dừng replay không pause runner; tốc độ animation không đổi budget bot. Trận chạy nhanh thì UI catch-up/batch hoặc xem lại, không block engine vì animation. Chỉ hiển thị clock/budget server thực sự cung cấp, không tạo đồng hồ giả để kết luận timeout.
 

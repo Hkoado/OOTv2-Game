@@ -4,6 +4,8 @@ import { parseHashRoute, routeHash } from './tournamentView.js';
 import LoginScreen from './LoginScreen.jsx';
 import TournamentWorkspace from './TournamentWorkspace.jsx';
 import OfflinePlay from './OfflinePlay.jsx';
+import LivePage from './live/LivePage.jsx';
+import { parseLiveHash } from './live/liveView.js';
 
 const EMPTY_BUSY = {
   login: false,
@@ -35,6 +37,7 @@ export default function LocalCore({ theme, onToggleTheme }) {
   const [serverStatus, setServerStatus] = useState('checking');
   const [replay, setReplay] = useState(CLOSED_REPLAY);
   const [route, setRoute] = useState({ page: 'overview', eventId: null });
+  const [liveHash, setLiveHash] = useState(() => window.location.hash);
 
   const accountRef = useRef(null);
   const routeRef = useRef(route);
@@ -52,6 +55,14 @@ export default function LocalCore({ theme, onToggleTheme }) {
   }, []);
 
   useEffect(() => () => window.clearTimeout(toastTimer.current), []);
+
+  // Trang khán giả `#/live` độc lập với đăng nhập; theo dõi hash để điều hướng nhẹ
+  // không cần thêm react-router.
+  useEffect(() => {
+    const onHashChange = () => setLiveHash(window.location.hash);
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   const setPending = useCallback((key, value) => {
     setBusy((current) => ({ ...current, [key]: value }));
@@ -358,12 +369,20 @@ export default function LocalCore({ theme, onToggleTheme }) {
 
   const closeReplay = useCallback(() => setReplay(CLOSED_REPLAY), []);
 
+  const liveRoute = parseLiveHash(liveHash);
+  if (liveRoute.live) {
+    return <LivePage matchId={liveRoute.matchId} theme={theme} onToggleTheme={onToggleTheme} />;
+  }
+
   if (!account && offline) return <OfflinePlay onBack={() => setOffline(false)} />;
   if (!account) {
     return (
       <LoginScreen
         onSubmit={signIn}
         onOffline={() => setOffline(true)}
+        onLive={() => {
+          window.location.hash = '#/live';
+        }}
         busy={busy.login}
         error={loginError}
         notice={loginNotice}

@@ -24,6 +24,24 @@ API/worker MVP dùng các bảng `mvp_*` riêng; chưa tích hợp runtime Campu
 Migration nằm trong `supabase/migrations/`; SQL smoke trong `supabase/tests/` chạy
 toàn bộ bằng SQL Editor và tự rollback dữ liệu thử. Không chạy lại migration đã áp dụng.
 
+## Xem trực tiếp và chạy công khai một origin (22/10/2026)
+
+- API Express phục vụ luôn `dist/` + SPA fallback → web và API cùng cổng 3001,
+  phù hợp mở Internet bằng **Cloudflare Tunnel** (miễn phí) từ máy tại nhà.
+- Khán giả ẩn danh xem mọi ván đang đấu tại `/#/live` (bàn cờ + nước đi, poll 2 giây).
+  Log bot (stdout/stderr) chỉ đội sở hữu và admin đọc được qua `/api/local/live/...`.
+- Chạy thử nhanh:
+
+```powershell
+npm run build
+npm start                         # API + web: http://127.0.0.1:3001
+npm run start:worker              # terminal khác
+npm run demo:live                 # tạo giải demo 8 đội, bot chậm ~1,1 s/nước
+```
+
+Mở `http://127.0.0.1:3001/#/live`. Hướng dẫn tunnel, biến `.env`, Windows Service và
+giới hạn bảo mật: [docs/13-LIVE-VA-TRIEN-KHAI.md](docs/13-LIVE-VA-TRIEN-KHAI.md).
+
 ## Chơi thử và chuẩn bị giải
 
 - Trang đăng nhập có **Chơi offline**: hai người cùng máy, không tài khoản/API, ba map mẫu.

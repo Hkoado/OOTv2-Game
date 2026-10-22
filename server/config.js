@@ -54,6 +54,18 @@ function parseTrustProxy(raw) {
   return value;
 }
 
+/** Bật/tắt phục vụ `dist/` từ chính Express (mặc định bật, tắt bằng `OOTV2_SERVE_DIST=0`). */
+function parseServeDist(raw) {
+  if (raw === undefined || raw === '') return true;
+  return !['0', 'false', 'off', 'no'].includes(String(raw).trim().toLowerCase());
+}
+
+/** Bật/tắt ghi log stdout/stderr của bot (chỉ đội sở hữu + admin đọc được). */
+function parseLiveBotOutput(raw) {
+  if (raw === undefined || raw === '') return true;
+  return !['0', 'false', 'off', 'no'].includes(String(raw).trim().toLowerCase());
+}
+
 const dataDir = resolveFromRoot(process.env.OOTV2_DATA_DIR, path.join(ROOT_DIR, 'data'));
 
 export const config = {
@@ -82,6 +94,28 @@ export const config = {
   /** Đường dẫn Python tuỳ chọn; để trống thì tự dò `python` / `py -3` / `python3`. */
   pythonBin: process.env.OOTV2_PYTHON_BIN || '',
 
+  /**
+   * Express phục vụ luôn `dist/` (SPA fallback) để chạy 1 origin duy nhất sau
+   * Cloudflare Tunnel/Caddy: web + `/api` cùng cổng 3001.
+   */
+  serveDist: parseServeDist(process.env.OOTV2_SERVE_DIST),
+  distDir: resolveFromRoot(process.env.OOTV2_DIST_DIR, path.join(ROOT_DIR, 'dist')),
+
+  /** Cấu hình phần xem trực tiếp (L1 công khai, L2 chỉ đội sở hữu + admin). */
+  live: {
+    /** Số event tối đa trả về trong một lần poll. */
+    eventsPerRequest: 100,
+    /** Ghi stdout/stderr của bot vào `match_bot_output` (không công khai). */
+    botOutput: parseLiveBotOutput(process.env.OOTV2_LIVE_BOT_OUTPUT),
+    /** Giới hạn log bot mỗi trận để DB không phình. */
+    botOutputLinesPerMatch: 400,
+    botOutputLineChars: 400,
+    /** Rate limit cho `/api/live` (mỗi IP, cửa sổ 1 phút). */
+    publicRequestsPerMinute: 240,
+    /** Số IP tối đa giữ trong bộ đếm rate limit (chống phình RAM). */
+    rateLimitKeys: 5000,
+  },
+
   limits: {
     /**
      * Kích thước tối đa file bot upload: 256 KiB (profile `bot.v1`).
@@ -100,6 +134,11 @@ export const config = {
     maxPlies: 200,
     /** Chu kỳ poll của worker khi chưa có match. */
     workerPollMs: 1000,
+    /**
+     * Nghỉ thêm giữa hai trận (ms). Mặc định 0 = chấm liên tục; dùng cho demo
+     * xem trực tiếp để khán giả kịp theo dõi từng ván.
+     */
+    workerPauseMs: Number(process.env.OOTV2_WORKER_PAUSE_MS || 0),
   },
 };
 

@@ -41,13 +41,26 @@ function emptyReplay(matchId, seed, pieces, result, reason) {
   };
 }
 
+/** Gọi observer (worker ghi live) mà không để lỗi observer ảnh hưởng kết quả ván. */
+function safeNotify(callback, payload) {
+  if (typeof callback !== 'function') return;
+  try {
+    callback(payload);
+  } catch {
+    /* bỏ qua: dữ liệu live là best-effort */
+  }
+}
+
 /**
  * @param {{ matchId: string, seed: number, red: {name: string, filePath: string},
- *           blue: {name: string, filePath: string}, onProgress?: Function }} options
+ *           blue: {name: string, filePath: string}, onProgress?: Function,
+ *           onLive?: (event: {kind: 'initial', initialPieces: object[], seed: number}
+ *                            | {kind: 'move', ply: number, event: object}) => void,
+ *           onBotOutput?: (chunk: {side: 'red'|'blue', stream: 'stdout'|'stderr', text: string}) => void }} options
  * @returns {Promise<{result: string, reason: string, winner: string|null, ply_count: number,
  *                    replay: object, notes: string[]}>}
  */
-export async function runMatch({ matchId, seed, red, blue, onProgress }) {
+export async function runMatch({ matchId, seed, red, blue, onProgress, onLive, onBotOutput }) {
   const notes = [];
   const bots = {
     [PLAYERS.RED]: red,
@@ -55,7 +68,15 @@ export async function runMatch({ matchId, seed, red, blue, onProgress }) {
   };
 
   const callBot = (player, payload, timeoutMs) =>
-    runBotRequest({ filePath: bots[player].filePath, payload, timeoutMs });
+    runBotRequest({
+      filePath: bots[player].filePath,
+      payload,
+      timeoutMs,
+      onOutput:
+        typeof onBotOutput === 'function'
+          ? (chunk) => onBotOutput({ side: player, stream: chunk.stream, text: chunk.text })
+          : undefined,
+    });
 
   try {
     let state = createTournamentGame(matchId);
@@ -125,6 +146,9 @@ export async function runMatch({ matchId, seed, red, blue, onProgress }) {
     const initialPieces = getPiecesArray(state);
     const events = [];
 
+    // Mốc công khai: khán giả thấy đúng thế trận hai đội đã xếp trước nước đầu tiên.
+    safeNotify(onLive, { kind: 'initial', initialPieces, seed });
+
     return await playLoop({
       state,
       events,
@@ -134,6 +158,7 @@ export async function runMatch({ matchId, seed, red, blue, onProgress }) {
       callBot,
       notes,
       onProgress,
+      onLive,
     });
   } catch (error) {
     // Lỗi ngoài dự kiến của engine/runner: không được làm chết worker.
@@ -180,7 +205,7 @@ function buildFinished(matchId, seed, initialPieces, events, result, reason, not
 }
 
 /** Vòng lặp nước đi: engine kiểm tra từng nước, giới hạn MAX_PLIES. */
-async function playLoop({ state, events, initialPieces, matchId, seed, callBot, notes, onProgress }) {
+async function playLoop({ state, events, initialPieces, matchId, seed, callBot, notes, onProgress, onLive }) {
   let current = state;
 
   for (let ply = 1; ply <= MAX_PLIES; ply += 1) {
@@ -231,6 +256,7 @@ async function playLoop({ state, events, initialPieces, matchId, seed, callBot, 
     current = applied.state;
     events.push({ ply, ...applied.event });
     if (onProgress) onProgress({ ply, event: applied.event });
+    safeNotify(onLive, { kind: 'move', ply, event: applied.event });
 
     if (current.phase === GAME_PHASES.FINISHED && current.winner) {
       const reason = determineWinReason(current, current.winner);

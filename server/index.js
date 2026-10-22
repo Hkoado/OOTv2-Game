@@ -4,6 +4,8 @@
  */
 
 import { pathToFileURL } from 'node:url';
+import fs from 'node:fs';
+import path from 'node:path';
 
 import config from './config.js';
 import { initDb } from './db.js';
@@ -18,6 +20,11 @@ export function startServer({ port = config.port, host = config.host } = {}) {
   const app = createApp();
   const server = app.listen(port, host, () => {
     console.log(`[api] OOTv2 tournament API: http://${host}:${port} (loopback only)`);
+    if (config.serveDist && fs.existsSync(path.join(config.distDir, 'index.html'))) {
+      console.log(`[api] Web tĩnh (dist/) cùng origin: http://${host}:${port}/#/live`);
+    } else {
+      console.log('[api] Chưa có dist/index.html — chạy `npm run build` để phục vụ web cùng API.');
+    }
   });
 
   const close = () => {

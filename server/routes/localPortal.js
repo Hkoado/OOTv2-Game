@@ -8,6 +8,7 @@ import { createTournament, updateTournamentDraft, startTournament, listTournamen
 import { getMatchDetail, getMatchReplay } from '../services/matches.js';
 import { COOKIE_NAME, SESSION_MS, login, logout, requireSession, requireLocalAdmin, listAccounts, createAccount, resetPassword, updateProfile } from '../services/localAccounts.js';
 import { getJudgeMatch, getJudgeOverview } from '../services/judgeMonitor.js';
+import { listBotOutput } from '../services/liveEvents.js';
 import { isAllowedOrigin } from '../lib/origin.js';
 
 const forbidden = () => new HttpError(403, 'scope_denied', 'Không có quyền truy cập dữ liệu này.');
@@ -100,6 +101,30 @@ export function localPortalRouter() {
     const match = getMatchDetail(req.params.id);
     checkStage(req.account, match.tournament_id, match.stage);
     res.json({ match, replay: getMatchReplay(match.id) });
+  });
+  // L2 — log stdout/stderr của bot: chỉ đội sở hữu (đúng bên của mình) và admin.
+  router.get('/live/matches/:id/bot-output', (req, res, next) => {
+    const row = getDb().prepare(
+      `SELECT m.id, re.participant_id AS red_pid, be.participant_id AS blue_pid
+       FROM matches m
+       JOIN tournament_entries re ON re.id = m.red_entry_id
+       JOIN tournament_entries be ON be.id = m.blue_entry_id
+       WHERE m.id = ?`
+    ).get(req.params.id);
+    if (!row) return next(new HttpError(404, 'match_not_found', 'Không tìm thấy ván đấu.'));
+
+    let side = null;
+    if (req.account.role === 'admin') {
+      side = ['red', 'blue'].includes(req.query.side) ? req.query.side : null;
+    } else if (req.account.participant_id === row.red_pid) {
+      side = 'red';
+    } else if (req.account.participant_id === row.blue_pid) {
+      side = 'blue';
+    } else {
+      return next(forbidden());
+    }
+
+    res.json({ match_id: row.id, ...listBotOutput(row.id, { side, afterId: req.query.after, limit: req.query.limit }) });
   });
   return router;
 }

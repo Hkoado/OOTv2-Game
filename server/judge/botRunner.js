@@ -15,6 +15,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, realpathSync, rmSync, statSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
 
 import config from '../config.js';
 
@@ -63,6 +64,19 @@ function buildChildEnv() {
 
 function fail(errorCode, message) {
   return { ok: false, errorCode, message };
+}
+
+/**
+ * Chuyển output bot cho observer (worker ghi vào `match_bot_output`).
+ * Lỗi của observer KHÔNG được làm hỏng việc chấm bài.
+ */
+function emitOutput(onOutput, stream, text) {
+  if (typeof onOutput !== 'function' || !text) return;
+  try {
+    onOutput({ stream, text });
+  } catch {
+    /* observer lỗi: bỏ qua, ưu tiên kết quả ván đấu */
+  }
 }
 
 /**
@@ -186,10 +200,11 @@ export function parseSingleLineJson(stdout) {
 
 /**
  * Chạy một request bot.
- * @param {{ filePath: string, payload: object, timeoutMs: number, allowedRoot?: string }} options
+ * @param {{ filePath: string, payload: object, timeoutMs: number, allowedRoot?: string,
+ *           onOutput?: (chunk: { stream: 'stdout'|'stderr', text: string }) => void }} options
  * @returns {Promise<{ ok: true, response: object } | { ok: false, errorCode: string, message: string }>}
  */
-export async function runBotRequest({ filePath, payload, timeoutMs, allowedRoot }) {
+export async function runBotRequest({ filePath, payload, timeoutMs, allowedRoot, onOutput }) {
   let resolvedPath;
   try {
     resolvedPath = resolveBotPath(filePath, allowedRoot);
@@ -232,6 +247,18 @@ export async function runBotRequest({ filePath, payload, timeoutMs, allowedRoot 
     let stdoutBytes = 0;
     let stderrBytes = 0;
     let timer = null;
+    let outputFlushed = false;
+    // StringDecoder giữ ký tự UTF-8 bị cắt giữa hai chunk (tiếng Việt trong log).
+    const stdoutDecoder = new StringDecoder('utf8');
+    const stderrDecoder = new StringDecoder('utf8');
+
+    /** Xả phần còn lại của decoder đúng một lần, kể cả khi timeout/nonzero exit. */
+    const flushOutput = () => {
+      if (outputFlushed) return;
+      outputFlushed = true;
+      emitOutput(onOutput, 'stdout', stdoutDecoder.end());
+      emitOutput(onOutput, 'stderr', stderrDecoder.end());
+    };
 
     const cleanup = () => {
       if (timer) {
@@ -248,6 +275,7 @@ export async function runBotRequest({ filePath, payload, timeoutMs, allowedRoot 
     const finish = (result) => {
       if (settled) return;
       settled = true;
+      flushOutput();
       cleanup();
       resolve(result);
     };
@@ -285,6 +313,7 @@ export async function runBotRequest({ filePath, payload, timeoutMs, allowedRoot 
         return;
       }
       stdoutChunks.push(chunk);
+      emitOutput(onOutput, 'stdout', stdoutDecoder.write(chunk));
     });
 
     child.stderr.on('data', (chunk) => {
@@ -294,6 +323,7 @@ export async function runBotRequest({ filePath, payload, timeoutMs, allowedRoot 
         return;
       }
       stderrChunks.push(chunk);
+      emitOutput(onOutput, 'stderr', stderrDecoder.write(chunk));
     });
 
     child.on('close', (code) => {
