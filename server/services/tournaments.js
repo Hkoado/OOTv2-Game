@@ -32,7 +32,7 @@ export function groupPairs() {
   return pairs;
 }
 
-export function createTournament({ name, participantIds = [], map = EMPTY_MAP }) {
+export function createTournament({ name, participantIds = [], map = EMPTY_MAP, deadline = null }) {
   const db = getDb();
   const trimmedName = typeof name === 'string' ? name.trim() : '';
   if (trimmedName.length < 1 || trimmedName.length > 80) {
@@ -55,8 +55,8 @@ export function createTournament({ name, participantIds = [], map = EMPTY_MAP })
 
   const create = db.transaction(() => {
     db.prepare(
-      `INSERT INTO tournaments (id, name, status, seed, created_at, map_json) VALUES (?, ?, 'draft', ?, ?, ?)`
-    ).run(tournamentId, trimmedName, seed, createdAt, JSON.stringify(normalizedMap));
+      `INSERT INTO tournaments (id, name, status, seed, created_at, map_json, deadline) VALUES (?, ?, 'draft', ?, ?, ?, ?)`
+    ).run(tournamentId, trimmedName, seed, createdAt, JSON.stringify(normalizedMap), deadline || null);
 
     participantIds.forEach((participantId, index) => {
       const participant = findParticipant.get(participantId);
@@ -75,7 +75,7 @@ export function createTournament({ name, participantIds = [], map = EMPTY_MAP })
 }
 
 /** Replace a draft's roster and map atomically. Never modify frozen entries. */
-export function updateTournamentDraft(tournamentId, { participantIds, map }) {
+export function updateTournamentDraft(tournamentId, { participantIds, map, deadline }) {
   const db = getDb();
   return db.transaction(() => {
     const event = getTournament(tournamentId);
@@ -87,7 +87,8 @@ export function updateTournamentDraft(tournamentId, { participantIds, map }) {
     for (const id of ids) if (!db.prepare('SELECT id FROM participants WHERE id=?').get(id)) throw badRequest('unknown_participant', 'Đội không tồn tại.');
     db.prepare('DELETE FROM tournament_entries WHERE tournament_id=?').run(tournamentId);
     ids.forEach((id, index) => db.prepare('INSERT INTO tournament_entries(id,tournament_id,participant_id,seed_order) VALUES(?,?,?,?)').run(newId(), tournamentId, id, index + 1));
-    db.prepare('UPDATE tournaments SET map_json=? WHERE id=?').run(JSON.stringify(normalized), tournamentId);
+    const finalDeadline = deadline !== undefined ? deadline : event.deadline;
+    db.prepare('UPDATE tournaments SET map_json=?, deadline=? WHERE id=?').run(JSON.stringify(normalized), finalDeadline || null, tournamentId);
     return writeEventFolder(getTournament(tournamentId));
   })();
 }

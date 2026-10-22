@@ -144,6 +144,7 @@ export default function EventDetailPage({
   const summary = useMemo(() => stageSummary(matches), [matches]);
   const myStanding = standingFor(standings, account.participant_id);
   const champion = bracket?.champion || null;
+  const runningMatch = matches.find((m) => m.status === 'running');
 
   const backButton = (
     <button type="button" className="tt-back" onClick={() => onNavigate('events')}>
@@ -313,6 +314,30 @@ export default function EventDetailPage({
           </div>
         )}
       >
+        {runningMatch && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0.75rem 1rem',
+              borderRadius: '6px',
+              border: '1px solid var(--color-danger, #ef4444)',
+              marginBottom: '1rem',
+              backgroundColor: 'rgba(239, 68, 68, 0.08)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <Badge tone="live" dot>ĐANG ĐẤU</Badge>
+              <span>
+                <strong className="tt-side tt-side--red">{runningMatch.red?.name}</strong> vs{' '}
+                <strong className="tt-side tt-side--blue">{runningMatch.blue?.name}</strong>{' '}
+                ({stageLabel(runningMatch.stage)} · lượt {runningMatch.game_no})
+              </span>
+            </div>
+            <span className="tt-small tt-muted">Cập nhật trực tiếp</span>
+          </div>
+        )}
         <MatchTable matches={filtered} onOpenReplay={onOpenReplay} highlightId={account.participant_id} />
       </Panel>
     </>

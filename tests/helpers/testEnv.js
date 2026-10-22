@@ -20,15 +20,17 @@ let exitHookRegistered = false;
 
 /** Xoá sạch dữ liệu để mỗi test bắt đầu từ DB trống. */
 function resetTables(dbModule) {
-  dbModule
-    .getDb()
-    .exec(
-      `DELETE FROM matches;
-       DELETE FROM tournament_entries;
-       DELETE FROM tournaments;
-       DELETE FROM submissions;
-       DELETE FROM participants;`
-    );
+  const db = dbModule.getDb();
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((t) => t.name);
+  if (tables.includes('local_sessions')) db.exec('DELETE FROM local_sessions;');
+  if (tables.includes('local_accounts')) db.exec('DELETE FROM local_accounts;');
+  db.exec(
+    `DELETE FROM matches;
+     DELETE FROM tournament_entries;
+     DELETE FROM tournaments;
+     DELETE FROM submissions;
+     DELETE FROM participants;`
+  );
 }
 
 export const FIXTURES_DIR = path.join(here, '..', 'fixtures');

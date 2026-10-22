@@ -47,10 +47,10 @@ export function createParticipant(rawName) {
 function latestSubmissionFor(participantId, onlyValid = false) {
   const db = getDb();
   const sql = onlyValid
-    ? `SELECT id, participant_id, sha256, status, validation_error, created_at
+    ? `SELECT id, participant_id, sha256, status, validation_error, created_at, commit_sha, repo_url, branch, source_type
        FROM submissions WHERE participant_id = ? AND status = 'valid'
        ORDER BY created_at DESC, rowid DESC LIMIT 1`
-    : `SELECT id, participant_id, sha256, status, validation_error, created_at
+    : `SELECT id, participant_id, sha256, status, validation_error, created_at, commit_sha, repo_url, branch, source_type
        FROM submissions WHERE participant_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1`;
   return db.prepare(sql).get(participantId) || null;
 }
@@ -82,7 +82,7 @@ export function listSubmissions(participantId) {
   // Không trả `storage_path` hay nội dung source ra ngoài.
   return db
     .prepare(
-      `SELECT id, participant_id, sha256, status, validation_error, created_at
+      `SELECT id, participant_id, sha256, status, validation_error, created_at, commit_sha, repo_url, branch, source_type
        FROM submissions WHERE participant_id = ? ORDER BY created_at DESC, rowid DESC`
     )
     .all(participantId);
@@ -101,9 +101,13 @@ export function getSubmissionRecord(submissionId) {
  * Lưu submission mới: ghi file server-generated -> validate (cú pháp + smoke test)
  * -> cập nhật `status`/`validation_error`. File không hợp lệ bị xoá khỏi đĩa.
  * @param {string} participantId
- * @param {{ buffer: Buffer, originalname: string }} upload file từ multer memoryStorage
+ * @param {{ buffer: Buffer, originalname: string }} upload file từ multer memoryStorage hoặc git pull
  */
-export async function createSubmission(participantId, upload) {
+export async function createSubmission(
+  participantId,
+  upload,
+  { commitSha = null, repoUrl = null, branch = null, sourceType = 'upload' } = {}
+) {
   if (!upload || !Buffer.isBuffer(upload.buffer)) {
     throw badRequest('missing_file', 'Thiếu file bot trong trường `file`');
   }
@@ -118,9 +122,19 @@ export async function createSubmission(participantId, upload) {
   const sha256 = createHash('sha256').update(upload.buffer).digest('hex');
 
   db.prepare(
-    `INSERT INTO submissions (id, participant_id, storage_path, sha256, status, validation_error, created_at)
-     VALUES (?, ?, ?, ?, 'uploaded', NULL, ?)`
-  ).run(submissionId, participantId, storagePath, sha256, nowIso());
+    `INSERT INTO submissions (id, participant_id, storage_path, sha256, status, validation_error, created_at, commit_sha, repo_url, branch, source_type)
+     VALUES (?, ?, ?, ?, 'uploaded', NULL, ?, ?, ?, ?, ?)`
+  ).run(
+    submissionId,
+    participantId,
+    storagePath,
+    sha256,
+    nowIso(),
+    commitSha,
+    repoUrl,
+    branch,
+    sourceType
+  );
 
   let validation;
   try {
@@ -148,4 +162,4 @@ export async function createSubmission(participantId, upload) {
   return getSubmissionRecord(submissionId);
 }
 
-export default { createParticipant };
+export default { createParticipant, createSubmission };

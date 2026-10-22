@@ -321,6 +321,36 @@ export default function LocalCore({ theme, onToggleTheme }) {
     }
   }, [handleError, loadRoleData, notify, setPending]);
 
+  const syncGitBot = useCallback(async (teamId) => {
+    setPending('upload', true);
+    try {
+      const data = await apiRequest(`/submissions/${encodeURIComponent(teamId)}/sync-git`, { method: 'POST' });
+      const valid = data.status === 'valid';
+      notify(
+        valid
+          ? `Đồng bộ Git thành công (commit: ${data.commit_sha ? data.commit_sha.slice(0, 8) : ''}). Bot hợp lệ!`
+          : `Đã kéo từ Git nhưng bot chưa hợp lệ: ${data.validation_error || data.status}`,
+        valid ? 'success' : 'warning'
+      );
+      await loadRoleData();
+      return true;
+    } catch (error) {
+      handleError(error);
+      return false;
+    } finally {
+      setPending('upload', false);
+    }
+  }, [handleError, loadRoleData, notify, setPending]);
+
+  const syncAllEventBots = useCallback((eventId) => runAction('start', async () => {
+    const res = await apiRequest(`/events/${encodeURIComponent(eventId)}/sync-all`, { method: 'POST' });
+    const successCount = (res.results || []).filter((r) => r.synced).length;
+    await loadRoleData();
+    const data = await apiRequest(`/events/${encodeURIComponent(eventId)}`);
+    setDetail(data);
+    notify(`Đã đồng bộ Git cho ${successCount}/${res.results?.length || 0} đội.`, 'success');
+  }), [loadRoleData, notify, runAction]);
+
   const createEvent = useCallback((values) => runAction('event', async () => {
     const event = await apiRequest('/events', { method: 'POST', body: values });
     await loadRoleData();
@@ -397,7 +427,7 @@ export default function LocalCore({ theme, onToggleTheme }) {
       replay={replay}
       onOpenReplay={openReplay}
       onCloseReplay={closeReplay}
-      actions={{ refresh, saveProfile, createTeam, resetPassword, uploadBot, createEvent, saveEvent, startEvent }}
+      actions={{ refresh, saveProfile, createTeam, resetPassword, uploadBot, syncGitBot, syncAllEventBots, createEvent, saveEvent, startEvent }}
     />
   );
 }

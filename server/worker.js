@@ -5,6 +5,7 @@
  * - Khôi phục match `running` chưa có kết quả về `pending` khi boot (chạy lại bằng
  *   đúng seed và submission snapshot cũ).
  * - Mọi lỗi bot được xử lý thành kết quả trận; worker không crash vì bot lỗi.
+ * - Tự động kiểm tra deadline và kéo code Git cho các giải đấu draft.
  *
  * Cách chạy: `npm run dev:worker` (vòng lặp), hoặc `node server/worker.js --once`
  * để chạy tối đa 1 trận (dùng cho test), `--drain` để chạy tới khi hết việc.
@@ -19,6 +20,7 @@ import { runMatch } from './judge/matchRunner.js';
 import { advanceTournament, computeBracket, getTournament } from './services/tournaments.js';
 import { sharedEnabled } from './shared/client.js';
 import { runSharedWorker } from './shared/worker.js';
+import { startAutoPullTimer, stopAutoPullTimer } from './services/autoPuller.js';
 
 const STAGE_FOR_STATUS = {
   group_running: 'group',
@@ -188,9 +190,14 @@ export async function runWorker({ once = false, drain = false } = {}) {
     console.log(`[worker] khôi phục ${recovered} match 'running' chưa có kết quả về 'pending'`);
   }
 
+  if (!once && !drain) {
+    startAutoPullTimer({ intervalMs: 15000 });
+  }
+
   let stopping = false;
   const stop = () => {
     stopping = true;
+    stopAutoPullTimer();
     console.log('[worker] nhận tín hiệu dừng, kết thúc sau trận đang chạy...');
   };
   process.on('SIGINT', stop);
@@ -204,6 +211,8 @@ export async function runWorker({ once = false, drain = false } = {}) {
 
     if (!result.processed) await sleep(config.limits.workerPollMs);
   }
+
+  stopAutoPullTimer();
 
   const tournament = currentRunningTournament();
   if (tournament) {

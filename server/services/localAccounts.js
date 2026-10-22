@@ -26,6 +26,17 @@ export function initAccounts() {
     );
     CREATE INDEX IF NOT EXISTS local_sessions_expiry ON local_sessions(expires_at);
   `);
+
+  const accountCols = getDb().prepare('PRAGMA table_info(local_accounts)').all().map((c) => c.name);
+  if (!accountCols.includes('last_sync_at')) {
+    getDb().exec('ALTER TABLE local_accounts ADD COLUMN last_sync_at TEXT');
+  }
+  if (!accountCols.includes('sync_status')) {
+    getDb().exec('ALTER TABLE local_accounts ADD COLUMN sync_status TEXT');
+  }
+  if (!accountCols.includes('sync_error')) {
+    getDb().exec('ALTER TABLE local_accounts ADD COLUMN sync_error TEXT');
+  }
 }
 
 function checkPassword(password) {
@@ -42,9 +53,20 @@ async function passwordHash(password) {
 }
 
 export function accountView(row) {
-  return { id: row.id, username: row.username, role: row.role, participant_id: row.participant_id,
-    name: row.name || row.username, members: row.members, contact: row.contact,
-    repository: row.repository, branch: row.branch };
+  return {
+    id: row.id,
+    username: row.username,
+    role: row.role,
+    participant_id: row.participant_id,
+    name: row.name || row.username,
+    members: row.members,
+    contact: row.contact,
+    repository: row.repository,
+    branch: row.branch,
+    last_sync_at: row.last_sync_at || null,
+    sync_status: row.sync_status || null,
+    sync_error: row.sync_error || null,
+  };
 }
 
 const SELECT = `SELECT a.*, p.name FROM local_accounts a LEFT JOIN participants p ON p.id=a.participant_id`;
@@ -125,6 +147,12 @@ export async function resetPassword(accountId, password) {
   getDb().prepare('DELETE FROM local_sessions WHERE account_id=?').run(accountId);
 }
 
+export function updateAccountSyncStatus(accountId, { status, error = null, syncedAt = nowIso() }) {
+  getDb()
+    .prepare('UPDATE local_accounts SET sync_status=?, sync_error=?, last_sync_at=? WHERE id=?')
+    .run(status, error, syncedAt, accountId);
+}
+
 export function updateProfile(id, body) {
   const values = ['members', 'contact', 'repository', 'branch'].map((key) => {
     const value = body[key];
@@ -135,8 +163,11 @@ export function updateProfile(id, body) {
   if (repository) {
     let url;
     try { url = new URL(repository); } catch { throw badRequest('bad_repository', 'URL GitHub không hợp lệ.'); }
-    if (url.origin !== 'https://github.com' || url.username || url.password || url.search || url.hash || !/^\/[a-zA-Z0-9-]+\/[a-zA-Z0-9_.-]+\/?$/.test(url.pathname)) {
-      throw badRequest('bad_repository', 'Chỉ nhận URL repository HTTPS trên github.com, không kèm token.');
+    const isMockOrDev = (process.env.NODE_ENV !== 'production' && url.protocol === 'file:');
+    if (!isMockOrDev) {
+      if (url.origin !== 'https://github.com' || url.username || url.password || url.search || url.hash || !/^\/[a-zA-Z0-9-]+\/[a-zA-Z0-9_.-]+\/?$/.test(url.pathname)) {
+        throw badRequest('bad_repository', 'Chỉ nhận URL repository HTTPS trên github.com, không kèm token.');
+      }
     }
   }
   if (!branch || /[\x00-\x20]/.test(branch)) throw badRequest('bad_branch', 'Branch không hợp lệ.');

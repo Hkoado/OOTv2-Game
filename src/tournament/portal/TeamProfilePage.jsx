@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Github, Mail, Save, Users } from 'lucide-react';
+import { Github, Mail, RefreshCw, Save, Users } from 'lucide-react';
+import { Badge } from './TournamentUi.jsx';
+import { formatDateTime } from './tournamentView.js';
 import { Alert, Field, Panel } from './TournamentUi.jsx';
 import { validateRepository } from './tournamentView.js';
 
@@ -79,7 +81,7 @@ export default function TeamProfilePage({ account, actions, busy }) {
                 placeholder="email@example.com hoặc Discord/Telegram"
               />
             </Field>
-            <Field label="Repository GitHub" hint="Chỉ lưu metadata. Hệ thống chưa tải code từ GitHub." error={repoError}>
+            <Field label="Repository GitHub" hint="Nhập link GitHub public hoặc link test: https://github.com/mock/sample-bot" error={repoError}>
               <input
                 name="repository"
                 type="url"
@@ -90,7 +92,7 @@ export default function TeamProfilePage({ account, actions, busy }) {
                 spellCheck={false}
               />
             </Field>
-            <Field label="Branch" hint="Branch sẽ dùng khi BTC bật đồng bộ GitHub (chưa triển khai).">
+            <Field label="Branch" hint="Branch chứa file bot.py (mặc định main)">
               <input
                 name="branch"
                 maxLength={300}

@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { asyncHandler } from '../lib/asyncHandler.js';
-import { HttpError } from '../lib/httpError.js';
+import { HttpError, badRequest } from '../lib/httpError.js';
 import { getDb } from '../db.js';
 import { acceptBotUpload } from '../middleware/upload.js';
 import { createSubmission, listParticipants, listSubmissions } from '../services/participants.js';
 import { createTournament, updateTournamentDraft, startTournament, listTournaments, getTournament, computeStandings, computeBracket, listMatches } from '../services/tournaments.js';
 import { getMatchDetail, getMatchReplay } from '../services/matches.js';
 import { COOKIE_NAME, SESSION_MS, login, logout, requireSession, requireLocalAdmin, listAccounts, createAccount, resetPassword, updateProfile } from '../services/localAccounts.js';
+import { syncBotFromGit, syncAllTournamentBots } from '../services/gitSync.js';
 
 const forbidden = () => new HttpError(403, 'scope_denied', 'Không có quyền truy cập dữ liệu này.');
 
@@ -72,6 +73,33 @@ export function localPortalRouter() {
     const row = await createSubmission(req.params.team, req.file);
     res.status(201).json({ id: row.id, status: row.status, sha256: row.sha256, validation_error: row.validation_error });
   }));
+
+  // Sync bot từ Git repository
+  router.post('/submissions/:team/sync-git', asyncHandler(async (req, res, next) => {
+    if (req.account.role !== 'admin' && req.account.participant_id !== req.params.team) return next(forbidden());
+    if (req.account.role !== 'admin' && getDb().prepare(`SELECT e.id FROM tournament_entries e JOIN tournaments t ON t.id=e.tournament_id
+      WHERE e.participant_id=? AND t.status IN ('group_running','semifinal_running','final_running')`).get(req.params.team)) {
+      return next(new HttpError(409, 'round_frozen', 'Đội đang thi giải đã khóa bài. Chờ giải kết thúc để nộp bản mới.'));
+    }
+    const account = getDb().prepare('SELECT * FROM local_accounts WHERE participant_id=?').get(req.params.team);
+    if (!account || !account.repository) {
+      throw badRequest('no_repository', 'Đội chưa khai báo link repository GitHub trong Hồ sơ đội.');
+    }
+    const result = await syncBotFromGit({
+      participantId: req.params.team,
+      repositoryUrl: account.repository,
+      branch: account.branch || 'main',
+      accountId: account.id,
+    });
+    res.status(201).json({
+      id: result.submission.id,
+      status: result.submission.status,
+      sha256: result.submission.sha256,
+      commit_sha: result.commitSha,
+      validation_error: result.submission.validation_error,
+    });
+  }));
+
   router.get('/events', (req, res) => {
     const events = listTournaments().filter((event) => req.account.role === 'admin' || getDb().prepare('SELECT id FROM tournament_entries WHERE tournament_id=? AND participant_id=?').get(event.id, req.account.participant_id));
     res.json({ events });
@@ -79,6 +107,13 @@ export function localPortalRouter() {
   router.post('/events', requireLocalAdmin, (req, res) => res.status(201).json(createTournament(req.body || {})));
   router.put('/events/:id', requireLocalAdmin, (req, res) => res.json(updateTournamentDraft(req.params.id, req.body || {})));
   router.post('/events/:id/start', requireLocalAdmin, (req, res) => res.json(startTournament(req.params.id)));
+
+  // Admin đồng bộ Git cho toàn bộ các đội trong giải draft
+  router.post('/events/:id/sync-all', requireLocalAdmin, asyncHandler(async (req, res) => {
+    const results = await syncAllTournamentBots(req.params.id);
+    res.json({ results });
+  }));
+
   router.get('/events/:id', (req, res) => {
     checkStage(req.account, req.params.id);
     const matches = listMatches(req.params.id).filter((match) => {

@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Download, Lock, UploadCloud } from 'lucide-react';
+import { Download, GitBranch, Lock, UploadCloud } from 'lucide-react';
 import { Alert, Badge, DataTable, Field, Panel } from './TournamentUi.jsx';
 import {
   botState, formatDateTime, shortSha, submissionFreeze, submissionState, teamBotState,
@@ -45,8 +45,8 @@ export default function SubmissionsPage({ account, events, teams, submissions, t
           <p className="tt-eyebrow">{isAdmin ? 'Ban tổ chức · nhận bài' : 'Đội thi · bài nộp'}</p>
           <h1 className="tt-page-title">{isAdmin ? 'Bài nộp & kiểm tra bot' : 'Bot & bài nộp'}</h1>
           <p className="tt-page-lead">
-            Hệ thống chỉ nhận một file Python dùng thư viện chuẩn. Server lưu file với tên sinh tự động, tính
-            SHA-256 và chạy smoke test; bot không được quyền quyết định kết quả trận.
+            Hệ thống chỉ nhận một file Python dùng thư viện chuẩn. Bạn có thể nộp trực tiếp file .py hoặc cấu hình
+            link GitHub repository để server tự động kéo code theo deadline.
           </p>
         </div>
         <a className="tt-btn" href="/api/sample-bot" download="sample_bot.py">
@@ -64,7 +64,7 @@ export default function SubmissionsPage({ account, events, teams, submissions, t
       {isAdmin && (
         <Panel
           title="Chọn đội cần xem"
-          subtitle="Admin có thể nộp hộ khi đội gặp sự cố, không bị khóa bởi vòng đang chạy."
+          subtitle="Admin có thể nộp hộ hoặc kéo Git hộ khi đội gặp sự cố, không bị khóa bởi vòng đang chạy."
           actions={selectedTeam ? <Badge tone={teamBotState(selectedTeam).tone}>{teamBotState(selectedTeam).label}</Badge> : null}
         >
           <Field label="Đội">
@@ -100,7 +100,7 @@ export default function SubmissionsPage({ account, events, teams, submissions, t
       </section>
 
       <div className="tt-grid tt-grid--2 tt-grid--form">
-        <Panel title="Nộp bot" subtitle="Nộp bài mới không xóa lịch sử; hệ thống dùng bài hợp lệ mới nhất khi giải bắt đầu.">
+        <Panel title="Nộp bot" subtitle="Nộp file .py hoặc kéo từ Git repository đã lưu.">
           <form className="tt-form" ref={formRef} onSubmit={handleUpload}>
             <Field label="File bot (.py)" hint="Tối đa 64 KiB. Validation chạy code trên máy BTC, không có sandbox.">
               <input type="file" name="file" accept=".py" required disabled={!canUpload || busy?.upload} />
@@ -111,22 +111,32 @@ export default function SubmissionsPage({ account, events, teams, submissions, t
                 {frozen && !isAdmin ? <Lock size={16} aria-hidden="true" /> : <UploadCloud size={16} aria-hidden="true" />}
                 {busy?.upload ? 'Đang kiểm tra…' : 'Nộp & kiểm tra bot'}
               </button>
+              {canUpload && (
+                <button
+                  type="button"
+                  className="tt-btn tt-btn--info"
+                  disabled={Boolean(busy?.upload)}
+                  onClick={() => actions.syncGitBot(targetId)}
+                >
+                  <GitBranch size={16} aria-hidden="true" />
+                  {busy?.upload ? 'Đang kéo Git…' : 'Kéo từ Git'}
+                </button>
+              )}
               {!canUpload && <span className="tt-muted">Cần chọn đội và mở khóa vòng đấu trước khi nộp.</span>}
             </div>
           </form>
         </Panel>
 
-        <Panel title="Yêu cầu kỹ thuật" subtitle="Theo protocol MVP, không phải Campus persistent.">
+        <Panel title="Yêu cầu kỹ thuật & Git" subtitle="Theo protocol MVP, không phải Campus persistent.">
           <ul className="tt-bullets">
             <li><strong>Python 3.12+</strong>, chỉ thư viện chuẩn; không cài package.</li>
-            <li>Một file <code>.py</code> duy nhất; không ZIP, không source URL.</li>
+            <li>Một file <code>bot.py</code> duy nhất; đặt tại thư mục gốc repository.</li>
             <li>Bot nhận JSON qua stdin và trả JSON qua stdout; không tự ghi kết quả.</li>
             <li>Mỗi request là một tiến trình mới; bot không giữ trạng thái giữa các nước.</li>
             <li>Server giới hạn thời gian, kích thước output và số nước (tối đa 200 plies).</li>
           </ul>
-          <Alert tone="info" title="Bot mẫu">
-            Dùng <a href="/api/sample-bot" download="sample_bot.py">sample_bot.py</a> làm khung rồi thay phần chọn nước.
-            Đọc thêm tại <code>docs/02_BOT_WORKER_PROTOCOL.md</code>.
+          <Alert tone="info" title="Test Git cục bộ">
+            Có thể nhập repository: <code>https://github.com/mock/sample-bot</code> vào Hồ sơ đội để test kéo tự động.
           </Alert>
         </Panel>
       </div>
@@ -137,12 +147,22 @@ export default function SubmissionsPage({ account, events, teams, submissions, t
         actions={<Badge tone="neutral">{bot.total} bản</Badge>}
       >
         {bot.total ? (
-          <DataTable columns={['Thời điểm', 'SHA-256', 'Trạng thái', 'Lỗi kiểm tra']} label="Lịch sử bài nộp">
+          <DataTable columns={['Thời điểm', 'Nguồn', 'SHA-256', 'Trạng thái', 'Lỗi kiểm tra']} label="Lịch sử bài nộp">
             {submissions.map((row) => {
               const state = submissionState(row.status);
               return (
                 <tr key={row.id}>
                   <td>{formatDateTime(row.created_at)}</td>
+                  <td>
+                    {row.source_type === 'git' ? (
+                      <span className="tt-cell-sub">
+                        <GitBranch size={12} style={{ display: 'inline', marginRight: 4 }} />
+                        Git {row.commit_sha ? <code>{row.commit_sha.slice(0, 7)}</code> : ''}
+                      </span>
+                    ) : (
+                      <span className="tt-muted">File upload</span>
+                    )}
+                  </td>
                   <td><code>{shortSha(row.sha256)}</code></td>
                   <td><Badge tone={state.tone}>{state.label}</Badge></td>
                   <td className="tt-cell-wrap">{row.validation_error || <span className="tt-muted">—</span>}</td>
@@ -152,7 +172,7 @@ export default function SubmissionsPage({ account, events, teams, submissions, t
           </DataTable>
         ) : (
           <p className="tt-muted">
-            {isAdmin && !teamFilter ? 'Chọn một đội ở khung phía trên để xem lịch sử bài nộp.' : 'Chưa có bài nộp nào. Nộp file .py đầu tiên để hệ thống kiểm tra.'}
+            {isAdmin && !teamFilter ? 'Chọn một đội ở khung phía trên để xem lịch sử bài nộp.' : 'Chưa có bài nộp nào. Nộp file .py hoặc bấm Kéo từ Git.'}
           </p>
         )}
       </Panel>

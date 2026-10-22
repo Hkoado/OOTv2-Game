@@ -1,4 +1,4 @@
-/**
+﻿/**
  * db.js — SQLite (better-sqlite3) + schema cho MVP. Không ORM, không service DB ngoài.
  * File DB nằm trong `data/` (private, đã gitignore), không nằm trong public/src/dist.
  */
@@ -97,8 +97,26 @@ export function initDb({ dbPath = config.dbPath, submissionsDir = config.submiss
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA_SQL);
   // Additive migration: old events retain the open-board MVP profile.
-  if (!db.prepare('PRAGMA table_info(tournaments)').all().some((column) => column.name === 'map_json')) {
+  const tournamentCols = db.prepare('PRAGMA table_info(tournaments)').all().map((c) => c.name);
+  if (!tournamentCols.includes('map_json')) {
     db.exec('ALTER TABLE tournaments ADD COLUMN map_json TEXT');
+  }
+  if (!tournamentCols.includes('deadline')) {
+    db.exec('ALTER TABLE tournaments ADD COLUMN deadline TEXT');
+  }
+
+  const submissionCols = db.prepare('PRAGMA table_info(submissions)').all().map((c) => c.name);
+  if (!submissionCols.includes('commit_sha')) {
+    db.exec('ALTER TABLE submissions ADD COLUMN commit_sha TEXT');
+  }
+  if (!submissionCols.includes('repo_url')) {
+    db.exec('ALTER TABLE submissions ADD COLUMN repo_url TEXT');
+  }
+  if (!submissionCols.includes('branch')) {
+    db.exec('ALTER TABLE submissions ADD COLUMN branch TEXT');
+  }
+  if (!submissionCols.includes('source_type')) {
+    db.exec("ALTER TABLE submissions ADD COLUMN source_type TEXT DEFAULT 'upload'");
   }
   return db;
 }

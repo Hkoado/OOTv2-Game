@@ -17,6 +17,7 @@ import tournamentsRouter from './routes/tournaments.js';
 import matchesRouter from './routes/matches.js';
 import { localPortalRouter } from './routes/localPortal.js';
 import { initAccounts } from './services/localAccounts.js';
+import { ensureFakeGitRepos } from './services/fakeGitRepos.js';
 import { sharedEnabled, health } from './shared/client.js';
 import { sharedRouter } from './shared/router.js';
 
@@ -40,7 +41,15 @@ export function createApp({ legacyAccess = false } = {}) {
     res.type('text/plain').send(readSampleBot());
   });
 
-  if (!sharedEnabled) initAccounts();
+  if (!sharedEnabled) {
+    initAccounts();
+    try {
+      ensureFakeGitRepos();
+    } catch (err) {
+      console.warn('[api] Không thể khởi tạo fake-repos:', err.message);
+    }
+  }
+
   app.use('/api/local', sharedEnabled ? sharedRouter() : localPortalRouter());
   if (legacyAccess && !sharedEnabled) {
     app.use('/api/participants', participantsRouter);
