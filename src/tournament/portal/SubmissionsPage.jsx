@@ -145,6 +145,11 @@ export default function SubmissionsPage({
     const repoTrimmed = repoInput.trim();
     const branchTrimmed = branchInput.trim() || 'main';
 
+    if (!selectedEventId) {
+      setRepoError('Đội của bạn chưa được ghi danh vào giải đấu nào.');
+      return;
+    }
+
     const err = validateRepository(repoTrimmed);
     if (err) {
       setRepoError(err);
@@ -302,6 +307,13 @@ export default function SubmissionsPage({
         </a>
       </header>
 
+      {/* Warning if team is not enrolled in any tournament */}
+      {!isAdmin && events.length === 0 && (
+        <Alert tone="warning" title="Chưa được ghi danh vào giải đấu">
+          Đội của bạn hiện chưa được Ban tổ chức xếp vào giải đấu nào. Bài nộp bot được quản lý theo từng giải đấu cụ thể; vui lòng liên hệ BTC để được thêm vào giải trước khi nộp bot.
+        </Alert>
+      )}
+
       {/* Warning if tournament is running/frozen */}
       {isEventFrozen && (
         <Alert tone="warning" title={`Bài nộp đang khóa · ${selectedEvent.name}`}>
@@ -423,7 +435,7 @@ export default function SubmissionsPage({
                   <button
                     type="submit"
                     className="tt-btn"
-                    disabled={isEventFrozen || syncing || !targetId}
+                    disabled={!selectedEventId || isEventFrozen || syncing || !targetId}
                   >
                     <Github size={16} aria-hidden="true" />
                     Lưu & Đăng ký repository
