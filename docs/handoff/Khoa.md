@@ -2,6 +2,54 @@
 
 ## Trạng thái mới nhất
 
+- Checkpoint 24/10/2026 tiếp theo: **K2 pure foundation — READY FOR REVIEW**, chưa persistence/E2E.
+  Baseline `dev @ ddc20f3`; người dùng cho phép deploy/browser, nhưng chưa deploy vì thiếu runtime/privacy
+  và chưa xác định project Vercel. Không apply SQL remote. K3/K4 vẫn BLOCKED bởi contract/runtime gate.
+- Thêm `server/lib/officialBracket.js`, `server/contracts/officialSnapshot.js`,
+  `tests/officialBracket.test.js`; không sửa router/UI/worker/migration/package.
+- K2 exports: `compareOfficialFractions`, `seedOfficialQualifiers`, `seedOfficialTicketHolders`,
+  `createOfficialBracket`, `createOfficialKnockoutSeries`, `resolveOfficialKnockoutSeries`,
+  `officialBracketEntrants`, `allocateOfficialTickets`, `rankOfficialKnockout`.
+- `campus-bracket.v1`: seed tỷ lệ bằng cross-product BigInt chính xác; nhất bảng trước nhì;
+  permutation lower-half tối thiểu tổng lệch rồi numeric lexicographic, fixed winner/loser edges,
+  không reseed. Single-group Top 4 không thể tránh tái đấu cùng bảng.
+- Main 4/final 6, đổi màu từng block và luân phiên màu đầu; extra plan đúng 2 ván reserve,
+  chỉ trả `nextGames` extra khi main hoàn tất và hòa; không dừng sớm. Bye/walkover/double absence
+  không tạo ván hay game points giả; double-DQ truyền null xuống nhánh.
+- Ranking tranh nhất/tranh ba rồi losers vòng trước theo seed; administrative non-finishers trả
+  `unranked`, `complete:false`, cần quyết định trọng tài, không tự gán rank cho người bị DQ/rút.
+  Ticket allocator nhận ranking đã duyệt, loại holder/rút, không duplicate, trả reserves/vacant.
+- Ticket seeding giữ thành tích thực tế tốt nhất của đội (rank thật của vé chuyển), không giả á quân.
+- `createOfficialRoundSnapshot`, `verifyOfficialRoundSnapshot`: `campus-round-snapshot.v1`, canonical
+  contentHash, deep freeze; pin event/round/cutoff/seed, primary/reserve map + hash, packVersion,
+  runtimeVersion/runtimeHash/budgetHash, rules `ott-campus.v1`, protocol `bot.v1`, bot source hash,
+  artifact/submission, GitHub repo numeric ID/commit SHA/resolvedAt trước cutoff. Không đọc latest.
+- Contract K2 là nội bộ/chờ Huy/Bảo review, không API/RPC mới. Snapshot hash không chứng minh runtime
+  đã được cài/benchmark; provenance do caller tin cậy cung cấp, chưa receipt validation transaction.
+  Persist snapshot/write-once, map pack công bố/slot assignment, bracket/seed locking và accepted-attempt
+  fencing còn phải tích hợp với Huy; không gọi K2 end-to-end đã hoàn tất.
+- Tests 24/10 Windows Node v24.18.0: baseline install/test/build exit 0 (102 tests); K2 riêng
+  21/21 pass; full `npm.cmd test` 123/123 pass, 0 fail/skip, exit 0; build exit 0; diff check exit 0.
+  Logs `data/khoa-k1/k2-tests.log`, `k2-final-{0,1,2,3}.log`, `k2-final.json` (gitignored).
+  Lượt đầu bắt được validation group size max 7 sai tại 15/31 đội (bảng 8); đã sửa max 8 và chạy lại.
+- Browser: Edge headed local production build, API 503 fixture, không login/DB remote;
+  script `data/khoa-k1/browser-k2.mjs`, report/screenshots `data/khoa-k2-ui/`.
+  Kết quả cuối PASS: login dark/light, 81 ô, xếp quân hai bên và đi hợp lệ khi chặn mạng,
+  desktop 1366×900/mobile 390×844 không tràn ngang, 0 runtime exception. Đã đọc ảnh
+  `login-light.png`, `offline-light.png`, `offline-mobile.png` để kiểm trực quan.
+  Screenshot không phải nghiệm thu UI bracket (chưa nối UI).
+  Script QA cũ dùng `.tt-login__snapshot`, `.tt-turn`, `.square--valid-target` đã lỗi thời;
+  đã đổi script tạm sang selector đúng UI kit, không sửa production UI.
+- Remote inspection chỉ list Supabase project `OTTv2-G5`, không query/write/migrate.
+  Không có Vercel CLI/project link local. WSL Ubuntu có tên trong danh sách nhưng sandbox/preflight
+  Linux **NOT RUN**. DB integration/worker E2E/load/offline/restore/Preview **NOT RUN**.
+- Bước tiếp: Huy review snapshot/job/receipt/claim/finish DTO và schema trước K3; gate Start vẫn tắt.
+  Không dùng quyền deploy để bỏ qua privacy/runtime/sandbox. Muốn deploy preview cần project đích,
+  schema test tương thích và cấu hình credential qua cơ chế riêng, không dán secret vào chat.
+- SHA checkpoint mới: tra `git log -- docs/handoff/Khoa.md`; không push.
+
+### Checkpoint K1 trước đó
+
 - Ngày 24/10/2026, Khoa, **K1 — READY FOR REVIEW** (hàm thuần, không phải runtime chính thức).
 - Branch `dev`, baseline code `bb9cb4e9124a4e513505f7a03ce468eee7bbccee`, checkout sạch trước khi làm.
 - SHA commit K1/báo cáo: tra bằng `git log -- docs/handoff/Khoa.md`; chưa tạo PR/push/merge/deploy.
