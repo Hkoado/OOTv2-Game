@@ -90,9 +90,23 @@ Tận dụng bằng cách giữ live/log đã có và dùng ý tưởng form/CTA
 - Setup DTO hiện tại: `event.profile`, `competition` (schemaVersion/level/cutoff/mapPackVersion/
   weeksPerMonth/monthsPerSemester/primaryMap/reserveMap), `setup_preview`; update gửi `expectedVersion`.
 - Mỗi thay đổi schema/API cần mẫu request/response/error và PR review trước khi downstream nối.
-- API nộp đề xuất: `POST /api/local/events/:id/submissions/from-github`, body repository/branch;
-  trả `202 {receipt:{id,event_id,team_id,repo_id,commit_sha,resolved_at,status}}`.
-  `GET /api/local/repo-sync-jobs/:id` chỉ owner/admin; tên route phải chốt trong PR Huy trước UI.
+- API intake đã chốt ở H1 (`server/shared/router.js`, service `server/services/githubIntake.js`):
+  `PUT /api/local/events/:id/repository` — đội tự đăng ký (nhận `approved=false`, trạng thái
+  `pending_approval`), admin gửi kèm `team` để duyệt (`approved=true`); `GET` cùng path cho
+  owner/admin xem connection; `GET /api/local/events/:id/repositories` (admin) liệt kê repo chờ duyệt.
+  `POST /api/local/events/:id/submissions/from-github` body `{repository?, branch?}` trả
+  `202 {created, job, receipt}` (lần nộp lại cùng SHA trả `created=false`, không tạo job/quota mới).
+  `GET /api/local/repo-sync-jobs/:id` và `GET /api/local/events/:id/submissions/from-github` chỉ
+  owner/admin. Không có route nào clone, tải source hay chạy Python.
+- DTO receipt (whitelist, snake_case khớp fixtures `githubSyncState.js`):
+  `{id,event_id,team_id,repo_id,repository,branch,commit_sha,resolved_at,status,source_kind,file_path,
+  source_hash,error,error_category,submission_id,previous_valid_submission_id,job_id}` với
+  `status ∈ resolving|fetching|checking|valid|invalid|infrastructure|frozen` (frozen là view khi giải
+  đã bắt đầu, kèm `previous_status` + `note`). Job view bỏ `lease_token`/`requested_by`:
+  `{id,event_id,team_id,status,attempt,available_at,error,error_category,created_at,updated_at}`.
+  Mã lỗi API: `repo_not_approved`, `repo_taken`, `repository_changed`, `repository_not_found`,
+  `past_cutoff`, `event_frozen`, `quota_exceeded`, `missing_team`, `github_rate_limited`,
+  `github_timeout`, `github_unavailable`.
 - Job nội bộ cần source kind/path/SHA, lease token/until, attempt/retry/availableAt; status tách
   lỗi code khỏi hạ tầng. Snapshot tham chiếu receipt/source hash/map hash/rules/protocol/budget.
 - API viewer dùng chính sách docs/14: cùng **giải** xem mọi ván **đã công bố**, không theo vòng cũ;

@@ -29,6 +29,24 @@ Migration DDL dùng kết nối quản trị đã xác thực.
 
 
 ## Map snapshot theo ván (24/10/2026)
+## GitHub intake H1 — repo approval + job/receipt (24/10/2026)
+
+- Migration **`20261024130000_github_intake.sql`** (additive, chưa apply remote): 3 bảng private
+  `mvp_repo_connections` (repo/branch đã duyệt theo giải+đội), `mvp_repo_sync_jobs` (lease/attempt/
+  available_at/error_category), `mvp_github_receipts` (trạng thái cho UI + `source_hash`/`submission_id`).
+  RLS bật, `REVOKE` khỏi `PUBLIC/anon/authenticated`, chỉ `service_role` đọc/ghi.
+- RPC `mvp_repo_connection_upsert` (đăng ký/duyệt, unique `(event, repo_id)` chống dùng chéo đội) và
+  `mvp_github_intake` (cutoff/freeze/membership/quota/idempotency bằng `clock_timestamp()`), trả envelope
+  `{ok, created?, connection?|receipt?, job?, error?}` để API map mã lỗi mà không lộ chi tiết SQL.
+- API chỉ resolve `repository id` + HEAD `commit SHA` qua `api.github.com` (`server/services/githubRepo.js`),
+  kiểm host/protocol/redirect/size/timeout, token chỉ ở header. Không clone, không tải `bot.py`,
+  không chạy git/Python; worker BTC (H2) sẽ tải blob đúng SHA.
+- Route + DTO đã chốt: xem [docs/16](16-THIET-LAP-CHINH-THUC-VA-CHIA-VIEC.md) và
+  [bàn giao Huy](handoff/Huy.md). UI B2 dùng `receipt`/`job` view này trực tiếp.
+- Bảo mật: receipt chỉ trả whitelist (không `storage_path`, không token, không raw lỗi GitHub);
+  team chỉ đọc job/receipt của mình, admin đọc mọi đội; giải đã chạy thì `event_frozen`/`frozen`.
+
+
 
 - Migration **`20261024120000_mvp_match_map_snapshot.sql`** thêm `mvp_matches.map_json` (MapV1 đã
   chuẩn hoá) và `mvp_matches.map_hash` (hash canonical bỏ `id`/`revision`), rồi thay
