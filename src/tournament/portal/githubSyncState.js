@@ -76,6 +76,9 @@ export const GITHUB_INTAKE_ERROR_MESSAGES = Object.freeze({
   github_auth_failed: 'Lỗi xác thực với GitHub.',
   github_forbidden: 'Không có quyền truy cập repository này trên GitHub.',
   github_bad_response: 'Phản hồi không hợp lệ từ GitHub.',
+  shared_db_error: 'Cơ sở dữ liệu giải đấu chưa sẵn sàng (chưa áp dụng migration intake). Vui lòng báo Ban tổ chức.',
+  database_unavailable: 'Không thể kết nối đến cơ sở dữ liệu giải đấu. Vui lòng thử lại sau.',
+  scope_denied: 'Tài khoản không thuộc giải đấu này hoặc không có quyền thao tác.',
 });
 
 /**
