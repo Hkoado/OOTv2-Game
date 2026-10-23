@@ -2,6 +2,45 @@
 
 ## Trạng thái mới nhất
 
+### 24/10/2026 — K3a bounded Supabase artifact retrieval: READY FOR REVIEW
+
+- Nền `dev @ abb7cae`; có sẵn **18 file staged** của người dùng (map snapshot/worker MVP,
+  migration map và UI B1). Không sửa/unstage/commit các file này; không kết luận chúng là H1
+  chỉ từ lời mô tả. `docs/handoff/Huy.md` vẫn NOT STARTED; không tìm thấy GitHub backend
+  receipt/job service hoặc migration/RPC tương ứng trong checkout. Bảo B1 READY FOR REVIEW.
+- Phần thực hiện: `server/shared/artifactDownload.js`, sửa `server/shared/artifacts.js`,
+  thêm `tests/artifactDownload.test.js` (10 tests), cập nhật báo cáo Khoa này.
+- Contract: `downloadStorageArtifact(storageKey,{maxBytes,timeoutMs=20000,signal}) -> Buffer`;
+  fixed HTTPS configured Supabase origin, bucket `ootv2-bots`, UUID.py key; không URL arbitrary,
+  không redirect. Byte budget <=256 KiB kiểm cả header và từng chunk, fixed buffer tránh tích lũy
+  metadata của vô số chunk nhỏ. Deadline bao trùm fetch/body và không chờ cancel treo.
+- `materialize(submission,{signal,timeoutMs}={})` giữ tương thích một argument; kiểm SHA-256
+  syntax trước mạng, kiểm hash trước file, file private UUID `wx`/0600, cleanup khi partial write.
+  Source không execute ở downloader; lỗi upstream/body không bị đưa vào message/log.
+  Không đổi `client.request()` chung hoặc upload API, worker/MVP profile/map snapshot.
+- Integration test fetch giả xác nhận `validatePendingSubmissions` tải quá cỡ vẫn giữ uploaded,
+  không ghi valid/invalid/kết quả; API/storage origin giả, không gọi credential/network thật.
+- Baseline install/test/build exit 0: 155/155 tests. Sau sửa: targeted **16/16**, toàn repo
+  **165/165 pass**, 0 fail/skip; build exit 0 (1639 modules). Log `data/khoa-k3/final.json`,
+  `final-{0..4}.log`. Lượt đầu bắt cancellation-vs-EOF race đã sửa và test lại.
+- `git diff --check` phần unstaged của Khoa exit 0. `git diff --cached --check` toàn stage
+  có sẵn exit 2: extra blank EOF trong docs/07, githubSyncState.js, officialSetupView.js,
+  githubSyncState.test.js, matchMapSnapshot.test.js, officialSetupView.test.js. Không tự sửa
+  whitespace của người khác để báo PASS giả. Install còn 2 high vulnerabilities và esbuild
+  script approval warning có trước; không tự audit fix.
+- Không migration/env/dependency mới, không apply remote/deploy/push. Start giữ nguyên tắt.
+  NOT RUN: Supabase integration thật, GitHub consumer, persistent retention/pin/GC, lease/fencing
+  event/log/terminal, Linux sandbox, browser mới (không sửa frontend).
+- Bước tiếp: xác định phần Huy nằm ở commit/branch/file nào nếu chưa vào checkout; cần contract
+  reviewed receipt/job/snapshot/RPC trước consumer. Helper bounded GitHub blob/cache có thể
+  làm milestone độc lập; K3a này chỉ tăng an toàn luồng Storage đang có, không đóng K3.
+- Commit checkpoint **chưa tạo**: Git báo `cannot do a partial commit during a merge`.
+  Repo có MERGE_HEAD đang mở; không tự commit merge/abort merge của người dùng. Đã bỏ stage
+  chỉ 4 file của checkpoint này sau lần thử, bảo toàn 18 file stage gốc; code mới còn working tree
+  và untracked để review. Bằng chứng `data/khoa-k3/{commit,merge-check}.json`.
+
+### Checkpoint runtime trước đó
+
 - Checkpoint độc lập 24/10/2026: **bot.v1/Campus trusted runtime foundation — READY FOR REVIEW**.
   Baseline `dev @ 0b4ca63`, checkout sạch. Không tuyên bố K3/K4 production hoàn tất.
 - Đã thêm wire parser/validator/request builder `server/contracts/botProtocol.js`,
