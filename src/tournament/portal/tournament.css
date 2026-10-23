@@ -252,6 +252,26 @@
 }
 .tt-login__card-title { font-family: var(--ott-font-display); font-size: var(--ott-type-display-size); line-height: 1.2; }
 .tt-login__card-sub { color: var(--ott-color-text-secondary); font-size: var(--ott-type-label-size); }
+.tt-login__remember {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ott-space-3);
+  padding: var(--ott-space-3);
+  border: 1px solid var(--ott-color-border-subtle);
+  border-radius: var(--ott-radius-md, 10px);
+  cursor: pointer;
+}
+.tt-login__remember input {
+  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  accent-color: var(--ott-color-accent, #2563eb);
+}
+.tt-login__remember > span { display: flex; flex-direction: column; gap: 2px; }
+.tt-login__remember strong { font-size: var(--ott-type-label-size); color: var(--ott-color-text-primary); }
+
+
 .tt-login__help {
   font-size: var(--ott-type-caption-size);
   color: var(--ott-color-text-secondary);
