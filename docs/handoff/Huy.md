@@ -166,7 +166,7 @@ Worker BTC (Khoa/H2) dùng `server/shared/githubJobs.js`; mọi kiểm quyền n
 | `node --test tests/githubJobs.test.js` | **5/5 pass** — claim/lease/generation, heartbeat/progress, finish chuẩn hoá + chặn payload sai, release retry |
 | `node --test tests/publication.test.js` | **9/9 pass** — mốc phát, window vs full, ẩn ván chưa công bố, replay/log/live gate, cancel |
 
-| `node --test tests/*.test.js` | **136/136 pass**, exit 0 |
+| `node --test tests/*.test.js` | **212/212 pass**, exit 0 |
 | `npm run build` | **pass** (4.96 s, exit 0) |
 
 Môi trường: Windows, Node 24.18.0; không có test bị skip.
@@ -211,7 +211,7 @@ Môi trường: Windows, Node 24.18.0; không có test bị skip.
 - 24/10/2026: **H1 fix + worker contract** — sửa `previous_valid_submission_id` (dùng `submission_id`, bỏ
   receipt chưa có submission) và thêm `generation` + `mvp_github_claim/heartbeat/progress/finish/release`
   (lease token + generation, finish nguyên tử submission+receipt, release retry backoff);
-  `tests/githubJobs.test.js` 5/5, tổng 136/136 pass.
+  `tests/githubJobs.test.js` 5/5, tổng 212/212 pass.
 
 - 24/10/2026: **H3 done (mock-verified)** — `mvp_match_broadcasts` + 4 route (list/viewer/admin
   schedule/cancel), chặn xem ẩn danh và ẩn result/standings/bracket/replay/log của ván chưa công bố;
