@@ -86,7 +86,7 @@ Migration thứ tự / applied chưa / env mới:
 - Không có migration mới phía UI. Phụ thuộc migration 20261024150000_broadcast_schedule.sql của Huy. Không có biến môi trường mới.
 
 Tests: lệnh | môi trường | exit | pass/fail/skip | vị trí log:
-- npm test (node --test tests/*.test.js) | Windows local Node v22.13.0 | exit 0 | pass 219/219, fail 0, skip 0 | console stdout
+- npm test (node --test tests/*.test.js) | Windows local Node v22.13.0 | exit 0 | pass 233/233, fail 0, skip 0 | console stdout
 - npm run build (vite build) | Windows local Node v22.13.0 | exit 0 | pass (1644 modules transformed, dist bundle sạch) | console stdout
 
 NOT RUN + lý do:
@@ -96,9 +96,10 @@ NOT RUN + lý do:
 Giới hạn / bug còn lại / gate đang tắt / rủi ro:
 - Kết quả ván chỉ mở khi release_mode = 'full' và phase = 'ended'. Nếu đặt 'window', kết quả luôn được giữ kín trên UI.
 - Trang Live yêu cầu đăng nhập tài khoản hợp lệ thuộc giải (hoặc admin); người xem ẩn danh được hướng dẫn đăng nhập.
+- Khi truy cập ván đấu chéo giải (cross-event) hoặc tài khoản không có quyền, hệ thống nhận 403 scope_denied và tự động dừng polling kèm cảnh báo quyền xem.
 
 Dependency người khác + phần chưa tích hợp:
-- Đã tích hợp hoàn tất với publication backend H3 của Huy và DTO thể thức K1 của Khoa.
+- Đã tích hợp hoàn tất với publication backend H3 của Huy (bao gồm commit f1843b1 lọc live overview theo giải của đội và 403 scope_denied) và DTO thể thức K1 của Khoa.
 
 Cách chạy demo và rollback:
 - Demo Viewer và Lịch phát:
@@ -117,7 +118,7 @@ Bước tiếp theo nhỏ nhất:
 
 ## Lịch sử checkpoint
 
-- 24/10/2026 (Checkpoint 3): Hoàn thành B3 (Viewer lịch phát: nối publication API H3, countdown thời gian thực, server_time/visible_plies, sauSeq, đặt lịch phát Admin và bảng điểm chuẩn DTO Khoa). Tests: 219/219 pass.
+- 24/10/2026 (Checkpoint 3): Hoàn thành B3 (Viewer lịch phát: nối publication API H3, countdown thời gian thực, server_time/visible_plies, sauSeq, đặt lịch phát Admin và bảng điểm chuẩn DTO Khoa; tương thích hoàn toàn với cập nhật H3 scope_denied và scoped live overview). Tests: 233/233 pass.
 - 24/10/2026 (Checkpoint 2): Hoàn thành B2 (GitHub UI thật: kết nối API intake H1, duyệt quyền, receipt, đồng bộ commit và USB fallback cho Admin). Tests: 122/122 pass.
 - 24/10/2026 (Checkpoint 1): Hoàn thành B1 (Setup UX, dirty draft guard, timezone clarity UTC/local, dynamic groups A–H preview, 7 GitHub intake fixtures & adapters). Tests: 100/100 pass.
 - 23/10/2026: Tạo khung bàn giao ban đầu.

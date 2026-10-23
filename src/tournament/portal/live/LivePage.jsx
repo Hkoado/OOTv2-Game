@@ -139,6 +139,10 @@ export default function LivePage({ matchId = null, theme, onToggleTheme }) {
             setIsAuthRequired(true);
             return;
           }
+          if (e.status === 403 || e.code === 'scope_denied') {
+            setError(e.message || 'Bạn không có quyền xem ván đấu này.');
+            return;
+          }
           // If 404 broadcast_not_published or legacy fallback: fallback to fetchLiveEvents
         }
 
@@ -180,7 +184,12 @@ export default function LivePage({ matchId = null, theme, onToggleTheme }) {
         }
         setError('');
       } catch (caught) {
-        if (!stopped) setError(caught.message || 'Mất kết nối tới máy chủ giải đấu.');
+        if (!stopped) {
+          setError(caught.message || 'Mất kết nối tới máy chủ giải đấu.');
+          if (caught.status === 403 || caught.code === 'scope_denied') {
+            return;
+          }
+        }
       }
 
       if (!stopped) timer = window.setTimeout(tick, pollInterval);
