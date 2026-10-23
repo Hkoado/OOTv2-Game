@@ -27,7 +27,9 @@ import {
   otherPlayer,
   getPiecesArray,
   replayMatchesResult,
+  mapRequestFields,
 } from './gameAdapter.js';
+import { normalizeMap } from '../../src/game/maps.js';
 
 function emptyReplay(matchId, seed, pieces, result, reason) {
   return {
@@ -53,14 +55,32 @@ function safeNotify(callback, payload) {
 
 /**
  * @param {{ matchId: string, seed: number, red: {name: string, filePath: string},
- *           blue: {name: string, filePath: string}, onProgress?: Function,
+ *           blue: {name: string, filePath: string}, map?: object, onProgress?: Function,
  *           onLive?: (event: {kind: 'initial', initialPieces: object[], seed: number}
  *                            | {kind: 'move', ply: number, event: object}) => void,
  *           onBotOutput?: (chunk: {side: 'red'|'blue', stream: 'stdout'|'stderr', text: string}) => void }} options
  * @returns {Promise<{result: string, reason: string, winner: string|null, ply_count: number,
  *                    replay: object, notes: string[]}>}
  */
-export async function runMatch({ matchId, seed, red, blue, onProgress, onLive, onBotOutput }) {
+export async function runMatch({ matchId, seed, red, blue, map, onProgress, onLive, onBotOutput }) {
+  // Snapshot map do giải/worker chốt, không lấy từ bot.
+  const mapFields = mapRequestFields(map ? normalizeMap(map) : null);
+  const outcome = await runMatchInternal({
+    matchId,
+    seed,
+    red,
+    blue,
+    map: mapFields.map || null,
+    onProgress,
+    onLive,
+    onBotOutput,
+  });
+  // Cùng một map/hash cho setup, move và replay của ván này.
+  if (mapFields.map) outcome.replay = { ...outcome.replay, ...mapFields };
+  return outcome;
+}
+
+async function runMatchInternal({ matchId, seed, red, blue, map, onProgress, onLive, onBotOutput }) {
   const notes = [];
   const bots = {
     [PLAYERS.RED]: red,
@@ -84,7 +104,7 @@ export async function runMatch({ matchId, seed, red, blue, onProgress, onLive, o
     // --- Setup Đỏ trước ---
     const redSetup = await callBot(
       PLAYERS.RED,
-      buildSetupRequest(state, PLAYERS.RED, seed),
+      buildSetupRequest(state, PLAYERS.RED, seed, map),
       config.limits.setupTimeoutMs
     );
     if (!redSetup.ok) {
@@ -115,7 +135,7 @@ export async function runMatch({ matchId, seed, red, blue, onProgress, onLive, o
     // --- Setup Xanh (thấy đội hình Đỏ) ---
     const blueSetup = await callBot(
       PLAYERS.BLUE,
-      buildSetupRequest(state, PLAYERS.BLUE, seed),
+      buildSetupRequest(state, PLAYERS.BLUE, seed, map),
       config.limits.setupTimeoutMs
     );
     if (!blueSetup.ok) {
@@ -155,6 +175,7 @@ export async function runMatch({ matchId, seed, red, blue, onProgress, onLive, o
       initialPieces,
       matchId,
       seed,
+      map,
       callBot,
       notes,
       onProgress,
@@ -205,7 +226,7 @@ function buildFinished(matchId, seed, initialPieces, events, result, reason, not
 }
 
 /** Vòng lặp nước đi: engine kiểm tra từng nước, giới hạn MAX_PLIES. */
-async function playLoop({ state, events, initialPieces, matchId, seed, callBot, notes, onProgress, onLive }) {
+async function playLoop({ state, events, initialPieces, matchId, seed, map, callBot, notes, onProgress, onLive }) {
   let current = state;
 
   for (let ply = 1; ply <= MAX_PLIES; ply += 1) {
@@ -225,7 +246,7 @@ async function playLoop({ state, events, initialPieces, matchId, seed, callBot, 
 
     const live = await callBot(
       player,
-      buildMoveRequest(current, player, seed, ply),
+      buildMoveRequest(current, player, seed, ply, map),
       config.limits.moveTimeoutMs
     );
     if (!live.ok) {
