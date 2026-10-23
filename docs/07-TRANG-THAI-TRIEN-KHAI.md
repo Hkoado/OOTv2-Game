@@ -300,3 +300,17 @@ Xem [bàn giao UI](11-TICH-HOP-UI-KIT.md); đây không phải hoàn tất M2–
 - Giới hạn: runner MVP vẫn 200 plies và chưa chạy map có ô cản (`map_runner_unavailable`); 400 plies là
   profile Campus (`CAMPUS_MAX_PLIES`, đã có test riêng).
 
+
+### GitHub intake H1 — 24/10/2026
+
+- Đã có API thật cho B2: `PUT/GET /api/local/events/:id/repository` (đăng ký/duyệt repo),
+  `GET /events/:id/repositories` (admin duyệt), `POST/GET /events/:id/submissions/from-github`
+  (yêu cầu đồng bộ + trạng thái mới nhất), `GET /repo-sync-jobs/:id` (owner/admin).
+- Migration additive `20261024130000_github_intake.sql` (3 bảng private + 2 RPC) **chưa apply remote**;
+  API chỉ resolve repo ID + commit SHA qua `api.github.com`, không clone/tải source/chạy Python.
+- Receipt/job view là whitelist (không token/storage path/lease), trạng thái khớp fixtures
+  `githubSyncState.js`; ghi `frozen` khi giải đã bắt đầu. Xem [bàn giao Huy](handoff/Huy.md).
+- Test: `githubRepo` 5/5, `githubIntakeApi` 6/6, schema guardrail; tổng 120/120, build pass.
+- Chưa làm: worker tải blob/validate (H2, Khoa), tắt upload HTTP, publication/privacy (H3),
+  Postgres integration trên project thật.
+
