@@ -1,4 +1,23 @@
-# Trạng thái triển khai Campus — 22/10/2026
+# Trạng thái triển khai Campus — 23/10/2026
+
+## M0 — Baseline và chốt hướng chấm trước / phát trận (23/10/2026)
+
+Đợt này **chỉ xác lập baseline và chốt hướng**, chưa thêm tính năng chấm trước hay phát trận.
+
+- Nhánh hiện tại `testkhoa` @ `7676a51` (= `origin/live` + commit quan sát chấm bài), working tree sạch.
+- Baseline trên máy: `npm.cmd run build` **pass** (3,94 s); `npm.cmd test` **93/93 pass**
+  (42,6 s, exit 0), gồm worker hoàn tất giải 30 ván, local portal auth/CSRF, live events, schema Supabase.
+- **Không merge nguyên** `Backend` và `Worker-Fix`: `Backend` gắn SQLite và lấy HEAD tại/qua cutoff
+  (không khóa đúng commit trước hạn); `Worker-Fix` chỉ cho worker SQLite và cờ map kiểm truthy.
+  Phần dùng được sẽ **port chọn lọc** sang đường Supabase/shared ở M2.
+- Chốt mô hình: worker máy BTC chấm và ghi kết quả/replay **kín** vào Supabase; BTC công bố theo lịch;
+  API chỉ trả các nước đã đến mốc giờ phát; client tự dựng bàn cờ. Không chấm bot trên web/trình duyệt.
+- Chính sách xem đổi thành **theo giải**: đội xem mọi trận đã công bố trong giải mình tham gia.
+- Tài liệu quyết định: [kiến trúc chấm trước và phát trận](14-KIEN-TRUC-CHAM-TRUOC-VA-PHAT-TRAN.md)
+  (nhịp phát mặc định 2 s/nước, mục tiêu đo 100 viewer, milestone M1–M6, hình dạng API, deploy).
+
+Chưa làm ở M0: bảng công bố/lịch phát, API cắt theo mốc, viewer từng nước, chuyển validation khỏi API host,
+cách ly cấp OS cho bot sinh viên, đo tải thật.
 
 ## Cập nhật runtime shared MVP
 

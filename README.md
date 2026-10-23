@@ -71,7 +71,8 @@ node tools/cli/start-local.js    # API :3001 + worker + web :3000
 - Core dùng profile MVP 8 đội/30 ván, không phải Campus production. API legacy không auth tắt mặc định.
 
 Hướng dẫn vận hành chi tiết: [localhost và phân công 4 người](docs/09-LOCAL-CORE-VA-BAN-GIAO-4-NGUOI.md).
-Tài liệu Campus: [mục lục](docs/README.md), [trạng thái triển khai](docs/07-TRANG-THAI-TRIEN-KHAI.md).
+Tài liệu Campus: [mục lục](docs/README.md), [trạng thái triển khai](docs/07-TRANG-THAI-TRIEN-KHAI.md),
+[hướng chấm trước và phát trận](docs/14-KIEN-TRUC-CHAM-TRUOC-VA-PHAT-TRAN.md).
 
 > Các mục 1–… bên dưới mô tả luật chơi và giao diện phòng/spectator gốc. Chúng vẫn đúng về luật
 > và còn mã nguồn trong `LegacyApp.jsx`, nhưng không phải màn hình khởi động hiện tại.

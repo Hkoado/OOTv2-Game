@@ -1,8 +1,9 @@
 # OTTv2 — Bộ tài liệu giải đấu và giao diện
 
-Cập nhật 22/10/2026. Dành để bổ sung vào repository [Hkoado/OOTv2-Game](https://github.com/Hkoado/OOTv2-Game), phát triển tiếp nhánh `tournament/initial`. Đây là thiết kế/handoff, không phải tuyên bố các tính năng đã được triển khai.
+Cập nhật 23/10/2026. Dành để bổ sung vào repository [Hkoado/OOTv2-Game](https://github.com/Hkoado/OOTv2-Game), phát triển tiếp nhánh `tournament/initial`. Đây là thiết kế/handoff, không phải tuyên bố các tính năng đã được triển khai.
 
 **Code hiện tại:** xem [trạng thái triển khai và migration](07-TRANG-THAI-TRIEN-KHAI.md).
+Hướng đang triển khai (chấm trước → công bố → phát từng nước): [kiến trúc chấm trước và phát trận](14-KIEN-TRUC-CHAM-TRUOC-VA-PHAT-TRAN.md).
 Xem trực tiếp + triển khai công khai (đã chạy được): [live và Cloudflare Tunnel](13-LIVE-VA-TRIEN-KHAI.md).
 Đợt offline/thư mục giải: [bàn giao và chia việc còn thiếu](10-BAN-GIAO-OFFLINE-VA-THU-MUC-GIAI.md).
 Nền tảng engine Campus M1 có CLI riêng; API/worker/UI hiện tại vẫn dùng profile MVP.
@@ -17,6 +18,7 @@ Nền tảng engine Campus M1 có CLI riêng; API/worker/UI hiện tại vẫn d
 | Backend/runner agent | [Đặc tả kỹ thuật](03-DAC-TA-KY-THUAT.md), [hướng dẫn agent](04-HUONG-DAN-AGENT-CODE.md) |
 | Frontend/UI agent | [Tích hợp UI vào repo](05-TICH-HOP-UI-VA-REPO.md), [UI guide](ui-style/UI-GUIDE.md), [asset guide](ui-style/ASSET-GUIDE.md) |
 | Nộp bot qua GitHub | [Tự lấy code, cutoff và cache tối thiểu](06-GITHUB-NOP-BOT-VA-LUU-TRU.md) |
+| Chấm trước, công bố, phát trận trên Vercel | [Kiến trúc chấm trước và phát trận](14-KIEN-TRUC-CHAM-TRUOC-VA-PHAT-TRAN.md) |
 | Agent bắt đầu công việc | [Brief tích hợp](ui-style/REPO-INTEGRATION-BRIEF.md), rồi AGENTS.md và code thật trong repo |
 
 ## Các quyết định sản phẩm hiện hành
@@ -24,7 +26,8 @@ Nền tảng engine Campus M1 có CLI riêng; API/worker/UI hiện tại vẫn d
 - Khoảng 100 sinh viên, đội 2–3 người, 35–50 bot Python; giải tuần → tháng → kỳ.
 - Vòng loại online, chung kết offline không mạng. Offline đội nhận lại bot cũ và tự do dùng nguyên/sao chép/sửa/thay trước cutoff; không bắt buộc viết lại.
 - BTC công bố đầy đủ map chính/dự phòng từ trước sự kiện, có version và lịch áp dụng.
-- Online đội được xem tất cả trận thuộc vòng mình tham gia; server kiểm quyền trên state/events/replay/file. Offline chỉ BTC cần xem trên máy điều phối.
+- Online đội được xem **mọi trận đã được BTC công bố thuộc giải mình tham gia** (kể cả vòng sau khi đã bị loại); server kiểm quyền trên state/events/replay/file. Offline chỉ BTC cần xem trên máy điều phối. Chi tiết: [chấm trước và phát trận](14-KIEN-TRUC-CHAM-TRUOC-VA-PHAT-TRAN.md).
+- Kết quả chấm được giữ kín cho tới khi BTC công bố; web chỉ phát các nước đã đến mốc giờ phát, client tự dựng bàn cờ, không chấm bot trong trình duyệt.
 - Engine quyết định kết quả; viewer dùng snapshot và từng nước đi server gửi. Code sinh viên phải được cách ly trước khi mở nhận bài không tin cậy.
 - Online lấy bot tự động từ GitHub repo đội tại commit đã chốt; source chính ở GitHub, BTC chỉ cache chạy ngắn hạn và lưu metadata/kết quả/replay. Offline tải sẵn trước khi ngắt mạng.
 - UI theo **giấy da sáng/hầm ngục tối**, hình 2D và quân đơn sắc, hai theme. Phong cách không tự thay đổi luật hoặc yêu cầu xây lại project.
