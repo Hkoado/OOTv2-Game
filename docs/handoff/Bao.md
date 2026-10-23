@@ -5,8 +5,8 @@
 - Trạng thái: **READY FOR REVIEW** — hoàn thành milestone B4 (QA kịch bản người dùng, Thử nghiệm tải mô phỏng 50/100/200 viewers, và Runbook vận hành cho Sinh viên & Ban tổ chức).
 - Phạm vi: B1, B2, B3 & B4 trong [phân công Bảo](../assignments/Bao.md).
 - Checkpoint: branch `dev` (trên nền commit tích hợp H1/H2/H3/K1/K2/K3c).
-- Tổng test suite hiện tại: **256/256 bài kiểm thử PASS** (100% thành công, 0 lỗi, 0 skip).
-- Build production: **Vite build sạch** (1644 modules transformed, bundle `dist/` sẵn sàng).
+- Tổng test suite hiện tại: **282/282 bài kiểm thử PASS** (100% thành công, 0 lỗi, 0 skip).
+- Build production: **Vite build sạch** (1649 modules transformed, bundle `dist/` sẵn sàng).
 
 ---
 
@@ -70,8 +70,9 @@ dev | commit code hiện tại (tra bằng `git log -1`) | Chưa tạo PR remote
    - docs/runbook/SINH-VIEN.md: Hướng dẫn cấu hình repo bot.py <= 256 KiB, đăng ký nộp bài, đọc receipt SHA, xử lý lỗi và quy trình nộp USB dự phòng tại phòng thi.
    - docs/runbook/BAN-TO-CHUC.md: Hướng dẫn thiết lập giải bảng A-H, phê duyệt repo, đặt/hủy lịch phát sóng, cơ chế bảo vệ window/full, và quy trình ứng cứu khẩn cấp.
 
-4. Cập nhật và gia cố LivePage.jsx:
+4. Cập nhật và gia cố LivePage.jsx & điều hướng Live View:
    - Bắt mã lỗi 403 scope_denied và lập tức ngắt polling để chống spam server.
+   - Đưa Live View hoàn toàn vào bên trong đăng nhập: loại bỏ nút xem ngoài LoginScreen, bổ sung link "Trực tiếp" trên thanh topbar của TournamentWorkspace, đồng bộ 100% với chính sách bảo mật H3 privacy.
 
 File / export / route / RPC quan trọng:
 - tests/portalScenarios.test.js
