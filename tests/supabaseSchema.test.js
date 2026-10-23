@@ -126,7 +126,15 @@ test('github hardening migration: lease expiry, idempotent finish, reclaim cap, 
 
   // release BẮT BUỘC lease còn hạn; claim hủy job crash quá số lần.
   assert.match(sql, /AND status IN \('leased','running'\) AND lease_until>clock_timestamp\(\)/u);
-  assert.match(sql, /j\.attempt >= v_max/u);
+  assert.match(sql, /job\.attempt >= v_max/u);
+  // Alias bảng phải khác biến PL/pgSQL `j` trong claim (PostgreSQL 42702 ambiguous);
+  // các hàm chỉ khai báo `v`/`c` vẫn dùng alias `j` bình thường.
+  assert.match(sql, /FROM public\.mvp_repo_sync_jobs job/u);
+  assert.match(sql, /UPDATE public\.mvp_repo_sync_jobs job/u);
+  // Nền 20261024160000 đã tạo hàm cũ: finish đổi return type -> phải DROP trước (42P13),
+  // claim 2 tham số cũ phải bỏ để PostgREST chỉ thấy bản 3 tham số.
+  assert.match(sql, /DROP FUNCTION IF EXISTS public\.mvp_github_finish\(uuid,uuid,integer,jsonb\)/u);
+  assert.match(sql, /DROP FUNCTION IF EXISTS public\.mvp_github_claim\(text,integer\)/u);
   assert.match(sql, /status='infra_fault'/u);
 
   // finish idempotent + kiểm submission có sẵn đúng đội/valid/hash.

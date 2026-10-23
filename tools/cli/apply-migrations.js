@@ -107,6 +107,12 @@ const PLAN = [
     exists: async () => (await restGet('/rest/v1/mvp_official_setups?select=*&limit=1')).status === 200,
   },
   {
+    version: '20261024120000',
+    file: 'supabase/migrations/20261024120000_mvp_match_map_snapshot.sql',
+    why: 'mvp_matches.map_json/map_hash + mvp_stage_commit nhận snapshots',
+    exists: async () => (await restGet('/rest/v1/mvp_matches?select=map_hash&limit=1')).status === 200,
+  },
+  {
     version: '20261024130000',
     file: 'supabase/migrations/20261024130000_github_intake.sql',
     why: 'repo approval + job/receipt + mvp_github_intake',
@@ -138,6 +144,29 @@ const PLAN = [
       return !(result.status === 404 && result.body?.code === 'PGRST202');
     },
   },
+  {
+    version: '20261024180000',
+    file: 'supabase/migrations/20261024180000_lock_published_maps.sql',
+    why: 'trigger mvp_lock_published_maps (khóa map đã publish)',
+    exists: async () => {
+      // Trigger function không lộ qua PostgREST; chỉ Management API đọc được pg_proc.
+      if (!accessToken || !projectRef) return false;
+      try {
+        const found = await managementRows(
+          "select count(*)::int as c from pg_proc where proname = 'mvp_lock_published_maps'"
+        );
+        return Number(found?.[0]?.c || 0) > 0;
+      } catch {
+        return false;
+      }
+    },
+  },
+  {
+    version: '20261025090000',
+    file: 'supabase/migrations/20261025090000_official_schedule.sql',
+    why: 'mvp_official_rounds/games + 4 RPC mvp_official_*',
+    exists: async () => (await restGet('/rest/v1/mvp_official_rounds?select=*&limit=1')).status === 200,
+  },
 ];
 
 const readSql = (relative) => readFileSync(path.join(root, relative), 'utf8');
@@ -159,6 +188,17 @@ async function runManagementSql(sql) {
   return response.text();
 }
 
+/** Management API trả JSON array các dòng; helper này parse an toàn cho probe pg_proc. */
+async function managementRows(sql) {
+  const raw = await runManagementSql(sql);
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 function runPsqlSql(sql) {
   const result = spawnSync('psql', [dbUrl, '-v', 'ON_ERROR_STOP=1', '--single-transaction', '-q', '-X', '-f', '-'], {
     input: sql,
@@ -177,6 +217,27 @@ function pickTransport() {
     if (probe.status === 0) return { name: 'psql', run: runPsqlSql };
   }
   return null;
+}
+
+/** PostgREST giữ schema cache; sau DDL phải NOTIFY để nó nạp lại trước khi probe REST. */
+async function reloadPostgrestSchema() {
+  if (!accessToken || !projectRef) return;
+  try {
+    await runManagementSql("NOTIFY pgrst, 'reload schema'");
+  } catch {
+    // Không chặn apply nếu notify lỗi; vòng poll bên dưới sẽ thử lại.
+  }
+}
+
+/** Sau khi apply, object có thể chưa hiện ngay qua REST vì schema cache -> poll + notify. */
+async function confirmApplied(item, attempts = 8, delayMs = 1000) {
+  if (await item.exists()) return true;
+  for (let i = 0; i < attempts; i += 1) {
+    await reloadPostgrestSchema();
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    if (await item.exists()) return true;
+  }
+  return false;
 }
 
 async function preflight() {
@@ -253,7 +314,7 @@ async function main() {
       console.error('Đã dừng; migration sau KHÔNG chạy. Kiểm tra rồi chạy lại (file đã apply sẽ được skip).');
       process.exit(3);
     }
-    const ok = await item.exists();
+    const ok = await confirmApplied(item);
     console.log(`${ok ? 'OK  ' : 'FAIL'} ${item.version}${ok ? '' : ' — object đại diện chưa thấy (PostgREST schema cache?)'}`);
     if (!ok) process.exit(4);
   }
