@@ -17,7 +17,7 @@ import { EMPTY_MAP } from '../../src/game/maps.js';
 
 const forbidden=()=>new HttpError(403,'scope_denied','Không có quyền truy cập dữ liệu này.');
 /** Cookie session: HttpOnly + SameSite=strict, thêm `Secure` khi request đi qua HTTPS. */
-const cookieOptions=(req)=>({httpOnly:true,sameSite:'strict',path:'/api/local',maxAge:accounts.SESSION_MS,secure:req.secure});
+const cookieOptions=(req,maxAge=accounts.SESSION_MS)=>({httpOnly:true,sameSite:'strict',path:'/api/local',maxAge,secure:req.secure});
 const clearCookieOptions=(req)=>({httpOnly:true,sameSite:'strict',path:'/api/local',secure:req.secure});
 export async function checkStage(account,id,stage=null) {
   uuid(id);
@@ -61,9 +61,9 @@ export function sharedRouter() {
     const key=req.ip||req.socket.remoteAddress;
     const entry=attempts.get(key)||{count:0,until:now+60000};attempts.set(key,entry);
     if (++entry.count>15) throw new HttpError(429,'login_rate_limit','Thử lại sau một phút.');
-    const result=await accounts.login(req.body?.username,req.body?.password);attempts.delete(key);
-    res.cookie(accounts.COOKIE_NAME,result.token,cookieOptions(req));
-    res.json({account:result.account,csrf:result.csrf});
+    const result=await accounts.login(req.body?.username,req.body?.password,{remember:req.body?.remember===true});attempts.delete(key);
+    res.cookie(accounts.COOKIE_NAME,result.token,cookieOptions(req,accounts.sessionTtlMs(result.remember)));
+    res.json({account:result.account,csrf:result.csrf,remember:result.remember,session_expires_at:result.session_expires_at});
   });
   router.use(accounts.requireSession);
   router.get('/me',(req,res)=>res.json({account:req.account,csrf:req.session.csrf}));

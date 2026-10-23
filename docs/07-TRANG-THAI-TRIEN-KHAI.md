@@ -1,5 +1,17 @@
 # Trạng thái triển khai Campus — 23/10/2026
 
+## Nhớ tài khoản ở màn đăng nhập — 24/10/2026
+
+- `LoginScreen.jsx` có checkbox "Ghi nhớ tài khoản trên máy này"; bật thì lần sau tự điền
+  tên đăng nhập và phiên server giữ **30 ngày** (`REMEMBER_MS`), tắt thì giữ mặc định 8 giờ.
+- Client chỉ lưu `{username, remember}` vào localStorage (`rememberAccount.js`, key
+  `ootv2_remember_account`); **không lưu mật khẩu, session token hay CSRF**. Dữ liệu hỏng/
+  username không hợp lệ bị bỏ qua; đăng nhập thành công khi tắt checkbox sẽ xoá bản ghi cũ.
+- Cookie phiên vẫn HttpOnly, SameSite=strict, path `/api/local`; chỉ đổi `Max-Age` theo lựa chọn.
+  Không đổi quyền/CSRF/logout. Máy dùng chung không nên bật (chỉ nhớ tên, không nhớ mật khẩu).
+- Test: `tests/rememberAccount.test.js` + case TTL trong `tests/portalAuthApi.test.js`;
+  **286/286 pass**, `npm run build` pass. Kiểm tra checkbox trên browser thật: **NOT RUN**.
+
 ## Hoàn thiện map v2/offline và yêu cầu bot tự setup — 24/10/2026
 
 - Luồng đang mount: offline và thiết lập giải mới dùng v2; API lưu thiết lập chặn map v1

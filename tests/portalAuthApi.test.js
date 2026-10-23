@@ -342,3 +342,35 @@ test('profile: chỉ nhận repository GitHub HTTPS không token, không SSRF', 
 });
 
 
+
+
+test('login remember: phiên 30 ngày + cookie Max-Age dài; mặc định 8 giờ', async (t) => {
+  const store = seedStore();
+  const { base } = await startApp(t, store);
+
+  const signIn = async (remember) => {
+    const response = await globalThis.fetch(`${base}/api/local/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'doi1', password: PASSWORD, remember }),
+    });
+    const body = await response.json();
+    const setCookie = response.headers.getSetCookie
+      ? response.headers.getSetCookie().join(';')
+      : response.headers.get('set-cookie') || '';
+    return { body, setCookie };
+  };
+
+  const remembered = await signIn(true);
+  assert.equal(remembered.body.remember, true);
+  assert.match(remembered.body.session_expires_at, /^\d{4}-\d{2}-\d{2}T/u);
+  assert.match(remembered.setCookie, /Max-Age=2592000/u, 'cookie nhớ tài khoản phải 30 ngày');
+  const longLived = store.sessions.find((session) => session.expires_at > Date.now() + 20 * 24 * 60 * 60 * 1000);
+  assert.ok(longLived, 'session DB phải hạn ~30 ngày');
+
+  store.sessions.length = 0;
+  const normal = await signIn(false);
+  assert.equal(normal.body.remember, false);
+  assert.match(normal.setCookie, /Max-Age=28800/u, 'mặc định vẫn 8 giờ');
+  assert.ok(store.sessions[0].expires_at <= Date.now() + 8 * 60 * 60 * 1000 + 5000);
+});

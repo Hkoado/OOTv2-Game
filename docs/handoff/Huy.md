@@ -8,6 +8,9 @@
 - Checkpoint nguồn: `3de220e`; **commit kết quả H1: `be22c09`** trên nhánh `dev` (đã push `origin/dev`).
 - Migration `20261024130000_github_intake.sql`: **CHƯA apply remote** (quy ước repo: cần operator duyệt).
 - B2 (Bảo) **có thể nối API thật ngay**: route + DTO dưới đây đã chốt, có test mock phủ quyền/lỗi.
+- **24/10/2026 (ngoài H1–H3):** thêm "nhớ tài khoản" ở màn đăng nhập — client chỉ lưu username
+  (`src/tournament/portal/rememberAccount.js`), phiên 30 ngày khi bật (`REMEMBER_MS`) thay vì 8 giờ;
+  test TTL trong `tests/portalAuthApi.test.js`. **286/286 pass**, build pass; browser thật NOT RUN.
 
 ## H1 — route, DTO, quyền (đã chốt cho B2/Khoa)
 

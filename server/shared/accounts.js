@@ -7,6 +7,9 @@ import { normalizeParticipantName } from '../lib/names.js';
 const derive = promisify(scrypt);
 export const COOKIE_NAME = 'oot_local_session';
 export const SESSION_MS = 8 * 60 * 60 * 1000;
+/** "Ghi nhớ tài khoản": phiên dài 30 ngày. Client chỉ lưu username, KHÔNG lưu mật khẩu/token. */
+export const REMEMBER_MS = 30 * 24 * 60 * 60 * 1000;
+export const sessionTtlMs = (remember) => (remember === true ? REMEMBER_MS : SESSION_MS);
 
 /** Guard dùng chung cho các route chỉ admin (đặt ở đây vì không còn driver SQLite). */
 export function requireLocalAdmin(req, res, next) {
@@ -35,7 +38,7 @@ export async function createAccount({ username, password, name, role = 'team' })
   await rpc('mvp_account_create',{p_account:account,p_participant:participant});
   return view(account,participant?.name);
 }
-export async function login(username,password) {
+export async function login(username,password,{ remember = false } = {}) {
   if (typeof username !== 'string' || !/^[a-zA-Z0-9_.-]{3,40}$/.test(username) || typeof password !== 'string' || password.length>128) throw fail(401,'invalid_login','Sai tài khoản hoặc mật khẩu.');
   const [row] = await rows('accounts',`username=eq.${username.toLowerCase()}`);
   const encoded = row?.password_hash || `${'0'.repeat(32)}:${'0'.repeat(128)}`;
@@ -43,10 +46,17 @@ export async function login(username,password) {
   const actual = await derive(password,salt,64);
   if (!row || !/^[a-f0-9]{128}$/.test(expected) || !timingSafeEqual(actual,Buffer.from(expected,'hex'))) throw fail(401,'invalid_login','Sai tài khoản hoặc mật khẩu.');
   const token = randomBytes(32).toString('hex'),csrf = randomBytes(32).toString('hex');
+  const expiresAt = Date.now() + sessionTtlMs(remember);
   await remove('sessions',`expires_at=lte.${Date.now()}`);
-  await insert('sessions',{token_hash:hash(token),account_id:row.id,csrf,expires_at:Date.now()+SESSION_MS});
+  await insert('sessions',{token_hash:hash(token),account_id:row.id,csrf,expires_at:expiresAt});
   const team = row.participant_id ? (await rows('participants',`id=eq.${row.participant_id}`))[0] : null;
-  return { token,csrf,account:view(row,team?.name) };
+  return {
+    token,
+    csrf,
+    account: view(row, team?.name),
+    remember: remember === true,
+    session_expires_at: new Date(expiresAt).toISOString(),
+  };
 }
 export async function requireSession(req,res,next) {
   try {
