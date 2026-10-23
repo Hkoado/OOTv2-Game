@@ -1,5 +1,17 @@
 # Trạng thái triển khai Campus — 23/10/2026
 
+## Nhớ tài khoản ở màn đăng nhập — 24/10/2026
+
+- `LoginScreen.jsx` có checkbox "Ghi nhớ tài khoản trên máy này"; bật thì lần sau tự điền
+  tên đăng nhập và phiên server giữ **30 ngày** (`REMEMBER_MS`), tắt thì giữ mặc định 8 giờ.
+- Client chỉ lưu `{username, remember}` vào localStorage (`rememberAccount.js`, key
+  `ootv2_remember_account`); **không lưu mật khẩu, session token hay CSRF**. Dữ liệu hỏng/
+  username không hợp lệ bị bỏ qua; đăng nhập thành công khi tắt checkbox sẽ xoá bản ghi cũ.
+- Cookie phiên vẫn HttpOnly, SameSite=strict, path `/api/local`; chỉ đổi `Max-Age` theo lựa chọn.
+  Không đổi quyền/CSRF/logout. Máy dùng chung không nên bật (chỉ nhớ tên, không nhớ mật khẩu).
+- Test: `tests/rememberAccount.test.js` + case TTL trong `tests/portalAuthApi.test.js`;
+  **286/286 pass**, `npm run build` pass. Kiểm tra checkbox trên browser thật: **NOT RUN**.
+
 ## Hoàn thiện map v2/offline và yêu cầu bot tự setup — 24/10/2026
 
 - Luồng đang mount: offline và thiết lập giải mới dùng v2; API lưu thiết lập chặn map v1
@@ -30,6 +42,30 @@
 - Test mock `fetch` + tích hợp `processGithubJob` (7 test mới trong `tests/artifactDownload.test.js`).
   Toàn bộ **282/282 pass**, 0 skip; Vite build 1649 modules pass. Supabase Storage/PostgreSQL/GitHub
   thật, sandbox Linux, browser và offline restore **NOT RUN**. Chi tiết: [Storage adapter](STORAGE-ADAPTER.md).
+
+## K2 schedule persistence — 24/10/2026
+
+- Thêm migration `20261025090000_official_schedule.sql` (**CHƯA apply**): bảng `mvp_official_rounds`
+  (snapshot + genesis/chain head + frozen) và `mvp_official_games` (seq/game_key unique, màu khác nhau,
+  seed uint32, map khớp snapshot, kết quả một lần kèm replay hash), RLS + `service_role` only.
+- 4 RPC: open (pin genesis), append (chặn `stale_prefix`, `round_frozen`, `map_mismatch`,
+  `duplicate_game`), record_result (`result_conflict`), freeze (`incomplete_schedule`,
+  `pending_results`). Client `server/shared/officialSchedule.js` chuẩn hoá payload + verify toàn bộ
+  chain khi load; `nextPinnedGroupGame` trả ván kế tiếp kèm màu đã chốt từ prefix có kết quả.
+- Test **8/8** mock PostgREST + guardrail SQL; full suite/build xem handoff. **PostgreSQL thật,
+  API/UI công bố màu, series knockout và nối kết quả accepted đều NOT RUN.** Trigger Start giữ khóa.
+  Chi tiết: [K2 schedule persistence](OFFICIAL-SCHEDULE.md).
+
+## Gói offline tự chứa — 24/10/2026
+
+- `server/shared/offlineBundle.js` + CLI `tools/cli/offline-bundle.js` (`npm run offline:bundle`):
+  build/verify thư mục gồm `manifest.json`, `snapshot.json` (canonical của `campus-round-snapshot.v1`)
+  và `bots/<participantId>.py`. Kiểm contentHash manifest/snapshot, đúng tập bot, hash từng source,
+  giới hạn 256 KiB/bot, 16 MiB/tổng, chặn path traversal/extra/duplicate, từ chối symlink.
+- Ghi vào thư mục rỗng bằng temp + fsync + rename, manifest cuối; đọc chỉ file trong manifest.
+  Test **5/5**; diễn tập CLI 2 bot build/verify pass, sửa 1 byte → fail, phục hồi → pass.
+- Chưa xuất từ giải thật/56 đội, chưa restore VM Linux, chưa ký manifest, chưa nhập kết quả offline.
+  Chi tiết: [Gói offline](OFFLINE-BUNDLE.md).
 
 ## Luật v2 — 24/10/2026
 

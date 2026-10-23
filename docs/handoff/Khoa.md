@@ -2,6 +2,60 @@
 
 ## Trạng thái mới nhất
 
+### 24/10/2026 — K2 schedule persistence + màu: READY FOR REVIEW (migration chưa apply)
+
+- Bối cảnh: H4 chưa push (`origin/dev` = `2d8f6a3` lúc bắt đầu); giữa đợt remote nhảy 5 commit
+  (`23b59c9`: live view trong login, `apply-migrations`/`check-github-db` dry-run mặc định). Đã merge
+  `origin/dev` vào `dev`, không conflict; package.json giữ cả `offline:bundle` và 2 script DB mới.
+  **Huy handoff vẫn ghi H4 chưa làm; chưa có bằng chứng apply Postgres thật.**
+- Migration `supabase/migrations/20261025090000_official_schedule.sql` (**CHƯA apply**):
+  `mvp_official_rounds` (snapshot jsonb + snapshot/genesis/chain hash + game_count + frozen) và
+  `mvp_official_games` (seq/game_key unique trong vòng, hai màu khác nhau, seed uint32,
+  map phải khớp snapshot, `color_policy=alternate-loss-priority.v1`, kết quả một lần kèm replay hash).
+  RLS + `revoke all` khỏi public/anon/authenticated, chỉ `service_role`.
+- 4 RPC: `open_round` (pin genesis, chặn trùng/đóng giải), `append_game` (`FOR UPDATE`, chỉ nhận
+  `seq = game_count+1` khi `chain_hash = expected_prefix`, chặn `stale_prefix/round_frozen/
+  map_mismatch/duplicate_game`), `record_result` (idempotent cùng replay, khác → `result_conflict`),
+  `freeze_round` (`incomplete_schedule`/`pending_results`).
+- Client `server/shared/officialSchedule.js`: `genesisHash`, `gameChainHash` (canonical JSON),
+  `normalizeOfficialGame` (đúng 12 trường), `openOfficialRound`, `appendOfficialGame`,
+  `recordOfficialResult`, `freezeOfficialRound`, `loadOfficialRound` (verify snapshot + toàn bộ chain
+  + head), `nextPinnedGroupGame` (tái tạo lịch từ snapshot, đối chiếu prefix rồi trả ván kế tiếp kèm
+  màu đã chốt; thiếu kết quả → `result_pending`, lệch lịch → `schedule_mismatch`).
+- Test `tests/officialSchedule.test.js` **8/8**: genesis/normalize, open, append + stale fence,
+  result idempotent/conflict, freeze, load + 4 kiểu tamper, next-game màu, guardrail SQL
+  (RLS/revoke/unique/`$$` chẵn/không grant anon/không tự BEGIN-COMMIT).
+  Full sau merge: `node --test "tests/*.test.js"` **295/295 pass**, 0 fail/skip; Vite build exit 0
+  (1649 modules); `git diff --check` sạch.
+- **NOT RUN:** apply PostgreSQL, 2 writer tranh append, crash giữa transaction, RLS/service_role thật,
+  API admin, UI công bố màu (Bảo), persist series knockout, nối accepted result. Trigger
+  `official_scheduler_not_ready` và Start vẫn khóa. Chi tiết `docs/OFFICIAL-SCHEDULE.md`.
+- Việc tiếp: Huy review SQL rồi apply trên project disposable; sau H4 mới chạy test concurrency/crash;
+  kế đó mới thêm route admin + UI màu và persist bracket.
+
+### 24/10/2026 — K6a gói offline tự chứa: READY FOR REVIEW (chưa nối giải thật)
+
+- Người dùng yêu cầu chờ H4 và làm trước những gì không phụ thuộc DB. Đợt này chỉ dùng filesystem +
+  contract K2 sẵn có, không cần PostgreSQL/Storage/GitHub/sandbox.
+- Thêm `server/shared/offlineBundle.js`: `buildOfflineBundle`, `verifyOfflineBundle`,
+  `writeOfflineBundle`, `readOfflineBundle`; schema `campus-offline-bundle.v1`.
+  Gói = `manifest.json` + `snapshot.json` (canonical JSON của `campus-round-snapshot.v1`) +
+  `bots/<participantId>.py`; map chính/dự phòng và runtime hash nằm trong snapshot.
+- Kiểm: manifest/snapshot contentHash, snapshot hợp lệ, tập bot đúng bằng snapshot, từng bot khớp
+  `sourceSha256`, size/giới hạn, path chỉ `snapshot.json|bots/<safe-id>.py` (chặn traversal/extra/
+  duplicate). Ghi vào thư mục rỗng, temp + fsync + rename, manifest cuối; đọc chỉ file trong manifest,
+  từ chối symlink/không phải regular file và kiểm size trước khi đọc.
+- CLI `tools/cli/offline-bundle.js` + script `npm run offline:bundle` (`build`/`verify`).
+- Diễn tập thật trên Windows (không mạng/DB/Python): snapshot 2 bot → build 3 file/1754 byte → verify
+  pass; sửa 1 byte → exit 1 `offline_bundle_invalid: file_hash_mismatch, bot_hash_mismatch`;
+  phục hồi → exit 0. Log: `data/khoa-next/offline-demo-*.txt`, `offline-demo-tamper.json`
+  (gitignored). Chi tiết: `docs/OFFLINE-BUNDLE.md`.
+- **NOT RUN:** xuất từ giải thật, bundle 56 đội, restore VM Linux sạch, chạy bot trong phòng thi,
+  ký số manifest, nhập kết quả/replay sau chấm offline. Chưa đổi consumer/Start/migration/env.
+- Kiểm chứng đợt này: `node --test tests/offlineBundle.test.js` **5/5 pass**;
+  `node --test "tests/*.test.js"` **287/287 pass**, 0 fail/skip; Vite build exit 0 (1649 modules,
+  3,65 s); `git diff --check` sạch.
+
 ### 24/10/2026 — K3e Storage adapter cho consumer: READY FOR REVIEW (consumer vẫn tắt)
 
 - Tiếp tục từ `dev @ 3ff49e7` (đã fetch/merge Huy+Bảo, working tree sạch, không conflict). Không đổi
@@ -379,11 +433,13 @@ consumer/Storage adapter), worker Campus trusted-dev. Không có nghĩa giải �
 3. **Sandbox Linux (K4)** — filesystem/network/CPU/RAM/process/flood/timeout/cleanup trên VM sạch,
    xác nhận không secret vào bot. Chưa có bằng chứng thì **không mở nhận bot lạ**; `local-dev`
    trusted không thay thế sandbox.
-4. **K2 persistence + scheduler/màu** — chưa có persistence/queue/API runtime, chưa có UI công bố màu
-   trước ván. Giữ trigger `official_scheduler_not_ready` và Start khóa.
+4. **K2 persistence + scheduler/màu** — K2p đã có migration/RPC/client + mock. Còn: Huy review/apply
+   trên disposable, test 2-writer/crash/RLS, API admin + UI công bố màu, persist series knockout,
+   nối accepted result. Giữ trigger `official_scheduler_not_ready` và Start khóa.
 5. **H3 browser/privacy pass** — 401/403, `afterSeq`/clock client, replay/log ẩn; hiện chỉ mock.
-6. **Offline chung kết** — export/import gói giải (map v2 + bot + seed/replay), diễn tập restore
-   không mạng; chưa có script hay lần chạy thật.
+6. **Offline chung kết** — K6a đã có manifest/CLI build-verify + diễn tập filesystem không mạng.
+   Còn: xuất từ giải thật (snapshot + source), bundle 56 đội, ký manifest, restore VM sạch,
+   nhập kết quả/replay sau chấm, diễn tập có BTC.
 7. **B4 load** — số đo in-process, nhạy cảm CPU; cần benchmark trên hạ tầng triển khai thật.
 8. **Cổng đang tắt** — `storeVerifiedSource`/consumer chưa nối worker, `enabled:false`, upload online
    tắt mặc định, Start khóa, chưa deploy/apply remote.
@@ -400,3 +456,5 @@ consumer/Storage adapter), worker Campus trusted-dev. Không có nghĩa giải �
 - 23/10/2026: tạo khung bàn giao, chưa thực hiện thay người được giao.
 - 24/10/2026: K1 thuần READY FOR REVIEW; test/build local pass, integration/runtime chưa nghiệm thu.
 - 24/10/2026: K3e Storage adapter + test tích hợp; full 282/282 pass, vẫn tắt consumer/Start.
+- 24/10/2026: K6a gói offline tự chứa + CLI; full 287/287 pass, chưa xuất từ giải thật.
+- 24/10/2026: K2p schedule persistence (migration/RPC/client/mock); PostgreSQL thật NOT RUN.

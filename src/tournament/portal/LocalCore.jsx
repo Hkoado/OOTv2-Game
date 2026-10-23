@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { apiRequest, isSessionError, resetApiState } from './portalApi.js';
 import { parseHashRoute, routeHash } from './tournamentView.js';
+import { readRememberedAccount, saveRememberedAccount } from './rememberAccount.js';
 import LoginScreen from './LoginScreen.jsx';
 import TournamentWorkspace from './TournamentWorkspace.jsx';
 import OfflinePlay from './OfflinePlay.jsx';
@@ -37,6 +38,7 @@ export default function LocalCore({ theme, onToggleTheme }) {
   const [serverStatus, setServerStatus] = useState('checking');
   const [replay, setReplay] = useState(CLOSED_REPLAY);
   const [route, setRoute] = useState({ page: 'overview', eventId: null });
+  const [remembered, setRemembered] = useState(() => readRememberedAccount(typeof window === 'undefined' ? null : window.localStorage));
   const [liveHash, setLiveHash] = useState(() => window.location.hash);
 
   const accountRef = useRef(null);
@@ -238,15 +240,20 @@ export default function LocalCore({ theme, onToggleTheme }) {
     }
   }, [handleError, notify, setPending]);
 
-  const signIn = useCallback(async ({ username, password }) => {
+  const signIn = useCallback(async ({ username, password, remember = false }) => {
     setLoginError('');
     setLoginNotice('');
     setPending('login', true);
     try {
-      const data = await apiRequest('/login', { method: 'POST', body: { username, password } });
+      const data = await apiRequest('/login', {
+        method: 'POST',
+        body: { username, password, remember: remember === true },
+      });
       setServerStatus('online');
       setAccount(data.account);
       setRoute(parseHashRoute(window.location.hash, data.account.role));
+      saveRememberedAccount(window.localStorage, data.account.username, remember === true);
+      setRemembered(readRememberedAccount(window.localStorage));
     } catch (error) {
       setLoginError(error.message || 'Đăng nhập thất bại.');
       if (!error.status || error.status >= 500) {
@@ -381,6 +388,8 @@ export default function LocalCore({ theme, onToggleTheme }) {
         serverStatus={serverStatus}
         theme={theme}
         onToggleTheme={onToggleTheme}
+        initialUsername={remembered.username}
+        initialRemember={remembered.remember}
       />
     );
   }
