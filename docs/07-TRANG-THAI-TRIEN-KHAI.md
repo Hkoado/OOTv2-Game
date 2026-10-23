@@ -43,6 +43,19 @@
   Toàn bộ **282/282 pass**, 0 skip; Vite build 1649 modules pass. Supabase Storage/PostgreSQL/GitHub
   thật, sandbox Linux, browser và offline restore **NOT RUN**. Chi tiết: [Storage adapter](STORAGE-ADAPTER.md).
 
+## Sandbox Linux trên WSL (dev) — 24/10/2026
+
+- Dựng distro WSL2 riêng `ootv2-sandbox` (Ubuntu base 24.04.3 import vào `data/wsl`, gitignored),
+  Python 3.12.3 + bubblewrap 0.9.0; **không dùng Ubuntu cá nhân**.
+- `sandbox/linux/run-bot.sh`: `--unshare-all`, `clearenv`, `--cap-drop ALL`, `/usr` read-only,
+  `/proc` + `/dev` riêng, `/tmp` tmpfs 16 MiB, không `/mnt|/home|/sys`; cgroup v2
+  memory/pids/cpu + watchdog + cleanup; stdin/stdout JSONL truyền nguyên.
+- `sandbox/linux/selftest.sh` **11/11 PASS**: JSONL round-trip, FS/network/env isolation, fork bomb
+  (124), memory 64 MiB (137), CPU/timeout (124), CPU accounting, stdout flood (cắt 64 KiB),
+  wall timeout, cgroup + process cleanup.
+- **Chưa production:** chưa seccomp/attestation, chưa nối worker Node, WSL chia sẻ host kernel;
+  không dùng cho code sinh viên. Chi tiết: [Sandbox WSL](SANDBOX-WSL.md).
+
 ## K2 schedule persistence — 24/10/2026
 
 - Thêm migration `20261025090000_official_schedule.sql` (**CHƯA apply**): bảng `mvp_official_rounds`

@@ -2,6 +2,26 @@
 
 ## Trạng thái mới nhất
 
+### 24/10/2026 — K4a sandbox Linux trên WSL: dev acceptance 11/11 (chưa production)
+
+- Dựng **distro WSL2 riêng** `ootv2-sandbox` từ Ubuntu base 24.04.3, import vào
+  `data/wsl/ootv2-sandbox` (gitignored, D:), không dùng Ubuntu cá nhân. WSL 3.0.3 / kernel
+  6.18.54.1, Python 3.12.3, bubblewrap 0.9.0, cgroup v2 có `cpu memory pids`.
+- `sandbox/linux/run-bot.sh`: `bwrap --unshare-all --clearenv --cap-drop ALL`, `/usr` read-only,
+  `/proc` + `/dev` riêng, `/tmp` tmpfs 16 MiB, không `/mnt|/home|/sys`; cgroup v2
+  `memory.max/swap=0/pids.max/cpu.max` + watchdog wall-time + dọn cgroup/process; stdin/stdout
+  JSONL truyền nguyên. Exit: 0/124 timeout/137 kill/78 thiếu hạ tầng/64 tham số.
+- `sandbox/linux/preflight.sh`, `selftest.sh`, fixtures lành tính + phá hoại (chỉ test).
+  **Selftest 11/11 PASS**: JSONL round-trip, metrics, FS/network/env isolation, fork bomb (124),
+  memory 64 MiB (137), CPU/timeout (124), CPU accounting ~262 ms, stdout flood cắt 64 KiB,
+  wall timeout, cgroup cleanup, process cleanup. Log `data/khoa-next/sandbox-*.txt`.
+- `docs/SANDBOX-WSL.md` + `sandbox/README.md`; `.gitattributes` khóa LF cho `*.sh`.
+  Toàn bộ **299/299 test pass**, Vite build exit 0 (1650 modules), `git diff --check` sạch.
+- **Chưa production:** chưa seccomp/syscall allowlist/attestation, chưa nối worker Node, WSL chia sẻ
+  kernel/tài nguyên Windows, chưa thử escape nâng cao. Không dùng cho code sinh viên; mọi gate
+  Start/consumer vẫn giữ nguyên. Bước tiếp: adapter Node gọi runner + budget theo request, seccomp,
+  rồi nghiệm thu trên VM Linux sạch.
+
 ### 24/10/2026 — K2 schedule persistence + màu: READY FOR REVIEW (migration chưa apply)
 
 - Bối cảnh: H4 chưa push (`origin/dev` = `2d8f6a3` lúc bắt đầu); giữa đợt remote nhảy 5 commit
@@ -430,9 +450,9 @@ consumer/Storage adapter), worker Campus trusted-dev. Không có nghĩa giải �
    Owner Huy (DB); Khoa kiểm lại consumer sau khi có kết quả.
 2. **Storage + GitHub thật** — bucket private, quyền service_role, upload/readback SHA-256, quota/
    rate limit, inventory orphan. Adapter K3e mới chỉ mock.
-3. **Sandbox Linux (K4)** — filesystem/network/CPU/RAM/process/flood/timeout/cleanup trên VM sạch,
-   xác nhận không secret vào bot. Chưa có bằng chứng thì **không mở nhận bot lạ**; `local-dev`
-   trusted không thay thế sandbox.
+3. **Sandbox Linux (K4)** — K4a đã dựng WSL2 riêng + runner bwrap/cgroup, 11/11 selftest
+   (FS/network/env, fork, memory, CPU/timeout, flood, cleanup). Còn: nối Node worker, seccomp/
+   attestation, budget theo request, VM Linux sạch. Chưa mở nhận bot lạ.
 4. **K2 persistence + scheduler/màu** — K2p đã có migration/RPC/client + mock. Còn: Huy review/apply
    trên disposable, test 2-writer/crash/RLS, API admin + UI công bố màu, persist series knockout,
    nối accepted result. Giữ trigger `official_scheduler_not_ready` và Start khóa.
@@ -458,3 +478,4 @@ consumer/Storage adapter), worker Campus trusted-dev. Không có nghĩa giải �
 - 24/10/2026: K3e Storage adapter + test tích hợp; full 282/282 pass, vẫn tắt consumer/Start.
 - 24/10/2026: K6a gói offline tự chứa + CLI; full 287/287 pass, chưa xuất từ giải thật.
 - 24/10/2026: K2p schedule persistence (migration/RPC/client/mock); PostgreSQL thật NOT RUN.
+- 24/10/2026: K4a sandbox WSL (bwrap + cgroup) 11/11 dev acceptance; chưa nối worker/seccomp.
