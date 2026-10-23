@@ -25,7 +25,8 @@ import { RESULT_LABELS, STAGE_LABELS, TOURNAMENT_STATUS_LABELS, labelOf } from '
 const POLL_MS = 2000;
 const HIDDEN_POLL_MS = 6000;
 
-export default function LivePage({ matchId = null, theme, onToggleTheme }) {
+export default function LivePage({ account = null, matchId = null, theme, onToggleTheme }) {
+  const isAuthenticated = Boolean(account);
   const [overview, setOverview] = useState(null);
   const [overviewError, setOverviewError] = useState('');
   const [isAuthRequired, setIsAuthRequired] = useState(false);
@@ -254,7 +255,9 @@ export default function LivePage({ matchId = null, theme, onToggleTheme }) {
           </span>
         </div>
         <div className="live-header__actions">
-          <a className="tt-btn tt-btn--ghost tt-btn--sm" href="#/overview">Cổng giải đấu</a>
+          <a className="tt-btn tt-btn--ghost tt-btn--sm" href="#/overview">
+            {isAuthenticated ? 'Trang tài khoản' : 'Cổng giải đấu'}
+          </a>
           {onToggleTheme && (
             <button type="button" className="tt-icon-btn" onClick={onToggleTheme} aria-label="Đổi theme sáng/tối">
               {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
@@ -263,9 +266,9 @@ export default function LivePage({ matchId = null, theme, onToggleTheme }) {
         </div>
       </header>
 
-      {/* Auth required banner (H3 policy) */}
-      {isAuthRequired && (
-        <div className="tt-alert tt-alert--warning" style={{ margin: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      {/* Auth required banner (H3 policy) - chỉ hiển thị cảnh báo chính sách khi CHƯA đăng nhập */}
+      {isAuthRequired && !isAuthenticated && (
+        <div className="tt-alert tt-alert--warning" style={{ margin: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
           <div>
             <strong>Yêu cầu đăng nhập</strong>
             <p style={{ margin: '0.25rem 0 0' }}>
@@ -278,8 +281,30 @@ export default function LivePage({ matchId = null, theme, onToggleTheme }) {
         </div>
       )}
 
+      {/* Chỉ dẫn quay về trang tài khoản khi ĐÃ đăng nhập */}
+      {isAuthRequired && isAuthenticated && (
+        <div className="tt-alert tt-alert--info" style={{ margin: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div>
+            <strong>Tài khoản: {account.username} ({account.role === 'admin' ? 'Ban tổ chức' : 'Đội thi đấu'})</strong>
+            <p style={{ margin: '0.25rem 0 0' }}>
+              Trang trực tiếp chỉ hiển thị các ván đấu thuộc giải đấu mà đội của bạn tham gia. Hiện tại chưa có ván phát sóng trực tiếp nào cho giải của bạn.
+            </p>
+          </div>
+          <a className="tt-btn tt-btn--primary tt-btn--sm" href="#/overview">
+            Quay về trang tài khoản
+          </a>
+        </div>
+      )}
+
       {(overviewError || error) && !isAuthRequired && (
-        <p className="tt-alert tt-alert--warning">{error || overviewError}</p>
+        <div className="tt-alert tt-alert--warning" style={{ margin: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div>{error || overviewError}</div>
+          {isAuthenticated && (
+            <a className="tt-btn tt-btn--ghost tt-btn--sm" href="#/overview">
+              Quay về trang tài khoản
+            </a>
+          )}
+        </div>
       )}
 
       <div className="live-layout">

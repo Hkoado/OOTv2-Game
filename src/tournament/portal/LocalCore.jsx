@@ -376,6 +376,18 @@ export default function LocalCore({ theme, onToggleTheme }) {
 
   const closeReplay = useCallback(() => setReplay(CLOSED_REPLAY), []);
 
+  const liveRoute = parseLiveHash(liveHash);
+  if (liveRoute.live) {
+    return (
+      <LivePage
+        account={account}
+        matchId={liveRoute.matchId}
+        theme={theme}
+        onToggleTheme={onToggleTheme}
+      />
+    );
+  }
+
   if (!account && offline) return <OfflinePlay onBack={() => setOffline(false)} />;
   if (!account) {
     return (
@@ -392,11 +404,6 @@ export default function LocalCore({ theme, onToggleTheme }) {
         initialRemember={remembered.remember}
       />
     );
-  }
-
-  const liveRoute = parseLiveHash(liveHash);
-  if (liveRoute.live) {
-    return <LivePage matchId={liveRoute.matchId} theme={theme} onToggleTheme={onToggleTheme} />;
   }
 
   return (

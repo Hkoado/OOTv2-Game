@@ -5,7 +5,7 @@
 - Trạng thái: **READY FOR REVIEW** — hoàn thành milestone B4 và rà soát toàn diện tương thích B1–B4 với phân H (H1–H4).
 - Phạm vi: B1, B2, B3 & B4 trong [phân công Bảo](../assignments/Bao.md).
 - Checkpoint: branch `dev` (trên nền commit tích hợp H1/H2/H3/H4 và K1/K2/K3c/K4).
-- Tổng test suite hiện tại: **304/304 bài kiểm thử PASS** (100% thành công, 0 lỗi, 0 skip).
+- Tổng test suite hiện tại: **317/317 bài kiểm thử PASS** (100% thành công, 0 lỗi, 0 skip).
 - Build production: **Vite build sạch** (1650 modules transformed, bundle `dist/` sẵn sàng).
 
 ---
@@ -90,6 +90,10 @@ NOT RUN + lý do:
 
 ## Lịch sử checkpoint
 
+- 24/10/2026 (Checkpoint 6): **Phân định rõ trạng thái xác thực trên Live View (LivePage.jsx)**:
+  - Kiểm tra `account`: chỉ hiển thị cảnh báo chính sách H3 và nút *"Đăng nhập ngay"* khi người dùng **chưa đăng nhập** (`!account`).
+  - Khi đã đăng nhập (`account`): ẩn cảnh báo yêu cầu đăng nhập, hiển thị thông tin tài khoản và đưa ra chỉ dẫn rõ ràng kèm nút *"Quay về trang tài khoản"*.
+  - Đồng bộ điều hướng linh hoạt giữa `LocalCore.jsx` và `LivePage.jsx`. Tests: 317/317 pass, build pass.
 - 24/10/2026 (Checkpoint 5): **Rà soát & Đồng bộ B1–B4 với phần H (H1–H4)**: Thêm nút Thu hồi phê duyệt repo cho Admin (`DELETE /repository`), đồng bộ DTO, cập nhật Runbook BTC và xác nhận lỗi RPC DB thật đã được Huy giải quyết qua 10 migration. Tests: 304/304 pass, build pass.
 - 24/10/2026 (Checkpoint 4): Hoàn thành B4 (QA kịch bản người dùng, Thử nghiệm tải mô phỏng 50/100/200 viewers, và Runbook vận hành cho Sinh viên & Ban tổ chức; phân định rõ FULL / MOCK / PARTIAL). Tests: 256/256 pass.
 - 24/10/2026 (Checkpoint 3): Hoàn thành B3 (Viewer lịch phát: nối publication API H3, countdown thời gian thực, server_time/visible_plies, sauSeq, đặt lịch phát Admin và bảng điểm chuẩn DTO Khoa). Tests: 233/233 pass.
