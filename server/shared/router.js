@@ -101,6 +101,11 @@ export function sharedRouter() {
     const teamId=githubIntake.scopeTeam(req.account,req.body?.team);
     res.json(await githubIntake.putConnection({eventId:req.params.id,teamId,repository:req.body?.repository,branch:req.body?.branch,account:req.account}));
   });
+  // Admin thu hồi duyệt repo: hủy job đang chờ + đóng băng receipt chưa kết thúc.
+  router.delete('/events/:id/repository',requireLocalAdmin,async(req,res)=>{
+    const teamId=githubIntake.scopeTeam(req.account,req.query.team??req.body?.team);
+    res.json(await githubIntake.revokeConnection({eventId:req.params.id,teamId,account:req.account}));
+  });
   router.post('/events/:id/submissions/from-github',async(req,res)=>{
     const teamId=githubIntake.scopeTeam(req.account,req.body?.team);
     res.status(202).json(await githubIntake.requestSubmission({eventId:req.params.id,teamId,repository:req.body?.repository,branch:req.body?.branch,account:req.account}));
@@ -125,7 +130,12 @@ export function sharedRouter() {
   });
   router.post('/events',requireLocalAdmin,async(req,res)=>res.status(201).json(await tournaments.createTournament(req.body||{})));
   router.put('/events/:id',requireLocalAdmin,async(req,res)=>res.json(await tournaments.updateTournamentDraft(req.params.id,req.body||{})));
-  router.post('/events/:id/start',requireLocalAdmin,async(req,res)=>res.json(await tournaments.startTournament(req.params.id)));
+  router.post('/events/:id/start',requireLocalAdmin,async(req,res)=>{
+    // H2: freeze phải đợi job intake xong (hoặc BTC hủy/thu hồi repo), không bỏ qua bài đang chờ.
+    const pending=await githubIntake.pendingJobCount(req.params.id);
+    if (pending>0) throw new HttpError(409,'repo_sync_pending',`Còn ${pending} job GitHub chưa xong; đợi chấm xong hoặc BTC thu hồi repo rồi thử lại.`);
+    res.json(await tournaments.startTournament(req.params.id));
+  });
   router.get('/events/:id',async(req,res)=>{
     const id=req.params.id;await checkStage(req.account,id);
     const event = await tournaments.getTournament(id);

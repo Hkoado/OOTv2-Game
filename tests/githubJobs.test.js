@@ -49,6 +49,7 @@ test('claim: clamp lease, trim worker và map lease/generation', async () => {
     const claimed = await jobs.claimGithubJob({ worker: '  judge-a  ', leaseSeconds: 5 });
     assert.equal(fake.calls[0].body.p_worker, 'judge-a');
     assert.equal(fake.calls[0].body.p_lease_seconds, 10, 'lease tối thiểu 10 giây');
+    assert.equal(fake.calls[0].body.p_max_attempts, 3, 'mặc định tối đa 3 lần claim');
     assert.equal(claimed.lease.token, TOKEN);
     assert.equal(claimed.lease.generation, 2);
     assert.equal(claimed.lease.attempt, 2);
@@ -56,6 +57,8 @@ test('claim: clamp lease, trim worker và map lease/generation', async () => {
 
     assert.equal(await jobs.claimGithubJob({ worker: 'judge-a', leaseSeconds: 5000 }).then(() => 'ran'), 'ran');
     assert.equal(fake.calls[1].body.p_lease_seconds, 900, 'lease tối đa 900 giây');
+    await jobs.claimGithubJob({ worker: 'judge-a', maxAttempts: 99 });
+    assert.equal(fake.calls[2].body.p_max_attempts, 10, 'max attempts bị kẹp 10');
   } finally {
     fake.restore();
   }
@@ -75,7 +78,6 @@ test('heartbeat/progress: gửi đúng lease và trả false khi mất lease', a
   try {
     assert.equal(await jobs.heartbeatGithubJob({ jobId: JOB, token: TOKEN, generation: 3, leaseSeconds: 60 }), true);
     assert.deepEqual(fake.calls[0].body, { p_job: JOB, p_token: TOKEN, p_generation: 3, p_lease_seconds: 60 });
-
     assert.equal(await jobs.progressGithubJob({ jobId: JOB, token: TOKEN, generation: 3, status: 'fetching', note: 'đang tải bot.py' }), true);
     assert.equal(fake.calls[1].name, 'mvp_github_progress');
     assert.equal(fake.calls[1].body.p_status, 'fetching');
@@ -83,10 +85,6 @@ test('heartbeat/progress: gửi đúng lease và trả false khi mất lease', a
 
     reply = false;
     assert.equal(await jobs.heartbeatGithubJob({ jobId: JOB, token: TOKEN, generation: 3 }), false);
-    assert.equal(await jobs.finishGithubJob({
-      jobId: JOB, token: TOKEN, generation: 3,
-      outcome: { status: 'valid', source_hash: SHA, submission_id: SUBMISSION },
-    }), false, 'false = worker cũ, không được coi là đã ghi');
 
     await assert.rejects(
       jobs.progressGithubJob({ jobId: JOB, token: TOKEN, generation: 3, status: 'done' }),
@@ -101,39 +99,71 @@ test('heartbeat/progress: gửi đúng lease và trả false khi mất lease', a
   }
 });
 
-test('finish: chuẩn hoá outcome, không cho client tự đặt participant_id', async () => {
+test('finish: envelope đối soát (applied/already_finished/lease_lost), không cho client đặt participant_id', async () => {
+  let reply = {
+    ok: true, applied: true, already_finished: false,
+    job: { id: JOB, status: 'completed' },
+    receipt: { id: 'receipt', status: 'valid', submission_id: SUBMISSION },
+  };
   const fake = fakeRpc((name) => {
     assert.equal(name, 'mvp_github_finish');
-    return true;
+    return reply;
   });
   try {
-    assert.equal(await jobs.finishGithubJob({
+    const applied = await jobs.finishGithubJob({
       jobId: JOB, token: TOKEN, generation: 4,
       outcome: {
         status: 'valid', source_hash: SHA,
         submission: { storage_path: `${SUBMISSION}.py`, sha256: SHA, participant_id: 'hacker' },
       },
-    }), true);
+    });
+    assert.equal(applied.applied, true);
+    assert.equal(applied.alreadyFinished, false);
+    assert.equal(applied.leaseLost, false);
+    assert.equal(applied.receipt.submission_id, SUBMISSION);
     assert.deepEqual(fake.calls[0].body.p_outcome, {
       status: 'valid', source_hash: SHA, submission_id: null,
       submission: { storage_path: `${SUBMISSION}.py`, sha256: SHA },
       error: null, error_category: null,
     });
 
-    assert.equal(await jobs.finishGithubJob({
+    // Retry sau khi mất response: DB báo already_finished, KHÔNG tạo submission lần 2.
+    reply = {
+      ok: true, applied: false, already_finished: true,
+      job: { id: JOB, status: 'completed' },
+      receipt: { id: 'receipt', status: 'valid', submission_id: SUBMISSION },
+    };
+    const replay = await jobs.finishGithubJob({
       jobId: JOB, token: TOKEN, generation: 4,
-      outcome: { status: 'invalid', error: 'SyntaxError: invalid syntax' },
-    }), true);
-    assert.deepEqual(fake.calls[1].body.p_outcome, {
-      status: 'invalid', source_hash: null, submission_id: null, submission: null,
-      error: 'SyntaxError: invalid syntax', error_category: 'code',
+      outcome: { status: 'valid', source_hash: SHA, submission_id: SUBMISSION },
     });
+    assert.equal(replay.applied, false);
+    assert.equal(replay.alreadyFinished, true);
+    assert.equal(replay.receipt.submission_id, SUBMISSION, 'worker biết artifact đã được nhận');
 
-    assert.equal(await jobs.finishGithubJob({
+    // Lease mất (hết hạn/worker cũ): không coi là đã ghi.
+    reply = { ok: false, error: 'lease_lost', applied: false };
+    const lost = await jobs.finishGithubJob({
       jobId: JOB, token: TOKEN, generation: 4,
-      outcome: { status: 'infrastructure', error: 'GitHub 429', error_category: 'infrastructure' },
-    }), true);
-    assert.equal(fake.calls[2].body.p_outcome.error_category, 'infrastructure');
+      outcome: { status: 'invalid', error: 'timeout' },
+    });
+    assert.equal(lost.leaseLost, true);
+    assert.equal(lost.applied, false);
+
+    // DB từ chối domain (submission sai đội/hash) => lỗi 400 có mã để worker báo BTC.
+    reply = { ok: false, error: 'bad_submission' };
+    await assert.rejects(
+      jobs.finishGithubJob({
+        jobId: JOB, token: TOKEN, generation: 4,
+        outcome: { status: 'valid', source_hash: SHA, submission_id: SUBMISSION },
+      }),
+      { status: 400, code: 'bad_submission' }
+    );
+
+    // invalid/infrastructure: chuẩn hoá error_category trước khi gửi.
+    reply = { ok: true, applied: true, already_finished: false, receipt: { status: 'invalid' } };
+    await jobs.finishGithubJob({ jobId: JOB, token: TOKEN, generation: 4, outcome: { status: 'invalid', error: 'SyntaxError' } });
+    assert.equal(fake.calls.at(-1).body.p_outcome.error_category, 'code');
   } finally {
     fake.restore();
   }
@@ -170,20 +200,28 @@ test('finish: chặn outcome thiếu/sai dữ liệu trước khi gọi RPC', ()
   assert.equal(jobs.clampLeaseSeconds('abc'), jobs.DEFAULT_LEASE_SECONDS);
 });
 
-test('release: trả trạng thái retry hoặc lease_lost; giới hạn max attempts', async () => {
-  let reply = { ok: true, status: 'queued', attempt: 1, available_at: '2026-10-24T10:00:15.000Z' };
+test('release: envelope retry/lease_lost, kẹp max attempts', async () => {
+  let reply = { ok: true, applied: true, status: 'queued', attempt: 1, available_at: '2026-10-24T10:00:15.000Z' };
   const fake = fakeRpc(() => reply);
   try {
     const retry = await jobs.releaseGithubJob({ jobId: JOB, token: TOKEN, generation: 5, error: 'timeout GitHub', maxAttempts: 99 });
+    assert.equal(retry.ok, true);
     assert.equal(retry.status, 'queued');
+    assert.equal(retry.leaseLost, false);
     assert.equal(fake.calls[0].body.p_max_attempts, 10, 'max attempts bị kẹp 10');
     assert.equal(fake.calls[0].body.p_error, 'timeout GitHub');
 
-    reply = { ok: false, reason: 'lease_lost' };
-    assert.deepEqual(await jobs.releaseGithubJob({ jobId: JOB, token: TOKEN, generation: 5 }), { ok: false, reason: 'lease_lost' });
+    // DB từ chối vì lease đã hết hạn/bị worker khác chiếm: không requeue.
+    reply = { ok: false, error: 'lease_lost', applied: false };
+    const lost = await jobs.releaseGithubJob({ jobId: JOB, token: TOKEN, generation: 5 });
+    assert.equal(lost.ok, false);
+    assert.equal(lost.leaseLost, true);
+    assert.equal(lost.applied, false);
 
-    reply = null;
-    assert.deepEqual(await jobs.releaseGithubJob({ jobId: JOB, token: TOKEN, generation: 5 }), { ok: false, reason: 'lease_lost' });
+    // Quá số lần: job sang infra_fault (BTC xử lý tay), không quay lại queue.
+    reply = { ok: true, applied: true, status: 'infra_fault', attempt: 3 };
+    const exhausted = await jobs.releaseGithubJob({ jobId: JOB, token: TOKEN, generation: 5, maxAttempts: 3 });
+    assert.equal(exhausted.status, 'infra_fault');
 
     await assert.rejects(
       jobs.releaseGithubJob({ jobId: 'bad', token: TOKEN, generation: 5 }),

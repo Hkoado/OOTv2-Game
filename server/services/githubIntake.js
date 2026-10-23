@@ -28,6 +28,7 @@ const RPC_ERRORS = {
   past_cutoff: () => fail(409, 'past_cutoff', 'Đã quá hạn nộp bài của giải.'),
   not_in_event: () => fail(403, 'scope_denied', 'Đội không thuộc giải này.'),
   repo_not_approved: () => fail(403, 'repo_not_approved', 'Repository chưa được BTC duyệt.'),
+  repository_not_registered: () => fail(409, 'repository_not_registered', 'Đội chưa đăng ký repository cho giải này.'),
   repo_taken: () => fail(409, 'repo_taken', 'Repository đã được đội khác dùng trong giải này.'),
   repository_changed: () => fail(409, 'repository_changed', 'Repository/branch đã đổi; cần BTC duyệt lại.'),
   quota_exceeded: () => fail(429, 'quota_exceeded', 'Đã hết hạn mức kiểm tra commit mới trong 24 giờ.'),
@@ -156,6 +157,27 @@ export async function getConnection({ eventId, teamId, account }) {
   const [connection] = await rows('repo_connections', `event_id=eq.${uuid(eventId)}&team_id=eq.${uuid(teamId)}`);
   return { connection: connectionView(connection) };
 }
+
+/** Admin thu hồi duyệt repo: hủy job đang chờ, đóng băng receipt chưa kết thúc. */
+export async function revokeConnection({ eventId, teamId, account }) {
+  const result = await rpc('mvp_repo_connection_revoke', {
+    p_event: uuid(eventId),
+    p_team: uuid(teamId),
+    p_actor: account?.id || null,
+  });
+  if (!result?.ok) throw intakeError(result?.error);
+  return { connection: connectionView(result.connection), canceled_jobs: Number(result.canceled_jobs || 0) };
+}
+
+/** Số job intake chưa kết thúc của giải (start phải đợi freeze xong). */
+export async function pendingJobCount(eventId) {
+  const pending = await rows(
+    'repo_sync_jobs',
+    `event_id=eq.${uuid(eventId)}&status=in.(queued,leased,running)&select=id`
+  );
+  return pending.length;
+}
+
 
 /** Danh sách repo của giải cho BTC duyệt (admin-only route). */
 export async function listConnections({ eventId }) {

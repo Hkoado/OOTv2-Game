@@ -2,8 +2,8 @@
 
 ## Trạng thái mới nhất
 
-- Trạng thái: **H1 (+ fix review), H2 và H3 DONE (mock-verified)** — intake, contract worker, ACL/cổng upload,
-  đã có; **chưa chạy Postgres thật**; H4 chưa làm.
+- Trạng thái: **H1 (+ fix review), H2 (contract hardening) và H3 DONE (mock-verified)** — intake,
+  lease/idempotent finish/revoke, ACL/cổng upload, lịch phát; **chưa chạy Postgres thật**; H4 chưa làm.
 - Phạm vi: H1 trong [phân công Huy](../assignments/Huy.md).
 - Checkpoint nguồn: `3de220e`; **commit kết quả H1: `be22c09`** trên nhánh `dev` (đã push `origin/dev`).
 - Migration `20261024130000_github_intake.sql`: **CHƯA apply remote** (quy ước repo: cần operator duyệt).
@@ -155,10 +155,43 @@ Worker BTC (Khoa/H2) dùng `server/shared/githubJobs.js`; mọi kiểm quyền n
 - UI Bảo: nút "Nộp file USB" chỉ dành admin và cần cờ trên; đội dùng luồng GitHub.
 
 
+## H2 — contract worker chi tiết (`20261024170000_github_jobs_hardening.sql`)
+
+- **Claim** `mvp_github_claim(worker, lease_seconds=120, max_attempts=3)`: claim `queued` tới hạn hoặc lease
+  hết hạn (`SKIP LOCKED`), tăng `attempt` + `generation`, trả `{job, receipt, lease{token, generation,
+  expires_at, attempt, max_attempts}}`. **Chống crash**: lease hết hạn và `attempt >= max` → job
+  `infra_fault`, receipt `infrastructure`, **không phát lại** (BTC xử lý tay).
+- **Heartbeat/Progress**: trả `false` khi mất lease; `progress` chỉ nhận `fetching|checking`.
+- **Finish** trả envelope `{ok, applied, already_finished, job, receipt}`:
+  - `applied=true`: ghi submission (nếu valid) + receipt + job trong cùng transaction.
+  - `already_finished=true`: lần trước đã commit nhưng mất response → **không tạo submission lần 2**;
+    `receipt.submission_id` cho biết artifact của worker đã được nhận (`null` = chưa).
+  - `lease_lost`: worker cũ/lease hết hạn → dừng, không ghi.
+  - `valid` với `submission_id` có sẵn phải đúng `job.team_id`, `status='valid'`, `sha256 = source_hash`;
+    sai → `bad_submission` (HTTP 400) để worker báo BTC.
+- **Release**: **bắt buộc `lease_until > clock_timestamp()`**; hết hạn/sai token/generation →
+  `{ok:false, error:'lease_lost'}`, không requeue. Còn hạn → `queued` với backoff `15s×attempt`
+  (tối đa 300s); vượt attempts → `infra_fault`.
+- **Revoke repo** `DELETE /api/local/events/:id/repository?team=` (admin) → `mvp_repo_connection_revoke`:
+  `approved=false`, hủy job `queued|leased|running`, receipt chưa kết thúc → `frozen` (`repository_revoked`);
+  receipt `valid` và snapshot đã khóa **không đổi**.
+- **Start/freeze**: `POST /events/:id/start` trả `409 repo_sync_pending` khi còn job intake chưa xong —
+  BTC đợi worker chấm xong hoặc thu hồi repo; không tự chọn HEAD mới.
+- **Cutoff/candidate**: kiểm trong transaction bằng `clock_timestamp()` (`past_cutoff`); job nhận trước hạn
+  vẫn được chấm sau hạn; start chọn **latest `valid`** theo `(created_at desc, id desc)`; lỗi
+  hạ tầng/bot không thay bản valid cũ.
+- **Phía Khoa**: consumer `14ff30b` đã có trên `dev` (mặc định `enabled=false`, chưa chạy Python/polling).
+  Huy đã chỉnh `processGithubJob` dùng envelope: `recorded = applied || alreadyFinished`, `leaseLost` →
+  `lease_lost`, còn lại `completion_unknown`; `tests/githubConsumer.test.js` 12/12. Contract tham chiếu
+  `docs/GITHUB-CONSUMER.md` của Khoa.
+
+
 ## Schema / RPC (migration `20261024130000_github_intake.sql`, additive, CHƯA apply)
 
-- **Thứ tự áp dụng**: `20261024130000` (bảng + intake) → `20261024160000` (generation + worker RPC). Cả hai
-  phải sau `20261022125205` (bảng `mvp_*`) và `20261023160000` (RPC đọc cutoff).
+- **Thứ tự áp dụng**: `20261022125205` (bảng `mvp_*`) → `20261023160000` (official setup/cutoff)
+  → `20261024130000` (approval + job/receipt + intake) → `20261024150000` (broadcast H3)
+  → `20261024160000` (generation + worker RPC) → `20261024170000` (lease expiry, finish idempotent,
+  reclaim cap, revoke). Tất cả **CHƯA apply remote**; rollback ghi trong `docs/12`.
 
 - `mvp_repo_connections`: unique `(event_id, team_id)` + unique `(event_id, repo_id)` (một repo/đội trong
   giải), `approved boolean`, `approved_by`, check `repository` là https://github.com/..., `file_path='bot.py'`.
@@ -180,32 +213,36 @@ Worker BTC (Khoa/H2) dùng `server/shared/githubJobs.js`; mọi kiểm quyền n
   DROP TABLE mvp_github_receipts, mvp_repo_sync_jobs, mvp_repo_connections;`
 
 ## Tests (mock — không chạm DB/GitHub thật)
+| `node --test tests/githubConsumer.test.js` | **12/12 pass** — envelope finish (already_finished/lease_lost), fencing, cache/artifact (sau khi Huy nối envelope) |
+
 
 | Lệnh | Kết quả |
 | --- | --- |
 | `node --test tests/githubRepo.test.js` | **5/5 pass** — URL/branch, chỉ metadata, token ở header, map lỗi GitHub |
-| `node --test tests/githubIntakeApi.test.js` | **6/6 pass** — duyệt repo, 202 + receipt whitelist, idempotent SHA, cross-team 403, quota 429, CSRF/frozen/admin-only |
-| `node --test tests/supabaseSchema.test.js` | **8/8 pass** — guardrail SQL tĩnh cho migration mới |
+| `node --test tests/githubIntakeApi.test.js` | **7/7 pass** — duyệt/thu hồi repo, 202 + receipt whitelist, idempotent SHA, cross-team 403, quota 429, CSRF/frozen/admin-only |
+| `node --test tests/supabaseSchema.test.js` | **9/9 pass** — guardrail SQL tĩnh cho migration mới |
 | `node --test tests/githubJobs.test.js` | **5/5 pass** — claim/lease/generation, heartbeat/progress, finish chuẩn hoá + chặn payload sai, release retry |
 | `node --test tests/publication.test.js` | **10/10 pass** — mốc phát, window vs full, ẩn ván chưa công bố, replay/log/live gate, cancel |
 | `node --test tests/uploadDisabled.test.js` | **2/2 pass** — policy matrix + admin/đội 403 `upload_disabled`, không tạo submission |
 | `node --test tests/uploadTrustedDev.test.js` | **1/1 pass** — admin opt-in 201, đội vẫn 403, sai đuôi 400, không lộ `storage_path` |
 
 
-| `node --test tests/*.test.js` | **233/233 pass**, exit 0 |
-| `npm run build` | **pass** (4.96 s, exit 0) |
+| `node --test tests/*.test.js` | **247/247 pass**, exit 0 |
+| `npm run build` | **pass** (4.79 s, exit 0) |
 
 Môi trường: Windows, Node 24.18.0; không có test bị skip.
 
 ## NOT RUN / giới hạn
 
-- **Postgres integration**: chưa có disposable Supabase project/credential, nên 2 RPC mới chỉ được kiểm
-  bằng guardrail SQL tĩnh + mirror JS trong test — **chưa VERIFIED trên Postgres**.
+- **Postgres integration: NOT RUN**. Script `supabase/tests/github_intake.sql` (BEGIN/ROLLBACK) phủ hai
+  worker, stale token/generation, duplicate finish, crash/retry, cutoff, revoke; chạy
+  `psql "$OOTV2_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/github_intake.sql` trên project
+  disposable. Chưa có credential nên DDL/RPC chỉ kiểm bằng guardrail tĩnh + mirror JS.
 - **Worker claim job + tải blob `bot.py` tại SHA + validate**: thuộc H2/Khoa. Hiện job ở `queued`,
   receipt ở `resolving`; chưa có gì chuyển sang `fetching/checking/valid/invalid`.
 - **GitHub thật** (repo private, GitHub App, rate limit thực): NOT RUN — mọi test inject `fetchImpl`.
-- **Tắt upload HTTP cho đội online** (H2) chưa làm; route
-  `POST /api/local/submissions/:team` vẫn hoạt động như trước.
+- **Upload HTTP**: đã tắt mặc định cho đội (403 `upload_disabled`); admin chỉ bật bằng
+  `OOTV2_ALLOW_ONLINE_UPLOAD=1`; offline USB không đi qua HTTP nên giữ nguyên.
 - **UI/B2, browser QA**: thuộc Bảo; chưa có màn duyệt repo/poll job.
 
 - **H3 mức UI live**: `/api/live` giờ bắt buộc đăng nhập; trang Live của Bảo cần hiện nhắc đăng nhập thay
@@ -239,9 +276,19 @@ Môi trường: Windows, Node 24.18.0; không có test bị skip.
 
 ## Lịch sử checkpoint
 
+- 24/10/2026: **Tích hợp consumer Khoa** — `processGithubJob` dùng envelope finish
+  (`recorded = applied || alreadyFinished`, `leaseLost` → `lease_lost`); bỏ comment cũ về release thiếu
+  lease vì `20261024170000` đã chặn; `githubConsumer` 12/12, tổng 247/247. Consumer vẫn `enabled=false`,
+  chưa chạy Python/polling.
+
+- 24/10/2026: **H2 hardening contract** — release bắt buộc lease còn hạn; finish trả envelope
+  `already_finished`/`lease_lost` và kiểm submission cùng đội/valid/hash; claim chặn reclaim khi crash;
+  thêm `DELETE /repository` (revoke → hủy job/frozen receipt) + guard `repo_sync_pending` khi start;
+  `githubJobs` 5/5, `githubIntakeApi` 7/7, schema 9/9, tổng 247/247; script PostgreSQL NOT RUN.
+
 - 24/10/2026: **H3 hardening live overview** — `/api/live/overview` lọc theo giải của đội
   (`getLiveOverview({eventIds})`); đội khác giải không thấy tên giải/đội/matches. `publication` 10/10,
-  tổng 233/233 pass.
+  tổng 247/247 pass.
 
 - 24/10/2026: **H2 audit + đóng cổng upload** — thêm `requireEventMember` cho connection/receipt/intake
   (403 `scope_denied`), chặn upload HTTP mặc định (`403 upload_disabled`; admin chỉ khi

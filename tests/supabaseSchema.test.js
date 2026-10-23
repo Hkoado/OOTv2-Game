@@ -119,3 +119,35 @@ test('github jobs migration fixes previous submission and defines lease contract
   assert.match(sql, /make_interval\(secs=>LEAST\(300, 15\*GREATEST\(attempt,1\)\)\)/u);
   assert.doesNotMatch(sql, /SECURITY DEFINER|DROP TABLE/i);
 });
+
+
+test('github hardening migration: lease expiry, idempotent finish, reclaim cap, revoke', () => {
+  const sql = readFileSync(new URL('../supabase/migrations/20261024170000_github_jobs_hardening.sql', import.meta.url), 'utf8');
+
+  // release BẮT BUỘC lease còn hạn; claim hủy job crash quá số lần.
+  assert.match(sql, /AND status IN \('leased','running'\) AND lease_until>clock_timestamp\(\)/u);
+  assert.match(sql, /j\.attempt >= v_max/u);
+  assert.match(sql, /status='infra_fault'/u);
+
+  // finish idempotent + kiểm submission có sẵn đúng đội/valid/hash.
+  assert.match(sql, /'applied',false,'already_finished',true/u);
+  assert.match(sql, /s\.status='valid' AND s\.sha256=v_hash/u);
+  assert.match(sql, /IF j\.lease_token IS DISTINCT FROM p_token OR j\.generation<>p_generation/u);
+
+  // thu hồi repo: approved=false, hủy job chờ, đóng băng receipt chưa kết thúc.
+  assert.match(sql, /CREATE OR REPLACE FUNCTION public\.mvp_repo_connection_revoke/u);
+  assert.match(sql, /SET status='canceled'/u);
+  assert.match(sql, /SET status='frozen'/u);
+
+  for (const signature of [
+    'mvp_github_claim(text,integer,integer)',
+    'mvp_github_finish(uuid,uuid,integer,jsonb)',
+    'mvp_github_release(uuid,uuid,integer,text,integer)',
+    'mvp_repo_connection_upsert(uuid,uuid,text,bigint,text,text,boolean,uuid)',
+    'mvp_repo_connection_revoke(uuid,uuid,uuid)',
+  ]) {
+    assert.ok(sql.includes(`GRANT EXECUTE ON FUNCTION public.${signature} TO service_role`), `grant thiếu: ${signature}`);
+    assert.ok(sql.includes(`REVOKE ALL ON FUNCTION public.${signature} FROM PUBLIC,anon,authenticated`), `revoke thiếu: ${signature}`);
+  }
+  assert.doesNotMatch(sql, /SECURITY DEFINER|DROP TABLE|DROP COLUMN/i);
+});

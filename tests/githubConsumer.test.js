@@ -22,7 +22,10 @@ function fixture(overrides = {}) {
   for (const name of ['claim', 'heartbeat', 'progress', 'finish', 'release']) {
     api[`${name}GithubJob`] = async (args) => {
       calls.push({ name, args });
-      return name === 'claim' ? claim : name === 'release' ? { ok: true } : true;
+      return name === 'claim' ? claim
+        : name === 'release' ? { ok: true }
+        : name === 'finish' ? { applied: true, alreadyFinished: false, leaseLost: false }
+        : true;
     };
   }
   return { calls, claim, options: { enabled: true, workerId: 'test-worker', jobApi: api,
@@ -148,13 +151,22 @@ test('consumer external cancellation and deadline abort stalled validation with 
   }
 });
 
-test('consumer finish false or uncertain finish never releases/deletes possibly accepted source', async () => {
+test('consumer finish envelope: lease_lost hoặc uncertain không release/delete source', async () => {
   for (const uncertain of [true, false]) {
     const f = fixture();
-    f.options.jobApi.finishGithubJob = async () => { if (uncertain) throw Error('private DB error'); return false; };
+    f.options.jobApi.finishGithubJob = async () => {
+      if (uncertain) throw Error('private DB error');
+      return { applied: false, alreadyFinished: false, leaseLost: true };
+    };
     assert.equal((await processGithubJob(f.options)).reason, uncertain ? 'completion_unknown' : 'lease_lost');
     assert.equal(f.calls.some((c) => c.name === 'release'), false);
   }
+
+  // already_finished: lần trước đã commit nhưng mất response -> coi là đã ghi.
+  const f = fixture();
+  f.options.jobApi.finishGithubJob = async () => ({ applied: false, alreadyFinished: true, leaseLost: false,
+    receipt: { status: 'valid', submission_id: id } });
+  assert.deepEqual(await processGithubJob(f.options), { processed: true, recorded: true, reason: 'valid' });
 });
 
 test('consumer integrates actual RPC wrappers, pinned GitHub fetch and filesystem cache over mocked network', async (t) => {
@@ -181,9 +193,11 @@ test('consumer integrates actual RPC wrappers, pinned GitHub fetch and filesyste
         if (name === 'mvp_github_finish') {
           assert.equal(args.p_outcome.status, 'valid');
           assert.equal(args.p_outcome.submission.sha256, sourceHash);
+          response = { ok: true, applied: true, already_finished: false };
+        } else {
+          assert.ok(['mvp_github_heartbeat', 'mvp_github_progress'].includes(name));
+          response = true;
         }
-        assert.ok(['mvp_github_heartbeat', 'mvp_github_progress', 'mvp_github_finish'].includes(name));
-        response = true;
       }
     } else {
       assert.equal(target.origin, 'https://api.github.com');
