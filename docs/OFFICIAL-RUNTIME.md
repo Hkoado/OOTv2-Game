@@ -48,6 +48,6 @@ adapter, runner, sandbox adapter). Hash chuẩn hoá CRLF → LF nên Windows/Li
 
 ## 4. Chưa làm
 
-- Chưa có scheduler gọi verify trước trận (module mới chỉ có hàm thuần + drill).
-- Chưa có snapshot builder đọc setup/submission thật để tự tạo `runtime` này.
+- Chưa có scheduler gọi verify trước trận; module mới chỉ có hàm thuần + drill.
+- `server/services/officialRounds.js` đã dùng identity này khi tạo snapshot; chưa có runner chấm.
 - Chưa chốt VM production; WSL2 hiện là dev, factory từ chối attestation WSL.

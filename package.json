@@ -27,6 +27,10 @@
     "db:sql": "node tools/cli/db-sql.js",
     "db:h4": "node tools/cli/h4-drill.js",
     "db:k2": "node tools/cli/k2-schedule-drill.js",
+    "db:k2-open": "node tools/cli/k2-open-round.js",
+    "db:cutoff": "node tools/cli/github-cutoff-drill.js",
+    "github:cutoff": "node tools/cli/github-cutoff-sync.js",
+    "github:worker": "node tools/cli/github-cutoff-worker.js --drain",
     "test": "node --test tests/*.test.js"
   },
   "dependencies": {

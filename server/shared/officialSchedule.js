@@ -172,6 +172,14 @@ export async function loadOfficialRound({ roundId } = {}) {
     frozen: round.frozen === true, genesisHash: expectedGenesis, chainHash: chain };
 }
 
+export async function findOfficialRound({ eventId, roundId = 'group' } = {}) {
+  assertId(eventId, 'eventId');
+  if (!STAGE.test(roundId ?? '')) throw fail(400, 'bad_round', 'roundId không hợp lệ.');
+  const query = new URLSearchParams({ select: 'id', event_id: `eq.${eventId}`, round_id: `eq.${roundId}`, limit: '1' });
+  const rows = await request(`/rest/v1/mvp_official_rounds?${query}`);
+  return Array.isArray(rows) && rows[0]?.id ? rows[0].id : null;
+}
+
 /** Next group game with pinned colors. Requires a fully completed persisted prefix. */
 export function nextPinnedGroupGame({ snapshot, games } = {}) {
   if (!verifyOfficialRoundSnapshot(snapshot)) throw fail(400, 'invalid_snapshot', 'Snapshot không hợp lệ.');

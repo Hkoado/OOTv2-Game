@@ -8,6 +8,8 @@ import * as tournaments from './tournaments.js';
 import { getSharedJudgeMatch, getSharedJudgeOverview } from './judgeMonitor.js';
 import { listBotOutput } from './live.js';
 import * as githubIntake from '../services/githubIntake.js';
+import * as githubCutoff from '../services/githubCutoff.js';
+import * as officialRounds from '../services/officialRounds.js';
 import * as publication from './publication.js';
 import { rows, uuid } from './client.js';
 import { isAllowedOrigin } from '../lib/origin.js';
@@ -110,6 +112,10 @@ export function sharedRouter() {
     const teamId=githubIntake.scopeTeam(req.account,req.body?.team);
     res.status(202).json(await githubIntake.requestSubmission({eventId:req.params.id,teamId,repository:req.body?.repository,branch:req.body?.branch,account:req.account}));
   });
+  // BTC: đúng cutoff, pull một lần cho tất cả repo đã duyệt; job thành công không chạy lại.
+  router.post('/events/:id/github-cutoff-sync',requireLocalAdmin,async(req,res)=>{
+    res.status(202).json(await githubCutoff.syncAllAtCutoff({eventId:req.params.id,actor:req.account}));
+  });
   router.get('/events/:id/submissions/from-github',async(req,res)=>{
     const teamId=githubIntake.scopeTeam(req.account,typeof req.query.team==='string'?req.query.team:null);
     res.json(await githubIntake.getLatest({eventId:req.params.id,teamId,account:req.account}));
@@ -135,6 +141,12 @@ export function sharedRouter() {
     const pending=await githubIntake.pendingJobCount(req.params.id);
     if (pending>0) throw new HttpError(409,'repo_sync_pending',`Còn ${pending} job GitHub chưa xong; đợi chấm xong hoặc BTC thu hồi repo rồi thử lại.`);
     res.json(await tournaments.startTournament(req.params.id));
+  });
+  // K2 weekly group round: chốt snapshot từ setup + bot hợp lệ rồi mở vòng (admin).
+  router.get('/events/:id/official-round',requireLocalAdmin,async(req,res)=>res.json(await officialRounds.getGroupRound({eventId:req.params.id})));
+  router.post('/events/:id/official-round',requireLocalAdmin,async(req,res)=>{
+    const result=await officialRounds.openGroupRound({eventId:req.params.id});
+    res.status(result.alreadyOpen?200:201).json(result);
   });
   router.get('/events/:id',async(req,res)=>{
     const id=req.params.id;await checkStage(req.account,id);

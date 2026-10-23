@@ -73,10 +73,9 @@ Chưa kiểm: RLS bằng JWT anon/authenticated (`.env` chỉ có service role),
 
 ## Chưa làm / NOT RUN
 
-- **API admin + UI công bố màu trước ván** (Huy router / Bảo React) — chưa có.
-- **Snapshot builder từ giải thật**: cần chốt runtime identity/hash, map pack, cutoff, và pin
-  submission/bot theo từng vòng; hiện caller phải cung cấp snapshot đã verify.
-- Chưa persist series knockout (main/final/extra) — bảng riêng và bracket pinning còn thiếu.
-- Chưa nối kết quả từ worker/replay đã accepted vào `record_result`; caller phải cung cấp
-  `replay_hash` của attempt đã chấp nhận.
+- **Runner**: chưa gọi `runCampusMatch`/append/record/freeze; K2 chỉ lưu lịch.
+- **Knockout/standings**: chưa persist series main/final/extra hoặc tự lên top 16.
+- **Quyền xem**: route round hiện chỉ admin; đội/viewer chưa có API lịch/màu.
+- **VM**: Hyper-V đang Disabled; sandbox production chưa nghiệm thu.
+- **Accepted result**: caller vẫn phải cung cấp `replay_hash` của attempt đã chấp nhận.
 - Trigger Start vẫn khóa; không có scheduler queue/runner thật.

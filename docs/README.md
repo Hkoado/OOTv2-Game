@@ -19,6 +19,7 @@ Nền tảng engine Campus M1 có CLI riêng; API/worker/UI hiện tại vẫn d
 Sandbox code lạ: [kế hoạch production, chọn công cụ và ngân sách phần cứng](SANDBOX-PRODUCTION.md);
 dev acceptance WSL: [bằng chứng và giới hạn](SANDBOX-WSL.md).
 Runtime fingerprint cho snapshot: [cần chốt gì](OFFICIAL-RUNTIME.md).
+Luồng giải tuần online hiện tại: [cutoff → GitHub pull → mở vòng](OFFICIAL-WEEKLY-FLOW.md).
 
 ## Đọc gì trước?
 

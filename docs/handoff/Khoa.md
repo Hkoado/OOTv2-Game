@@ -17,11 +17,16 @@
   Budget/đóng băng engine **chờ BTC chốt**: [OFFICIAL-RUNTIME](../OFFICIAL-RUNTIME.md).
 - Lưu ý: chưa kiểm RLS bằng JWT anon/authenticated (`.env` chỉ có service role), crash giữa
   transaction, nhiều process/region, tải 35–56 đội.
-- **Còn thiếu K2:** API admin + UI công bố màu (Huy/Bảo), snapshot builder từ giải thật
-  (runtime identity/hash + pin submission theo vòng), persist knockout, nối result accepted.
-  Trigger `official_scheduler_not_ready` và Start vẫn khóa.
-- Cập nhật `docs/OFFICIAL-SCHEDULE.md`, `docs/07`; migration không sửa lại.
-- Full suite **322/322 pass**, 0 skip; Vite build exit 0 (1650 modules); `git diff --check` sạch.
+- **Đã thêm:** `server/services/officialRounds.js` build snapshot từ setup/submission + admin route
+  `GET/POST /events/:id/official-round` + panel “Vòng bảng chính thức”; drill `db:k2-open` **6/6**.
+  `server/services/githubCutoff.js` + API/CLI/worker pull một lần lúc cutoff; drill `db:cutoff` **4/4**.
+- **Còn thiếu K2:** runner gọi `runCampusMatch` rồi append/record/freeze, standings/top 16/knockout,
+  đội/viewer xem lịch, VM sandbox. Trigger `official_scheduler_not_ready` và Start vẫn khóa.
+- **VM Hyper-V:** máy này `Microsoft-Hyper-V-All` đang **Disabled**, không có `vmms`; cần admin +
+  reboot mới tạo VM sạch. Chưa dùng WSL2 cho production.
+- Cập nhật `docs/OFFICIAL-SCHEDULE.md`, `docs/OFFICIAL-RUNTIME.md`, `docs/OFFICIAL-WEEKLY-FLOW.md`,
+  `docs/GITHUB-CONSUMER.md`, `docs/07`; migration không sửa lại.
+- Full suite **326/326 pass**, 0 skip; Vite build exit 0 (1652 modules); `git diff --check` sạch.
 
 
 ### 24/10/2026 — K4 seccomp + CPU budget + attestation (dev 14/14, production chưa mở)

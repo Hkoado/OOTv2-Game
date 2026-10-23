@@ -4,6 +4,7 @@ import { SAMPLE_MAPS } from '../../game/sampleMaps.js';
 import { Alert, Badge, DataTable, Field, Panel } from './TournamentUi.jsx';
 import MapPreview from './MapPreview.jsx';
 import TerrainMapEditor from './TerrainMapEditor.jsx';
+import OfficialRoundPanel from './OfficialRoundPanel.jsx';
 import { upgradeTerrainMap } from '../../game/terrain.js';
 import {
   detectVersionConflict,
@@ -127,6 +128,8 @@ export default function OfficialSetupPanel({ event, teams, actions, busy, admin 
       <Alert tone="warning" title="Thiết lập giải chính thức · không phải giải MVP 8 đội">
         {preview.executionBlocker} Map có thể công bố trước để đội chuẩn bị bot; công bố map không mở worker giải chính thức.
       </Alert>
+
+      <OfficialRoundPanel event={event} admin={admin} busy={busy} actions={actions} />
 
       {conflict.hasConflict && (
         <Alert tone="danger" title="Phát hiện xung đột phiên bản">

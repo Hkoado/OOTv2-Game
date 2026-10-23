@@ -1,8 +1,20 @@
-# Consumer bài GitHub — K3d, foundation chưa bật
+# Consumer bài GitHub — K3d + cutoff pull
 
 `server/shared/githubConsumer.js` export `processGithubJob(options)` thực hiện một job theo
-contract `githubJobs.js` và pinned retrieval `githubArtifact.js`. Không có polling mới, endpoint,
-CLI, env flag hoặc import vào `runSharedWorker`. Mặc định `enabled:false` trả disabled trước DB.
+contract `githubJobs.js` và pinned retrieval `githubArtifact.js`. Consumer vẫn **opt-in**:
+`enabled:false` trả disabled trước DB; chưa import vào `runSharedWorker`.
+
+Đã có thêm **một-shot cutoff flow** (chưa phải sandbox/DB production):
+
+- `server/services/githubCutoff.js`: tại/ sau cutoff, resolve HEAD **một lần** cho mọi repo đã duyệt,
+  tạo đúng một job + receipt mỗi đội; chạy lại bỏ qua SHA đã có; lỗi pull được báo lại, không tạo job giả.
+- API `POST /api/local/events/:id/github-cutoff-sync` (admin) và CLI `npm run github:cutoff -- <eventId>`.
+- Worker CLI `npm run github:worker` dùng `processGithubJob`, tải blob tại SHA, kiểm UTF-8/size +
+  **syntax Python** rồi upload Storage. Worker này **không chạy bot** (không smoke test) — chạy trận
+  vẫn phải qua sandbox.
+- Drill DB thật `npm run db:cutoff` **4/4 PASS** (2 job, receipt resolving, chạy lại skip).
+
+Các giới hạn lease/Storage/sandbox bên dưới vẫn giữ nguyên.
 
 ## Cách tích hợp sau review
 
@@ -57,5 +69,6 @@ sau khi caller dừng chờ. Không tuyên bố client cancellation thu hồi tr
 
 `node --test tests/githubConsumer.test.js` dùng fixture, actual RPC wrappers/pinned fetch/cache
 qua network mock; không chạy Python hoặc gọi DB/GitHub thật. Không chứng minh sandbox/DB production.
-Rollback hiện là bỏ dùng helper (chưa có đường gọi trong worker), không có migration/env mới.
-Start vẫn khóa; phải kiểm adapter sandbox/Storage, DB concurrency/crash/lease và quyền trước bật.
+Rollback: bỏ CLI `github:worker`/`github:cutoff` và route cutoff; consumer vẫn không được import vào
+worker chính. Chưa có migration/env mới. Start vẫn khóa; phải kiểm adapter sandbox/Storage,
+DB concurrency/crash/lease và quyền trước bật.

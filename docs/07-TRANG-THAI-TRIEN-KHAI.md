@@ -94,8 +94,12 @@
 - **Drill DB thật `npm run db:k2` PASS 14/14** (4 đội/12 ván): open idempotent, 2 writer (một
   `stale_prefix`), chain, record idempotent/conflict, freeze thiếu/đủ/lặp; cleanup leftover=0.
 - Test mock **8/8** + guardrail drill **2/2**. Full suite/build xem handoff.
-  **Còn thiếu:** API admin/UI công bố màu, snapshot builder từ giải thật, series knockout,
-  nối result accepted. Trigger Start giữ khóa. Chi tiết: [K2 schedule persistence](OFFICIAL-SCHEDULE.md).
+- **Đã nối**: `server/services/officialRounds.js` build snapshot từ setup/submission + admin route
+  `GET/POST /events/:id/official-round` + panel “Vòng bảng chính thức”; drill `db:k2-open` **6/6**.
+  `server/services/githubCutoff.js` + worker CLI pull một lần lúc cutoff; drill `db:cutoff` **4/4**.
+- **Còn thiếu:** runner gọi `runCampusMatch` rồi append/record/freeze, standings/top 16/knockout,
+  đội/viewer xem lịch, VM sandbox. Trigger Start giữ khóa.
+  Chi tiết: [K2 schedule](OFFICIAL-SCHEDULE.md), [luồng tuần](OFFICIAL-WEEKLY-FLOW.md).
 - **Runtime identity (đề xuất):** `server/judge/officialRuntime.js` hash file engine/rules/protocol/replay
   + budget mặc định (5 s setup, 1 s/nước, 45 s/bot, 400 nước, 256 MiB); test **3/3**. Cần BTC chốt
   đóng băng engine + budget: [Runtime identity](OFFICIAL-RUNTIME.md).
