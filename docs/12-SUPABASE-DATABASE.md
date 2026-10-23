@@ -76,6 +76,23 @@ Migration DDL dùng kết nối quản trị đã xác thực.
   `storage_path` `<uuid>.py` và `sha256 = source_hash`; invalid/infrastructure không tạo submission.
 - Client contract: `server/shared/githubJobs.js`; test `tests/githubJobs.test.js` 5/5 (mock fetch).
 
+## Worker contract hardening (24/10/2026)
+
+- Migration **`20261024170000_github_jobs_hardening.sql`** (CHƯA apply): thay `mvp_github_claim`
+  (thêm `p_max_attempts`, hủy reclaim khi worker crash), `mvp_github_finish` (trả envelope
+  `{ok, applied, already_finished, job, receipt}`; kiểm submission có sẵn đúng đội/`valid`/`sha256`),
+  `mvp_github_release` (**bắt buộc `lease_until > clock_timestamp()`**), `mvp_repo_connection_upsert`
+  (thu hồi/đổi repo → hủy job chờ, receipt chưa kết thúc `frozen`) và mới `mvp_repo_connection_revoke`.
+- **Thứ tự migration**: `20261022125205` → `20261023160000` → `20261024130000` → `20261024150000`
+  → `20261024160000` → `20261024170000`. Rollback: `DROP FUNCTION` các hàm vừa thay rồi `DROP TABLE`
+  `mvp_github_receipts`, `mvp_repo_sync_jobs`, `mvp_repo_connections` (chỉ khi chưa có dữ liệu thật).
+- **PostgreSQL test**: `supabase/tests/github_intake.sql` (transaction + ROLLBACK) — chạy
+  `psql "$OOTV2_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/github_intake.sql` trên project
+  disposable. Hiện **NOT RUN**; DDL/RPC mới chỉ kiểm bằng guardrail tĩnh + mock.
+- API phía đội/admin không đổi DTO receipt/job; chỉ thêm `DELETE /events/:id/repository` (admin) và lỗi
+  `409 repo_sync_pending` khi start lúc còn job intake chưa xong.
+
+
 ## Broadcast schedule H3 (24/10/2026)
 
 - Migration **`20261024150000_broadcast_schedule.sql`** tạo `mvp_match_broadcasts`
