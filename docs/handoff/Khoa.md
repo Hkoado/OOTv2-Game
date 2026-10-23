@@ -2,6 +2,62 @@
 
 ## Trạng thái mới nhất
 
+### 24/10/2026 — K4 seccomp + CPU budget + attestation (dev 14/14, production chưa mở)
+
+- **Chọn công cụ** sau khi đối chiếu judge thật: `bubblewrap` (nhẹ, không setuid, Flatpak dùng,
+  có `--seccomp`) + cgroup v2 + libseccomp. nsjail/isolate là phương án allowlist/judge thuần;
+  gVisor/Firecracker cho code công khai. Bảng so sánh + link trong `docs/SANDBOX-PRODUCTION.md`.
+- **Seccomp**: `sandbox/linux/seccomp-profile.py` sinh BPF deny-list 67 syscall (mount*, unshare,
+  setns, ptrace, process_vm_*, keyctl/add_key, bpf, perf_event_open, io_uring_*, userfaultfd,
+  open_by_handle_at, kexec/module, swap/reboot...) → `EPERM`; runner fail-closed nếu thiếu
+  `python3-seccomp`/generator; `--seccomp-mode off` chỉ để dev và được ghi vào metrics.
+- **Runner**: `--cpu-seconds`, `--cgroup-id`/`--cgroup-root` (adapter đọc đúng cgroup), metrics
+  thêm `seccomp`, `cpuSeconds`, `cgroup`; exit 0/124/137/78/64 giữ nguyên.
+- **Selftest 14/14 PASS** (WSL, kernel 6.18.54.1): thêm probe `Seccomp:2` + 6 syscall escape
+  (`EPERM`), mode off (`Seccomp:0`); các test cũ vẫn pass (fork 124, mem 137, CPU/wall 124,
+  flood cắt 64 KiB, FS/net/env, cleanup).
+- **Adapter `linux-sandbox.v2`**: đọc `cpu.stat` mỗi 50 ms, vượt `cpuTotalMs` → `BOT_CPU_LIMIT`;
+  exit 137 → `BOT_MEMORY_LIMIT`; metrics `cpuMeasured`, `cpuUsec`, `memoryMeasured`,
+  `memoryPeakBytes`, `oomKills`, `seccomp`, `cgroup`; unit **9/9**. E2E WSL: setup 9 quân + move,
+  `cpuMeasured=true`, `memoryPeak≈5 MiB`, `seccomp=deny-list.v1`, cgroup sạch.
+- **Attestation + factory**: `sandbox/linux/attest.sh` xuất receipt 24 h (kernel, hash BPF, probe,
+  selftest); `server/judge/campusSandboxFactory.js` từ chối WSL, receipt hết hạn/sai, seccomp off,
+  runner tương đối; mặc định vẫn `trusted-dev`. Test **4/4**.
+- **Ngân sách đề xuất**: 128 MiB RAM/bot, 20 s CPU/ván/bot, setup 5 s, move 1 s, pids 16,
+  `cpu.max` 1 core; VM 4 vCPU/8 GiB/80 GiB cho ~200 ván/ngày (4 ván đồng thời). Chi tiết +
+  checklist production trong `docs/SANDBOX-PRODUCTION.md`.
+- `campusMatchRunner` giờ trả `sandboxProfiles` và limitations lấy từ session (không còn ghi
+  "No OS sandbox" khi chạy sandbox thật).
+- **Chưa production**: deny-list (chưa allowlist), chưa chạy `attest.sh --full` trên VM Linux thật,
+  campus worker/API chưa nối factory. H4/DB và gate Start/consumer giữ nguyên.
+- Full suite **312/312 pass**, 0 skip; Vite build exit 0 (1650 modules); `git diff --check` sạch.
+
+
+### 24/10/2026 — K4a (bản đầu, trước seccomp): dev acceptance 11/11
+
+- Dựng **distro WSL2 riêng** `ootv2-sandbox` từ Ubuntu base 24.04.3, import vào
+  `data/wsl/ootv2-sandbox` (gitignored, D:), không dùng Ubuntu cá nhân. WSL 3.0.3 / kernel
+  6.18.54.1, Python 3.12.3, bubblewrap 0.9.0, cgroup v2 có `cpu memory pids`.
+- `sandbox/linux/run-bot.sh`: `bwrap --unshare-all --clearenv --cap-drop ALL`, `/usr` read-only,
+  `/proc` + `/dev` riêng, `/tmp` tmpfs 16 MiB, không `/mnt|/home|/sys`; cgroup v2
+  `memory.max/swap=0/pids.max/cpu.max` + watchdog wall-time + dọn cgroup/process; stdin/stdout
+  JSONL truyền nguyên. Exit: 0/124 timeout/137 kill/78 thiếu hạ tầng/64 tham số.
+- `sandbox/linux/preflight.sh`, `selftest.sh`, fixtures lành tính + phá hoại (chỉ test).
+  **Selftest 11/11 PASS**: JSONL round-trip, metrics, FS/network/env isolation, fork bomb (124),
+  memory 64 MiB (137), CPU/timeout (124), CPU accounting ~262 ms, stdout flood cắt 64 KiB,
+  wall timeout, cgroup cleanup, process cleanup. Log `data/khoa-next/sandbox-*.txt`.
+- `docs/SANDBOX-WSL.md` + `sandbox/README.md`; `.gitattributes` khóa LF cho `*.sh`.
+- Adapter Node `server/judge/linuxSandboxSession.js`: Linux-only mặc định (Windows phải truyền
+  `launch` tường minh), kiểm `resolveBotPath`, argv limit, `runnerEnv` tối thiểu, tái dùng validator
+  `bot.v1`, timeout/budget, map exit 78/124; test fake child **7/7**.
+- E2E thật trong WSL (Node 18.19.1 + runner + bwrap): setup 9 quân + move trả đúng, `stdoutBytes=497`,
+  đóng session không còn cgroup; `productionReady:false` vì chưa đo CPU/RAM per request.
+- **Chưa production:** chưa seccomp/syscall allowlist/attestation, WSL chia sẻ kernel/tài nguyên
+  Windows, chưa thử escape nâng cao. Không dùng cho code sinh viên; mọi gate Start/consumer giữ nguyên.
+- Đã merge thêm `origin/dev` (`4477be5`, sửa SubmissionsPage/githubSyncState) không conflict.
+  Sau merge: **306/306 test pass**, Vite build exit 0 (1650 modules), `git diff --check` sạch.
+- (Đã thực hiện ở mục K4 phía trên; còn nghiệm thu trên VM Linux sạch.)
+
 ### 24/10/2026 — K2 schedule persistence + màu: READY FOR REVIEW (migration chưa apply)
 
 - Bối cảnh: H4 chưa push (`origin/dev` = `2d8f6a3` lúc bắt đầu); giữa đợt remote nhảy 5 commit
@@ -430,9 +486,9 @@ consumer/Storage adapter), worker Campus trusted-dev. Không có nghĩa giải �
    Owner Huy (DB); Khoa kiểm lại consumer sau khi có kết quả.
 2. **Storage + GitHub thật** — bucket private, quyền service_role, upload/readback SHA-256, quota/
    rate limit, inventory orphan. Adapter K3e mới chỉ mock.
-3. **Sandbox Linux (K4)** — filesystem/network/CPU/RAM/process/flood/timeout/cleanup trên VM sạch,
-   xác nhận không secret vào bot. Chưa có bằng chứng thì **không mở nhận bot lạ**; `local-dev`
-   trusted không thay thế sandbox.
+3. **Sandbox Linux (K4)** — K4a đã dựng WSL2 riêng + runner bwrap/cgroup, 11/11 selftest
+   (FS/network/env, fork, memory, CPU/timeout, flood, cleanup). Còn: nối Node worker, seccomp/
+   attestation, budget theo request, VM Linux sạch. Chưa mở nhận bot lạ.
 4. **K2 persistence + scheduler/màu** — K2p đã có migration/RPC/client + mock. Còn: Huy review/apply
    trên disposable, test 2-writer/crash/RLS, API admin + UI công bố màu, persist series knockout,
    nối accepted result. Giữ trigger `official_scheduler_not_ready` và Start khóa.
@@ -458,3 +514,4 @@ consumer/Storage adapter), worker Campus trusted-dev. Không có nghĩa giải �
 - 24/10/2026: K3e Storage adapter + test tích hợp; full 282/282 pass, vẫn tắt consumer/Start.
 - 24/10/2026: K6a gói offline tự chứa + CLI; full 287/287 pass, chưa xuất từ giải thật.
 - 24/10/2026: K2p schedule persistence (migration/RPC/client/mock); PostgreSQL thật NOT RUN.
+- 24/10/2026: K4a sandbox WSL (bwrap + cgroup) 11/11 dev acceptance; chưa nối worker/seccomp.

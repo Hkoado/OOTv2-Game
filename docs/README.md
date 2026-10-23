@@ -16,6 +16,8 @@ Tiếp tục ở phiên mới: [bàn giao code dang dở và bước tiếp theo
 Xem trực tiếp + triển khai công khai (đã chạy được): [live và Cloudflare Tunnel](13-LIVE-VA-TRIEN-KHAI.md).
 Đợt offline/thư mục giải: [bàn giao và chia việc còn thiếu](10-BAN-GIAO-OFFLINE-VA-THU-MUC-GIAI.md).
 Nền tảng engine Campus M1 có CLI riêng; API/worker/UI hiện tại vẫn dùng profile MVP.
+Sandbox code lạ: [kế hoạch production, chọn công cụ và ngân sách phần cứng](SANDBOX-PRODUCTION.md);
+dev acceptance WSL: [bằng chứng và giới hạn](SANDBOX-WSL.md).
 
 ## Đọc gì trước?
 

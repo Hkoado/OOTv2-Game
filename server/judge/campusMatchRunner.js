@@ -76,7 +76,12 @@ export async function runCampusMatch({ id, map, seed, red, blue, trusted = false
   }
   const replay = recordCampusReplay({ id, map, seed }, actions);
   if (!verifyCampusReplay(replay).ok) throw new CampusInfrastructureError('replay_verification_failed');
+  const profiles = [...new Set([...sessions.values()].map((session) => session.profile).filter(Boolean))];
+  const reported = [...sessions.values()].flatMap((session) => session.limitations ?? []);
+  const limitations = new Set(reported.length > 0 ? reported
+    : ['No OS sandbox', 'CPU/RAM not measured', 'No cgroup freeze']);
+  limitations.add('No DB attempt fencing');
   return { profile: 'campus-engine-trusted.v1', productionReady: false,
     result: state.result, reason: state.terminationReason, plyCount: state.ply, replay,
-    metrics: elapsed, limitations: ['No OS sandbox', 'CPU/RAM not measured', 'No cgroup freeze', 'No DB attempt fencing'] };
+    sandboxProfiles: profiles, metrics: elapsed, limitations: [...limitations] };
 }

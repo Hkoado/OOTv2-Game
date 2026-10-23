@@ -61,6 +61,26 @@
   Toàn bộ **282/282 pass**, 0 skip; Vite build 1649 modules pass. Supabase Storage/PostgreSQL/GitHub
   thật, sandbox Linux, browser và offline restore **NOT RUN**. Chi tiết: [Storage adapter](STORAGE-ADAPTER.md).
 
+## Sandbox Linux trên WSL (dev) — 24/10/2026
+
+- Dựng distro WSL2 riêng `ootv2-sandbox` (Ubuntu base 24.04.3 import vào `data/wsl`, gitignored),
+  Python 3.12.3 + bubblewrap 0.9.0; **không dùng Ubuntu cá nhân**.
+- `sandbox/linux/run-bot.sh`: `--unshare-all`, `clearenv`, `--cap-drop ALL`, `/usr` read-only,
+  `/proc` + `/dev` riêng, `/tmp` tmpfs 16 MiB, không `/mnt|/home|/sys`; cgroup v2
+  memory/pids/cpu + watchdog + cleanup; stdin/stdout JSONL truyền nguyên.
+- `sandbox/linux/selftest.sh` **14/14 PASS**: JSONL round-trip, metrics + seccomp mode, seccomp probe
+  (`Seccomp:2`, 6 syscall escape → EPERM), mode off, FS/network/env isolation, fork bomb (124),
+  memory 64 MiB (137), CPU/timeout (124), CPU accounting, stdout flood (cắt 64 KiB), wall timeout,
+  cgroup + process cleanup.
+- Seccomp deny-list 67 syscall qua `bwrap --seccomp` + libseccomp (`python3-seccomp`), fail-closed;
+  `attest.sh` xuất receipt 24 h (hash profile, probe, selftest); factory `campusSandboxFactory.js`
+  từ chối WSL/hết hạn/seccomp off và mặc định vẫn `trusted-dev`.
+- Adapter `server/judge/linuxSandboxSession.js` **9/9** + E2E thật trong WSL (setup 9 quân/move);
+  đo CPU theo cgroup (50 ms), map 137 → `BOT_MEMORY_LIMIT`; profile `linux-sandbox.v2`.
+- **Chưa production:** deny-list (chưa allowlist), chưa nghiệm thu VM Linux thật, WSL chia sẻ host kernel.
+  Ngân sách phần cứng + checklist: [Sandbox production](SANDBOX-PRODUCTION.md); dev:
+  [Sandbox WSL](SANDBOX-WSL.md).
+
 ## K2 schedule persistence — 24/10/2026
 
 - Thêm migration `20261025090000_official_schedule.sql` (**CHƯA apply**): bảng `mvp_official_rounds`
