@@ -1,7 +1,8 @@
 # Supabase: nền tảng DB quản lý giải
 
 Ngày 22/10/2026. Project đã được người dùng xác nhận: **OTTv2-G5**, ref `wsyfcgurnrowcuefwynx`.
-Migration đã áp dụng: `20261022122359`, tên `campus_foundation`.
+Migration đã áp dụng: **10/10** file trong `supabase/migrations` (apply 24/10/2026 qua Management API,
+smoke PostgreSQL PASS) — xem mục “DB thật” trong [bàn giao Huy](handoff/Huy.md).
 
 ## Phạm vi
 
@@ -31,7 +32,7 @@ Migration DDL dùng kết nối quản trị đã xác thực.
 ## Map snapshot theo ván (24/10/2026)
 ## GitHub intake H1 — repo approval + job/receipt (24/10/2026)
 
-- Migration **`20261024130000_github_intake.sql`** (additive, chưa apply remote): 3 bảng private
+- Migration **`20261024130000_github_intake.sql`** (additive, **đã apply 24/10/2026**): 3 bảng private
   `mvp_repo_connections` (repo/branch đã duyệt theo giải+đội), `mvp_repo_sync_jobs` (lease/attempt/
   available_at/error_category), `mvp_github_receipts` (trạng thái cho UI + `source_hash`/`submission_id`).
   RLS bật, `REVOKE` khỏi `PUBLIC/anon/authenticated`, chỉ `service_role` đọc/ghi.
@@ -78,17 +79,22 @@ Migration DDL dùng kết nối quản trị đã xác thực.
 
 ## Worker contract hardening (24/10/2026)
 
-- Migration **`20261024170000_github_jobs_hardening.sql`** (CHƯA apply): thay `mvp_github_claim`
+- Migration **`20261024170000_github_jobs_hardening.sql`** (**đã apply 24/10/2026**): thay `mvp_github_claim`
   (thêm `p_max_attempts`, hủy reclaim khi worker crash), `mvp_github_finish` (trả envelope
   `{ok, applied, already_finished, job, receipt}`; kiểm submission có sẵn đúng đội/`valid`/`sha256`),
   `mvp_github_release` (**bắt buộc `lease_until > clock_timestamp()`**), `mvp_repo_connection_upsert`
   (thu hồi/đổi repo → hủy job chờ, receipt chưa kết thúc `frozen`) và mới `mvp_repo_connection_revoke`.
-- **Thứ tự migration**: `20261022125205` → `20261023160000` → `20261024130000` → `20261024150000`
-  → `20261024160000` → `20261024170000`. Rollback: `DROP FUNCTION` các hàm vừa thay rồi `DROP TABLE`
-  `mvp_github_receipts`, `mvp_repo_sync_jobs`, `mvp_repo_connections` (chỉ khi chưa có dữ liệu thật).
-- **PostgreSQL test**: `supabase/tests/github_intake.sql` (transaction + ROLLBACK) — chạy
-  `psql "$OOTV2_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/github_intake.sql` trên project
-  disposable. Hiện **NOT RUN**; DDL/RPC mới chỉ kiểm bằng guardrail tĩnh + mock.
+- **Thứ tự migration**: `20261022125205` → `20261023160000` → `20261024120000` → `20261024130000`
+  → `20261024150000` → `20261024160000` → `20261024170000` → `20261024180000` → `20261025090000`.
+  Rollback: `DROP FUNCTION` các hàm vừa thay rồi `DROP TABLE` `mvp_github_receipts`,
+  `mvp_repo_sync_jobs`, `mvp_repo_connections` (chỉ khi chưa có dữ liệu thật).
+- **Bắt buộc khi apply `20261024170000`**: `DROP FUNCTION IF EXISTS public.mvp_github_finish(uuid,uuid,integer,jsonb)`
+  (đổi return type `boolean → jsonb`, nếu không PostgreSQL báo `42P13`) và
+  `DROP FUNCTION IF EXISTS public.mvp_github_claim(text,integer)` (overload 2 tham số cũ sẽ che bản 3 tham số).
+  Trong `mvp_github_claim` không được đặt alias bảng trùng biến `j` (`42702` ambiguous).
+- **PostgreSQL test**: `supabase/tests/github_intake.sql` (transaction + ROLLBACK) — **PASS 24/10/2026**
+  qua Management API (`npm run db:apply-migrations -- --apply --smoke`), dùng được cả
+  `psql "$OOTV2_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f ...` trên project disposable.
 - API phía đội/admin không đổi DTO receipt/job; chỉ thêm `DELETE /events/:id/repository` (admin) và lỗi
   `409 repo_sync_pending` khi start lúc còn job intake chưa xong.
 

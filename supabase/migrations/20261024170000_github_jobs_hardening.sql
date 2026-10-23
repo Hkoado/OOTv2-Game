@@ -6,6 +6,14 @@
 -- 4) connection upsert: đổi/thu hồi duyệt repo -> hủy job đang chờ và đóng băng receipt chưa kết thúc.
 -- Do NOT apply remotely without operator approval.
 
+-- 0) Nền 20261024160000 đã tạo bản cũ của các hàm này:
+--    - mvp_github_finish đổi return type boolean -> jsonb nên CREATE OR REPLACE bị 42P13,
+--      phải DROP trước.
+--    - mvp_github_claim cũ 2 tham số sẽ che bản 3 tham số (PostgREST chọn overload khớp
+--      tên tham số), nên bỏ để worker chỉ thấy contract mới.
+DROP FUNCTION IF EXISTS public.mvp_github_finish(uuid,uuid,integer,jsonb);
+DROP FUNCTION IF EXISTS public.mvp_github_claim(text,integer);
+
 CREATE OR REPLACE FUNCTION public.mvp_github_claim(
   p_worker text, p_lease_seconds integer DEFAULT 120, p_max_attempts integer DEFAULT 3
 ) RETURNS jsonb LANGUAGE plpgsql SET search_path='' AS $$
@@ -19,16 +27,16 @@ BEGIN
  UPDATE public.mvp_github_receipts r
   SET status='infrastructure', error='worker crash: lease hết hạn quá số lần', error_category='infrastructure',
       updated_at=clock_timestamp()
-  FROM public.mvp_repo_sync_jobs j
-  WHERE r.job_id=j.id AND j.status IN ('leased','running')
-    AND j.lease_until IS NOT NULL AND j.lease_until < clock_timestamp() AND j.attempt >= v_max
+  FROM public.mvp_repo_sync_jobs job
+  WHERE r.job_id=job.id AND job.status IN ('leased','running')
+    AND job.lease_until IS NOT NULL AND job.lease_until < clock_timestamp() AND job.attempt >= v_max
     AND r.status IN ('resolving','fetching','checking');
- UPDATE public.mvp_repo_sync_jobs j
+ UPDATE public.mvp_repo_sync_jobs job
   SET status='infra_fault', lease_token=NULL, lease_until=NULL,
-      error=COALESCE(j.error,'worker crash: lease hết hạn quá số lần'), error_category='infrastructure',
+      error=COALESCE(job.error,'worker crash: lease hết hạn quá số lần'), error_category='infrastructure',
       updated_at=clock_timestamp()
-  WHERE j.status IN ('leased','running') AND j.lease_until IS NOT NULL
-    AND j.lease_until < clock_timestamp() AND j.attempt >= v_max;
+  WHERE job.status IN ('leased','running') AND job.lease_until IS NOT NULL
+    AND job.lease_until < clock_timestamp() AND job.attempt >= v_max;
 
  SELECT * INTO j FROM public.mvp_repo_sync_jobs
   WHERE attempt < v_max AND (

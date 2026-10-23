@@ -24,6 +24,8 @@
     "db:admin": "node tools/cli/create-admin.js",
     "db:check-github": "node tools/cli/check-github-db.js",
     "db:apply-migrations": "node tools/cli/apply-migrations.js",
+    "db:sql": "node tools/cli/db-sql.js",
+    "db:h4": "node tools/cli/h4-drill.js",
     "test": "node --test tests/*.test.js"
   },
   "dependencies": {

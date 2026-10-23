@@ -9,9 +9,9 @@ DO $$ BEGIN
   THEN RAISE EXCEPTION 'missing migration 20261024130000/160000/170000'; END IF;
 END $$;
 
-INSERT INTO public.mvp_participants(id,name,created_at)
-VALUES ('00000000-0000-4000-8000-00000000a001','PG Đội A',now()),
-       ('00000000-0000-4000-8000-00000000a002','PG Đội B',now());
+INSERT INTO public.mvp_participants(id,name,name_key,created_at)
+VALUES ('00000000-0000-4000-8000-00000000a001','PG Đội A','pg đội a',now()),
+       ('00000000-0000-4000-8000-00000000a002','PG Đội B','pg đội b',now());
 INSERT INTO public.mvp_tournaments(id,name,status,seed,created_at)
 VALUES ('00000000-0000-4000-8000-00000000b001','PG Event','draft',7,now()),
        ('00000000-0000-4000-8000-00000000b002','PG Event cutoff','draft',8,now());

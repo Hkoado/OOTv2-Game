@@ -2,11 +2,12 @@
 
 ## Trạng thái mới nhất
 
-- Trạng thái: **H1 (+ fix review), H2 (contract hardening) và H3 DONE (mock-verified)** — intake,
-  lease/idempotent finish/revoke, ACL/cổng upload, lịch phát; **chưa chạy Postgres thật**; H4 chưa làm.
+- Trạng thái: **H1/H2/H3 DONE — đã VERIFIED trên Postgres thật** (10/10 migration + smoke PASS,
+  `db:check-github` 200/domain errors); **H4 mức DB DONE** (`npm run db:h4` 30/30 check, rồi dọn sạch).
+  Chưa chạy consumer Khoa thật (polling + Python), chưa Start/deploy.
 - Phạm vi: H1 trong [phân công Huy](../assignments/Huy.md).
-- Checkpoint nguồn: `3de220e`; **commit kết quả H1: `be22c09`** trên nhánh `dev` (đã push `origin/dev`).
-- Migration `20261024130000_github_intake.sql`: **CHƯA apply remote** (quy ước repo: cần operator duyệt).
+- Commit: H1 `be22c09`; nối DB thật `cfc7a77` trên nhánh `dev` (đã push `origin/dev`).
+- Migration `20261024130000_github_intake.sql`: **đã apply 24/10/2026** (cùng 9 file khác).
 - B2 (Bảo) **có thể nối API thật ngay**: route + DTO dưới đây đã chốt, có test mock phủ quyền/lỗi.
 - **24/10/2026 (ngoài H1–H3):** thêm "nhớ tài khoản" ở màn đăng nhập — client chỉ lưu username
   (`src/tournament/portal/rememberAccount.js`), phiên 30 ngày khi bật (`REMEMBER_MS`) thay vì 8 giờ;
@@ -235,43 +236,72 @@ Worker BTC (Khoa/H2) dùng `server/shared/githubJobs.js`; mọi kiểm quyền n
 
 Môi trường: Windows, Node 24.18.0; không có test bị skip.
 
-## DB thật — trạng thái & cách áp migration (24/10/2026)
+## DB thật — ĐÃ NỐI: 10 migration + smoke PASS (24/10/2026)
 
-Đã kiểm project thật `https://wsyfcgurnrowcuefwynx.supabase.co` bằng service role (không in key):
+Project thật `https://wsyfcgurnrowcuefwynx.supabase.co`; DDL qua Management API (`SUPABASE_ACCESS_TOKEN`),
+REST qua service role (không in key/token):
 
-- `npm run db:verify` OK: participants 11, accounts 5, tournaments 1, entries 8, submissions 4, matches 0.
-- **Đã apply**: `campus_foundation` (`maps`/`round_maps`/`games`), `shared_mvp_runtime_tables`
-  (`mvp_tournaments`, `mvp_submissions`).
-- **CHƯA apply (7 file, đúng thứ tự)**: `20261022150000_judge_monitor` → `20261023120000_live_stream`
-  → `20261023160000_official_setup` → `20261024130000_github_intake` → `20261024150000_broadcast_schedule`
-  → `20261024160000_github_jobs_worker` → `20261024170000_github_jobs_hardening`.
-  Bằng chứng: REST `PGRST205` cho `mvp_match_logs`/`mvp_match_events`/`mvp_official_setups`/
-  `mvp_repo_sync_jobs`/`mvp_match_broadcasts`; `PGRST202` cho `mvp_github_intake`/`mvp_github_claim`/
-  `mvp_repo_connection_revoke`.
-- **Chặn hiện tại**: máy chỉ có `SUPABASE_URL` + service role (PostgREST không chạy DDL), **không có**
-  `SUPABASE_ACCESS_TOKEN`/`SUPABASE_DB_URL`, không có `psql`/Supabase CLI ⇒ chưa thể apply từ máy này.
-- Công cụ đã thêm (dry-run mặc định): `npm run db:check-github` (probe bảng/RPC),
-  `npm run db:apply-migrations` (xem kế hoạch), `npm run db:apply-migrations -- --apply` (apply).
-  Runner kiểm baseline `mvp_tournaments`/`mvp_submissions`/`maps`, skip file đã apply, mỗi file một
-  transaction, dừng ngay khi lỗi, kiểm lại object đại diện sau mỗi file.
-- Cách cấp quyền (chọn 1) trong `.env`:
-  `SUPABASE_ACCESS_TOKEN=sbp_...` (Personal Access Token) **hoặc**
-  `SUPABASE_DB_URL=postgresql://postgres.<ref>:<password>@<host>:5432/postgres` (cần `psql`).
-  Sau đó: `npm run db:apply-migrations -- --apply --smoke` (apply rồi chạy `supabase/tests/github_intake.sql`
-  trong transaction + ROLLBACK) → `node tools/cli/check-github-db.js`.
-  `--smoke` dùng chính kênh DDL đã chọn nên chỉ cần MỘT credential, không bắt buộc cài `psql`.
-- Chưa mở Start/deploy; consumer vẫn `enabled=false` cho tới khi 7 migration trên được apply + smoke PASS.
+- `npm run db:verify` **OK** (24/10/2026, sau apply): driver `supabase`, `workerLeases: true`,
+  `apiAuthCsrfLogout: true`; counts participants 11, accounts 6, tournaments 1, entries 8, submissions 4, matches 0.
+- **Đã apply 10/10 migration** qua kênh DDL **Management API** (`SUPABASE_ACCESS_TOKEN`, không in token):
+  `20261022150000_judge_monitor` → `20261023120000_live_stream` → `20261023160000_official_setup` →
+  `20261024120000_mvp_match_map_snapshot` → `20261024130000_github_intake` →
+  `20261024150000_broadcast_schedule` → `20261024160000_github_jobs_worker` →
+  `20261024170000_github_jobs_hardening` → `20261024180000_lock_published_maps` →
+  `20261025090000_official_schedule`.
+- **Smoke PostgreSQL: PASS** — `npm run db:apply-migrations -- --apply --smoke` chạy
+  `supabase/tests/github_intake.sql` (BEGIN/ROLLBACK) qua chính kênh DDL: hai worker claim,
+  stale token/generation, duplicate finish, crash/retry, cutoff, revoke repo.
+- **`npm run db:check-github`**: tất cả bảng HTTP 200 (`mvp_match_logs`, `mvp_match_events`,
+  `mvp_match_bot_output`, `mvp_worker_state`, `mvp_official_setups`, `mvp_repo_connections`,
+  `mvp_repo_sync_jobs`, `mvp_github_receipts`, `mvp_match_broadcasts`); RPC trả lỗi domain thay vì
+  `PGRST202` (`mvp_github_intake`/`mvp_repo_connection_revoke` → `event_not_found`;
+  `mvp_github_claim` → `bad_lease`).
+- Ba lỗi thật phát hiện khi apply lần đầu (đã sửa, không phải lỗi DB):
+  1. `20261024170000` dùng `CREATE OR REPLACE` cho `mvp_github_finish` nhưng đổi return type
+     `boolean → jsonb` ⇒ PostgreSQL `42P13`; thêm `DROP FUNCTION IF EXISTS ...finish(uuid,uuid,integer,jsonb)`
+     và `DROP ...claim(text,integer)` (overload 2 tham số cũ sẽ che bản 3 tham số mới của PostgREST).
+  2. Cùng file: biến PL/pgSQL `j` trùng alias bảng `j` trong `mvp_github_claim` ⇒ `42702` "column
+     reference j.id is ambiguous"; đổi alias thành `job`.
+  3. `supabase/tests/github_intake.sql` thiếu `name_key` (NOT NULL UNIQUE từ `shared_mvp_runtime_tables`)
+     ⇒ thêm `'pg đội a'`/`'pg đội b'`.
+- Runner `apply-migrations` được vá thêm: NOTIFY `pgrst, 'reload schema'` + poll sau mỗi file (schema cache
+  PostgREST từng làm probe REST báo FAIL oan), và đưa 3 migration mới vào kế hoạch (10 file thay vì 7).
+- Vẫn **không** mở Start/deploy; consumer Khoa giữ `enabled=false` cho tới khi chạy thật 2 worker + Python.
 
+
+## H4 — drill 2 worker thật trên Supabase (24/10/2026)
+
+Công cụ: `npm run db:h4` (`tools/cli/h4-drill.js` + `tools/cli/h4-worker.js`). Kết quả **PASS 30/30**
+trên project thật; baseline sau drill không đổi (`db:verify`: 11 participants, 6 accounts, 1 event,
+8 entries, 4 submissions, 0 matches).
+
+- **Hai worker = hai OS process** (`spawn(process.execPath, …, shell:false)`), claim song song 4 job:
+  không job nào bị claim 2 lần, mỗi lần claim một lease token riêng, cả hai worker đều nhận việc;
+  finish lần thứ hai trả `already_finished=true, applied=false`.
+- **Crash/retry**: worker `H4_MODE=crash` claim rồi thoát ngay; hết lease 10 s, claim với
+  `max_attempts=1` **không phát lại** job → `infra_fault` + receipt `infrastructure`, lease đã nhả.
+- **Stale**: finish sai token và sai `generation` đều trả `lease_lost`; `progress` sai token → `false`;
+  `release` sai token → `lease_lost`; `release` đúng → `queued` + backoff, reclaim `attempt=2,
+  generation=2`; finish `valid` tạo submission và finish lặp **không** tạo submission thứ hai.
+- **Revoke**: `mvp_repo_connection_revoke` hủy đúng 2 job chờ (`canceled`), receipt `frozen`.
+- **Cutoff**: `mvp_official_setups.config.cutoff` trong quá khứ → intake trả `past_cutoff`.
+- An toàn: drill **từ chối chạy** nếu `mvp_repo_sync_jobs` đang có job lạ (không tranh job thật);
+  UUID ngẫu nhiên cho event/team; cleanup trong `finally` (receipts → jobs → connections → setups →
+  entries → submissions → tournaments → participants) và assert `leftover=0`.
+- Phụ trợ: `npm run db:sql -- "select …"` (mặc định chỉ SELECT; `--write` mới cho câu ghi) để đối soát.
+- **Còn lại (chưa làm)**: chạy consumer Khoa thật (polling + Python) trên drill này, đo tải
+  Preview/50–200 viewer, review security cuối. Chưa bật Start/deploy.
 
 ## NOT RUN / giới hạn
 
-- **DB thật**: kết nối OK nhưng DDL chưa chạy (thiếu token/DB URL) → 7 migration vẫn chưa apply; chưa coi
-  intake/job/receipt/broadcast là VERIFIED trên Postgres thật.
+- **DB thật**: đã apply 10 migration + smoke PASS (mục trên). **Chưa** chạy consumer Python/polling thật,
+  chưa Start trận, chưa deploy; smoke mô phỏng hai worker trong cùng transaction, chưa phải 2 tiến trình
+  worker thật tranh `SKIP LOCKED` trên project (H4).
 
-- **Postgres integration: NOT RUN**. Script `supabase/tests/github_intake.sql` (BEGIN/ROLLBACK) phủ hai
-  worker, stale token/generation, duplicate finish, crash/retry, cutoff, revoke; chạy
-  `psql "$OOTV2_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/github_intake.sql` trên project
-  disposable. Chưa có credential nên DDL/RPC chỉ kiểm bằng guardrail tĩnh + mirror JS.
+- **Postgres integration: PASS (smoke)**. `supabase/tests/github_intake.sql` (BEGIN/ROLLBACK) đã chạy thật
+  qua Management API, không để lại dữ liệu: hai worker claim, stale token/generation, duplicate finish,
+  crash/retry, cutoff, revoke repo. Chưa phải hai tiến trình worker thật tranh nhau (H4).
 - **Worker claim job + tải blob `bot.py` tại SHA + validate**: thuộc H2/Khoa. Hiện job ở `queued`,
   receipt ở `resolving`; chưa có gì chuyển sang `fetching/checking/valid/invalid`.
 - **GitHub thật** (repo private, GitHub App, rate limit thực): NOT RUN — mọi test inject `fetchImpl`.
@@ -305,10 +335,23 @@ Môi trường: Windows, Node 24.18.0; không có test bị skip.
 1. **H2 worker (Khoa)**: claim job (`queued → leased`) qua `githubJobs.js`, tải blob `bot.py` tại SHA (bounded,
    verify regular file), kiểm size/UTF-8/hash + validate trên worker, tạo `mvp_submissions` valid và
    cập nhật receipt (`fetching → checking → valid|invalid|infrastructure`), giữ bản valid cũ khi lỗi.
-2. **H4**: integration/ops trên project DB test, hai worker claim/retry.
+2. **H4 phần còn lại**: chạy consumer Khoa thật (polling + Python) trên drill; đo tải 50–200 viewer,
+   rà UI Live/B2. Contract DB (2 worker, crash, stale, duplicate finish, revoke, cutoff) đã PASS `db:h4`.
 3. Đo tải 50–200 viewer, chốt chu kỳ poll; rà UI Live/B2 sau khi API ổn định.
 
 ## Lịch sử checkpoint
+
+- 24/10/2026: **H4 drill DB thật** — `npm run db:h4` PASS **30/30**: 2 worker OS process (pid khác nhau)
+  claim 4 job không trùng, crash/retry (`max_attempts=1` chặn phát lại → `infra_fault`), stale token/generation
+  → `lease_lost`, release → queued + reclaim `attempt=2`, duplicate finish không tạo submission thứ 2,
+  revoke hủy job + frozen receipt, cutoff → `past_cutoff`; cleanup `leftover=0`, baseline `db:verify` không đổi.
+  Thêm `tools/cli/db-sql.js` (`npm run db:sql`, mặc định chỉ SELECT) và test guardrail `tests/h4Drill.test.js`.
+
+- 24/10/2026: **NỐI DB THẬT** — có `SUPABASE_ACCESS_TOKEN`; apply **10/10** migration qua Management API;
+  smoke PostgreSQL **PASS**; `db:check-github` mọi bảng 200 + RPC trả domain error; `db:verify` OK
+  (participants 11, accounts 6, tournaments 1, entries 8, submissions 4, matches 0). Sửa 3 lỗi thật:
+  `42P13` return type `mvp_github_finish`, `42702` alias `j` trong `mvp_github_claim`, fixture thiếu `name_key`.
+  Runner thêm NOTIFY reload schema cache + 3 migration mới (10 file).
 
 - 24/10/2026: **Kiểm DB thật** — `db:verify` OK (11 đội, 1 giải, 4 submission); phát hiện **7 migration chưa
   apply**; thêm `db:check-github`/`db:apply-migrations` (dry-run mặc định, skip theo object, transaction từng

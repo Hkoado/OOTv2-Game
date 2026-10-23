@@ -1,5 +1,23 @@
 # Trạng thái triển khai Campus — 23/10/2026
 
+## Đã nối DB thật + smoke PASS — 24/10/2026
+
+- Cấp `SUPABASE_ACCESS_TOKEN` (PAT) trong `.env`; apply **10/10** migration qua Management API
+  `POST /v1/projects/<ref>/database/query`, đúng thứ tự, mỗi file một transaction, dừng khi lỗi.
+- **Smoke PostgreSQL PASS**: `supabase/tests/github_intake.sql` chạy thật (BEGIN/ROLLBACK) qua cùng kênh DDL —
+  hai worker claim, stale token/generation, duplicate finish, crash/retry, cutoff, revoke.
+- `npm run db:check-github`: mọi bảng 200; RPC trả lỗi domain (`event_not_found`, `bad_lease`) thay vì
+  `PGRST202`. `npm run db:verify`: OK, `workerLeases: true`, participants 11, accounts 6, tournaments 1,
+  entries 8, submissions 4, matches 0.
+- Sửa 3 lỗi thật khi apply: `42P13` do đổi return type `mvp_github_finish` (thêm `DROP FUNCTION`),
+  `42702` alias `j` trùng biến PL/pgSQL trong `mvp_github_claim`, fixture smoke thiếu `name_key`.
+- Runner vá thêm: NOTIFY `pgrst, 'reload schema'` + poll sau mỗi file (schema cache gây FAIL oan) và đưa
+  3 migration mới vào kế hoạch (10 file thay vì 7).
+- **H4 drill trên DB thật**: `npm run db:h4` — 2 worker là 2 OS process claim song song (không trùng job/token),
+  crash/retry qua reclaim cap, stale token/generation, duplicate finish, revoke, cutoff → **PASS 30/30**;
+  dữ liệu drill được dọn trong `finally`, `db:verify` sau drill không đổi.
+- Vẫn **không** mở Start/deploy; consumer Khoa `enabled=false`; H4 (2 tiến trình worker thật) chưa chạy.
+
 ## Nhớ tài khoản ở màn đăng nhập — 24/10/2026
 
 - `LoginScreen.jsx` có checkbox "Ghi nhớ tài khoản trên máy này"; bật thì lần sau tự điền
