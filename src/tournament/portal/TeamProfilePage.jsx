@@ -79,7 +79,7 @@ export default function TeamProfilePage({ account, actions, busy }) {
                 placeholder="email@example.com hoặc Discord/Telegram"
               />
             </Field>
-            <Field label="Repository GitHub" hint="Chỉ lưu metadata. Hệ thống chưa tải code từ GitHub." error={repoError}>
+            <Field label="Repository GitHub" hint="Repository mặc định của đội trên GitHub." error={repoError}>
               <input
                 name="repository"
                 type="url"
@@ -90,7 +90,7 @@ export default function TeamProfilePage({ account, actions, busy }) {
                 spellCheck={false}
               />
             </Field>
-            <Field label="Branch" hint="Branch sẽ dùng khi BTC bật đồng bộ GitHub (chưa triển khai).">
+            <Field label="Branch" hint="Nhánh mặc định (ví dụ: main).">
               <input
                 name="branch"
                 maxLength={300}
@@ -122,8 +122,8 @@ export default function TeamProfilePage({ account, actions, busy }) {
 
           <Panel title="GitHub & đồng bộ">
             <Alert tone="info">
-              Đồng bộ GitHub, runner Campus và sandbox chưa được bật trong bản local. Repository ở đây chỉ để BTC
-              đối chiếu khi nhận bài qua file <code>.py</code>.
+              Đây là repository mặc định trong hồ sơ đội. Để nộp bài và đồng bộ mã nguồn cho giải đấu cụ thể, hãy vào mục{' '}
+              <strong>Bot & bài nộp</strong> để gửi yêu cầu phê duyệt và nhận biên nhận commit từ BTC.
             </Alert>
             <ul className="tt-detail-list">
               <li><Github size={16} aria-hidden="true" /><span>{account.repository || 'Chưa khai báo repository'}</span></li>

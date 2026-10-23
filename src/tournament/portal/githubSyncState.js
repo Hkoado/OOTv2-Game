@@ -61,6 +61,31 @@ export const SYNC_STATUS_METADATA = Object.freeze({
   }),
 });
 
+export const GITHUB_INTAKE_ERROR_MESSAGES = Object.freeze({
+  repo_not_approved: 'Repository chưa được BTC phê duyệt quyền truy cập.',
+  repo_taken: 'Repository này đã được một đội khác đăng ký trong giải đấu.',
+  repository_changed: 'Repository hoặc nhánh đã thay đổi; cần gửi lại để BTC duyệt.',
+  repository_not_found: 'Không tìm thấy repository hoặc nhánh trên GitHub (kiểm tra lại URL và quyền public/app).',
+  past_cutoff: 'Đã quá thời hạn nộp bài (cutoff) của giải đấu.',
+  event_frozen: 'Giải đấu đã bắt đầu hoặc đã đóng nộp bài; không thể gửi bài mới.',
+  quota_exceeded: 'Đã hết hạn mức yêu cầu kiểm tra commit mới trong 24 giờ.',
+  missing_team: 'Thiếu thông tin đội thi đấu.',
+  github_rate_limited: 'Dịch vụ GitHub tạm thời giới hạn tần suất (rate limit). Vui lòng thử lại sau vài phút.',
+  github_timeout: 'Hết thời gian chờ khi kết nối đến GitHub.',
+  github_unavailable: 'Không thể kết nối đến GitHub. Kiểm tra kết nối mạng.',
+  github_auth_failed: 'Lỗi xác thực với GitHub.',
+  github_forbidden: 'Không có quyền truy cập repository này trên GitHub.',
+  github_bad_response: 'Phản hồi không hợp lệ từ GitHub.',
+});
+
+/**
+ * Humanises backend intake error codes to Vietnamese messages.
+ */
+export function humanizeIntakeError(code, fallback = 'Lỗi không xác định khi đồng bộ từ GitHub.') {
+  if (!code) return fallback;
+  return GITHUB_INTAKE_ERROR_MESSAGES[code] || fallback;
+}
+
 /**
  * Returns formatted status info for a GitHub sync status code.
  */
@@ -233,9 +258,10 @@ export const GITHUB_SYNC_FIXTURES = Object.freeze({
 export default {
   GITHUB_SYNC_STATUSES,
   SYNC_STATUS_METADATA,
+  GITHUB_INTAKE_ERROR_MESSAGES,
+  humanizeIntakeError,
   syncStatusInfo,
   formatCommitSha,
   formatReceipt,
   GITHUB_SYNC_FIXTURES,
 };
-
