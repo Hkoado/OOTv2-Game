@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * live-demo.js — Tạo giải demo 8 đội với bot "chậm" để khán giả xem trực tiếp.
+ * live-demo.js — Tạo giải demo 8 đội với các bot giả lập đa dạng chiến thuật
+ * (random, aggressive, center, buggy) để khán giả xem trực tiếp.
  *
  * - Không tạo project mới, dùng đúng service của server (participants/tournaments).
- * - Mỗi đội là 1 source Python sinh tại chỗ (stdlib), delay 0.26–0.33 s/nước và
+ * - Mỗi đội là 1 source Python sinh tại chỗ (stdlib), delay linh hoạt và
  *   in log ra stderr để kiểm tra luồng L2 (log chỉ đội sở hữu + admin xem được).
  * - Sau khi tạo xong, chạy worker (`npm run dev:worker`) để các ván bắt đầu.
  *
@@ -29,21 +30,24 @@ const TEAM_NAMES = [
   'Vầng Trăng',
 ];
 
-/** Source bot demo: đọc 1 JSON line, in 1 JSON line; log ra stderr để xem ở L2. */
-function botSource({ team, delay, pickLast }) {
-  return `"""Bot demo cho giải trực tiếp — sinh tự động, chỉ dùng thư viện chuẩn."""
+const STRATEGIES = ['random', 'aggressive', 'center', 'aggressive', 'center', 'random', 'aggressive', 'buggy'];
+
+/** Source bot demo: hỗ trợ nhiều chiến thuật và in log chi tiết ra stderr (L2). */
+function botSource({ team, delay, strategy = 'random' }) {
+  return `"""Bot demo cho giải trực tiếp — sinh tự động, hỗ trợ đa chiến thuật."""
 
 import json
 import sys
 import time
+import random
 
 TEAM = ${JSON.stringify(team)}
 DELAY = ${delay}
-PICK_LAST = ${pickLast ? 'True' : 'False'}
+STRATEGY = ${JSON.stringify(strategy)}
 
 
 def log(message):
-    print("[" + TEAM + "] " + message, file=sys.stderr, flush=True)
+    print("[" + TEAM + "][" + STRATEGY + "] " + message, file=sys.stderr, flush=True)
 
 
 def on_setup(request):
@@ -51,19 +55,45 @@ def on_setup(request):
     squares = request["available_squares"]
     if len(pieces) != 9 or len(squares) < 9:
         raise ValueError("Unexpected setup request")
+    
+    shuffled_squares = list(squares)
+    random.shuffle(shuffled_squares)
     placements = []
     for index, piece in enumerate(pieces):
-        placements.append({"piece_id": piece["id"], "square": squares[index]})
+        placements.append({"piece_id": piece["id"], "square": shuffled_squares[index]})
     log("xep quan xong: " + str(len(placements)) + " quan")
     time.sleep(DELAY)
     return {"placements": placements}
+
+
+def select_move(moves, request):
+    if STRATEGY == "aggressive":
+        captures = [m for m in moves if m.get("is_capture") or m.get("captures")]
+        if captures:
+            log("Phat hien nuoc an quan! Tan cong.")
+            return random.choice(captures)
+
+    elif STRATEGY == "center":
+        center_moves = [m for m in moves if any(c in str(m.get("to", "")) for c in ["d", "e", "f", "4", "5", "6"])]
+        if center_moves:
+            log("Uu tien kiem soat khu vuc trung tam.")
+            return random.choice(center_moves)
+
+    elif STRATEGY == "buggy":
+        # Giả lập xác suất nhỏ bị lỗi ngẫu nhiên để test luồng L2 log error
+        if random.random() < 0.15:
+            log("LOI GIA LAP: Bot gap su co bo nho!")
+            raise RuntimeError("Simulated bot crash for L2 logging test")
+
+    return random.choice(moves)
 
 
 def on_move(request):
     moves = request["legal_moves"]
     if not moves:
         raise ValueError("No legal moves available")
-    move = moves[-1] if PICK_LAST else moves[0]
+    
+    move = select_move(moves, request)
     log(
         "nuoc " + str(request.get("turn_number"))
         + ": " + str(move.get("piece_id")) + " -> " + str(move.get("to"))
@@ -94,7 +124,7 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as error:
-        print("Bot failed: " + str(error), file=sys.stderr)
+        print("Bot failed: " + str(error), file=sys.stderr, flush=True)
         sys.exit(1)
 `;
 }
@@ -137,10 +167,11 @@ async function main() {
       const team = TEAM_NAMES[index];
       const displayName = `${team} ${stamp}`;
       const participant = createParticipant(displayName);
+      const strategy = STRATEGIES[index % STRATEGIES.length];
       const source = botSource({
         team,
-        delay: Number((1.05 + (index % 4) * 0.06).toFixed(2)),
-        pickLast: index % 3 === 2,
+        delay: Number((0.85 + (index % 4) * 0.08).toFixed(2)),
+        strategy,
       });
       const filePath = path.join(workDir, `team-${index}.py`);
       writeFileSync(filePath, source, 'utf8');
@@ -168,7 +199,7 @@ async function main() {
     console.log(`     Thể thức : ${detail.match_counts.total} ván (vòng bảng → bán kết → chung kết)`);
     console.log('     Khán giả : http://127.0.0.1:3001/#/live');
     console.log('     Worker   : npm run dev:worker   (nếu worker chưa chạy)');
-    console.log('     Mỗi ván  : ~20 giây (bot demo ngủ 1.05–1.23 s mỗi nước).');
+    console.log('     Mỗi ván  : ~15-20 giây (bot demo chiến thuật đa dạng).');
     console.log('     Xem chậm : OOTV2_WORKER_PAUSE_MS=8000 npm run dev:worker  (nghỉ 8 s giữa hai ván)');
     console.log('');
     console.log('Dừng demo: Ctrl+C ở cửa sổ worker, dữ liệu vẫn nằm trong data/ootv2.sqlite.');
@@ -185,4 +216,3 @@ main().catch((error) => {
   console.error('[demo:live] lỗi:', error);
   process.exitCode = 1;
 });
-
