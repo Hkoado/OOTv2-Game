@@ -2,6 +2,53 @@
 
 ## Trạng thái mới nhất
 
+### 24/10/2026 — Fetch/tích hợp H1 + K3b pinned GitHub source: READY FOR REVIEW
+
+- Đã `git fetch --all --prune` exit 0, origin/dev từ a84c3c7 lên **1822e92**.
+  H1 **be22c09**, handoff a38dc4f/a25d024, B2 1822e92. Huy H1 mock-verified, H2–H4 NOT RUN;
+  không còn áp dụng kết luận Huy NOT STARTED trong checkpoint K3a bên dưới.
+- Theo yêu cầu user tích hợp: chốt merge map/B1 đang mở thành **1ac8be6**, commit riêng K3a
+  **f7bf6f5**, merge origin/dev không conflict; không reset/ghi đè/abort merge hoặc push.
+  Backup K3a và Git logs ở `data/khoa-h1/backup`, `inspection.json`, `integration.json`.
+- Thêm `server/shared/githubArtifact.js`: `fetchGithubArtifact(job,{fetchImpl,token,timeoutMs,
+  signal,expectedHash})`. Input contract H1 nội bộ: numeric repo_id, canonical repository,
+  file_path=bot.py, commit_sha full 40 hex; branch không dùng khi lấy source.
+- Pipeline fixed api.github.com: repo identity -> pinned Git commit -> root tree -> exact blob.
+  Không clone/archive/project/HEAD/download_url. Kiểm tree không truncated, một bot.py regular
+  mode 100644/100755, từ chối symlink/tree/submodule. Source 1..256 KiB, base64 canonical,
+  Git blob SHA1 đối chiếu bytes, UTF8 fatal/no NUL/no LFS; sourceHash SHA256 và optional
+  expectedHash để restore đúng source đã pin. Không execute bot, không đọc DB hoặc ghi Storage.
+- Budget toàn operation <=20s (fetch/body), streaming bounded buffers (repo 64 KiB, commit
+  256 KiB, root tree 1 MiB, blob JSON 400 KiB); hủy stream khi quá cỡ/timeout/cancel,
+  redirect:error, token chỉ header và raw upstream không vào error. Lỗi access/rate/network/
+  integrity là infrastructure; lỗi file sai định dạng là code; repo identity changed là repo.
+  Category chỉ là output nội bộ, chưa mapping thành SQL outcome hoặc result thua bot.
+- Output: `{source:Buffer,sourceHash,size,repoId,commitSha,blobSha,filePath,sourceKind}`;
+  source private không trả qua API DTO/log/replay. Helper chỉ consume job tin cậy từ coordinator,
+  không phải cơ chế xác minh quyền sở hữu/cutoff từ input người dùng.
+- Tests mới `tests/githubArtifact.test.js`: **17 pass**; cùng H1/API/B2 **30/30**;
+  full suite **196/196 pass**, 0 fail/skip; build và diff check exit 0. Baseline sau merge
+  install/test/build exit 0 (179 tests). Baseline script copy giữ log path cũ
+  `data/khoa-k3/baseline*`; final logs `data/khoa-h1/final.json`, `final-{0..3}.log`.
+- Test mocks kiểm SHA/branch không đổi, size biên/pinned hash, repo thay thế, symlink/submodule,
+  LFS/binary/UTF8, tamper blob, truncated tree, oversize stream, timeout/cancel, redaction.
+  GitHub thật/private/PAT permissions, PostgreSQL thật, browser B2 mới **NOT RUN**.
+- Review H1 phát hiện blocker SQL trước tạo valid candidate thứ hai:
+  `20261024130000_github_intake.sql` dòng 155 `SELECT id INTO previous FROM mvp_github_receipts`
+  rồi ghi previous vào `previous_valid_submission_id REFERENCES mvp_submissions(id)`.
+  Phải chọn `submission_id` của valid receipt (không receipt.id). Không sửa migration Huy tại chỗ;
+  Huy cần migration corrective reviewed và integration trên Postgres. API H1 readJson còn dùng
+  arrayBuffer rồi mới kiểm size, chưa bounded trước allocation như helper worker K3b.
+- H1 chưa có RPC claim/heartbeat/progress/fenced finish/retry cho repo_sync_jobs;
+  không tự đoán RPC hoặc nối consumer ghi trực tiếp bảng. Cần contract token/generation/lease,
+  atomic submission+receipt acceptance/idempotency, retry/backoff/freeze-candidate semantics.
+  Result/events/log/terminal game attempts vẫn cần fencing riêng, không đánh đồng intake job.
+- Để tiếp tục consumer E2E: Huy review/đưa RPC trên, sửa FK previous, operator cấp disposable
+  Supabase project và cho phép migrations qua kênh credential riêng (không paste secret chat).
+  Linux sandbox host/runtime pin là gate độc lập trước validation source không tin cậy.
+- Không env/dependency/migration mới, không remote DB write/apply/deploy/push, Start vẫn tắt,
+  profile/replay MVP không đổi. Milestone này không đóng K3/K4/cache-pin-GC/scheduler persistence.
+
 ### 24/10/2026 — K3a bounded Supabase artifact retrieval: READY FOR REVIEW
 
 - Nền `dev @ abb7cae`; có sẵn **18 file staged** của người dùng (map snapshot/worker MVP,
