@@ -13,6 +13,7 @@ import { HttpError, notFound } from '../lib/httpError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { createRateLimiter } from '../lib/rateLimit.js';
 import { getLiveMatchSnapshot, getLiveOverview, listLiveEvents } from '../shared/live.js';
+import { rows, uuid } from '../shared/client.js';
 import { requireSession } from '../shared/accounts.js';
 import {
   assertEventMember,
@@ -59,7 +60,14 @@ export function liveRouter() {
   router.get(
     '/overview',
     asyncHandler(async (req, res) => {
-      const overview = await getLiveOverview();
+      // H3: đội chỉ thấy giải mình tham gia (không lộ tên/đội của giải khác).
+      const allowedEventIds = req.account.role === 'admin'
+        ? null
+        : (req.account.participant_id
+          ? (await rows('tournament_entries', `participant_id=eq.${uuid(req.account.participant_id)}&select=tournament_id`))
+            .map((entry) => entry.tournament_id)
+          : []);
+      const overview = await getLiveOverview({ eventIds: allowedEventIds });
       if (req.account.role === 'admin' || !overview.event) {
         res.json(overview);
         return;

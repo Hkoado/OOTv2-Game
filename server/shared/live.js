@@ -223,9 +223,12 @@ async function workerRow(runningMatches) {
   return running ? { worker_id: running.worker_id, heartbeat_at: running.lease_until } : null;
 }
 
-/** Tổng quan công khai: giải đang chạy (hoặc giải gần nhất) + các ván đang đấu. */
-export async function getLiveOverview({ now = Date.now() } = {}) {
-  const events = await rows('tournaments', 'select=id,name,status,started_at,finished_at,created_at');
+/** Tổng quan công khai: giải đang chạy (hoặc giải gần nhất) + các ván đang đấu.
+ * `eventIds` (tuỳ chọn) giới hạn tập giải được xem — dùng cho đội thuộc giải (H3 privacy).
+ */
+export async function getLiveOverview({ now = Date.now(), eventIds = null } = {}) {
+  const all = await rows('tournaments', 'select=id,name,status,started_at,finished_at,created_at');
+  const events = Array.isArray(eventIds) ? all.filter((event) => eventIds.includes(event.id)) : all;
   const tournament = pickTournament(events);
 
   if (!tournament) {
