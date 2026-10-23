@@ -2,6 +2,14 @@
 
 ## Tài liệu mở rộng và thứ tự ưu tiên (22/10/2026)
 
+### Quyết định hiện hành ngày 23/10/2026
+
+- Supabase là DB duy nhất; các mục SQLite bên dưới là lịch sử, không phục hồi driver cũ.
+- Đợt chấm trước/phát trận theo `docs/14-KIEN-TRUC-CHAM-TRUOC-VA-PHAT-TRAN.md` giữ profile MVP 256 KiB / 200 plies; không tự đổi sang Campus 400 plies/persistent protocol.
+- GitHub repo + SHA/job/receipt là luồng online mục tiêu; một file `bot.py`, không clone/execute trên API. Upload hiện tại chỉ là đường tương thích trusted-dev, không phải M1 đã hoàn tất.
+- Làm song song phải đọc `docs/15-DIEU-PHOI-HAI-AGENT.md` và prompt được giao trong `docs/agents/`; dùng worktree/nhánh riêng và tuân thủ ownership. Không sửa file của agent kia, không tự merge/deploy/apply migration remote.
+- Chưa có sandbox cấp OS: chỉ chạy bot tin cậy. Serverless entrypoint không đồng nghĩa đủ điều kiện mở nhận bài công khai.
+
 Đọc [mục lục docs mới](docs/README.md) và [trạng thái code](docs/07-TRANG-THAI-TRIEN-KHAI.md)
 trước danh sách MVP bên dưới. Với tính năng Campus, ưu tiên bộ `00-` đến `06-` mới;
 docs dùng `_` mô tả profile MVP lịch sử. Các quyết định mới về GitHub, 256 KiB/400 plies,

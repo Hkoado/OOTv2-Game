@@ -3,6 +3,10 @@
 Tài liệu này **chốt hướng triển khai**, không phải tuyên bố M1–M6 đã xong.
 Mốc M0 (baseline + quyết định) đã thực hiện; các mốc sau triển khai dần, mỗi lần một milestone.
 
+**Đối chiếu sau các commit Supabase-only/M1 ngày 23/10:** xem
+[bàn giao hai agent](15-DIEU-PHOI-HAI-AGENT.md) cho phần đã có, phần thiếu, ownership và prompt.
+M1 chưa hoàn tất GitHub SHA/job/receipt; đợt song song đầu chỉ đóng M1, chưa làm tràn M2–M6.
+
 ## 1. Vấn đề và quyết định
 
 Yêu cầu mới nhất của BTC:
@@ -27,8 +31,8 @@ Sinh viên ──► Web (Vercel) ──► Supabase (DB + Storage private) ◄�
 
 ## 2. Không dùng cách hiểu “worker chạy trên web, thực thi ở client”
 
-- Worker chấm là **tiến trình Node.js + Python trên máy BTC**, hiện ở `server/shared/worker.js`
-  (chế độ Supabase) và `server/worker.js` (chế độ SQLite legacy).
+- Worker chấm là **tiến trình Node.js + Python trên máy BTC**, ở `server/shared/worker.js`;
+  `server/worker.js` chỉ là entrypoint. Supabase là DB duy nhất, SQLite legacy đã bị bỏ.
 - Trình duyệt **không chấm bot, không quyết định kết quả**; chỉ dựng bàn cờ và diễn hoạt nước đi.
 - Trang quản lý worker trên web chỉ hiển thị trạng thái/nhịp tim; không nhận lệnh chạy code tùy ý
   qua HTTP và không chạy Python trong Function.
@@ -218,8 +222,9 @@ không mang theo logic deadline sai và không tạo hai nguồn sự thật SQL
 
 - **Chưa có** bảng công bố, lịch phát, API cắt theo mốc, hay viewer “từng nước theo giờ” — thuộc M3–M4.
 - **Chưa có** cách ly cấp OS cho bot sinh viên; chưa được mở nhận bài công khai.
-- Validation/nộp bài hiện vẫn chạy trên API host → phải chuyển sang worker ở M1–M2.
-- API live công khai hiện tại (`/api/live`) đọc SQLite, không kiểm membership → phải khóa lại trước khi công bố.
+- API upload chỉ kiểm tĩnh; Python validation đã chuyển sang worker, nhưng chưa có job claim/lease/fencing
+  cho validation upload. GitHub intake/SHA/job/receipt còn thiếu ở M1, thực thi job an toàn thuộc M2.
+- API live công khai hiện tại (`/api/live`) đọc Supabase, không kiểm membership/lịch phát → phải khóa lại trước khi công bố.
 - Mọi worker dùng chung một service role key của Supabase → chưa có danh tính riêng cho từng máy chấm.
 - Test tải mới là ước lượng; phải đo thật trước khi cam kết 100–200 viewer.
 - Luật 200 nước trong MVP khác 400 plies của Campus; **không đổi trong đợt này**.

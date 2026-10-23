@@ -1,5 +1,14 @@
 # Trạng thái triển khai Campus — 23/10/2026
 
+## Bàn giao song song M1 — 23/10/2026
+
+Xem [đối chiếu code, chia nhánh/worktree và prompt Codex/Cline](15-DIEU-PHOI-HAI-AGENT.md).
+M1 vẫn **một phần**: upload intake không chạy Python và có Vercel entrypoint, nhưng chưa có
+luồng GitHub SHA/job/receipt; validation upload chưa có lease; Preview HTTPS và integration
+Supabase chưa nghiệm thu. Live hiện anonymous/immediate, chưa giữ kín và phát lịch M3–M4.
+Các số test/build phía dưới là bằng chứng của từng đợt cũ, không cộng dồn hay coi là chạy lại.
+Các mục SQLite phía dưới là lịch sử trước Supabase-only, không phải hướng triển khai hiện tại.
+
 ## M0 — Baseline và chốt hướng chấm trước / phát trận (23/10/2026)
 
 Đợt này **chỉ xác lập baseline và chốt hướng**, chưa thêm tính năng chấm trước hay phát trận.
@@ -41,7 +50,8 @@ Quyết định: chỉ còn **một** đường dữ liệu (Supabase Postgres +
 - Smoke thật với `.env` hiện tại: `GET /api/health` → 200 (`driver=supabase`),
   `GET /api/live/overview` → 200. Build Vite pass (1636 modules, 4,3 s).
 - **Nợ kỹ thuật phải trả**: chưa có bộ test end-to-end trên Supabase thật (cần project test riêng);
-  validation bot vẫn chạy Python ngay trên API host — phần "bỏ thực thi bot khỏi API" của M1 chưa xong.
+  ở mốc Supabase-only validation còn chạy trên API; phần M1 ngay bên dưới đã chuyển sang worker,
+  nhưng chưa có lease cho validation và chưa hoàn tất GitHub intake/job/receipt.
 
 ## M1 (một phần) — Tách API khỏi SQLite/filesystem/Python (23/10/2026)
 
