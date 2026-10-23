@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  BookOpen, ChevronRight, LayoutDashboard, LogOut, Menu, Moon, Sun, Trophy, UploadCloud, Users, X, Activity,
+  BookOpen, ChevronRight, LayoutDashboard, LogOut, Menu, Moon, Sun, Trophy, UploadCloud, Users, X, Activity, Radio,
 } from 'lucide-react';
 import { navTitle, tournamentNavigation, isEventRunning, initials } from './tournamentView.js';
 import { Badge } from './TournamentUi.jsx';
@@ -146,6 +146,15 @@ export default function TournamentWorkspace({
             <strong>{navTitle(account.role, route.page)}</strong>
           </div>
           <div className="tt-topbar__right">
+            <a
+              href="#/live"
+              className="tt-btn tt-btn--ghost tt-btn--sm"
+              title="Xem trực tiếp trận đấu"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+            >
+              <Radio size={16} aria-hidden="true" />
+              <span>Trực tiếp</span>
+            </a>
             {activeEvent ? (
               <button
                 type="button"
