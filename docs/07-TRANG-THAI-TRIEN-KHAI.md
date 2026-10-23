@@ -33,7 +33,7 @@ Quyết định: chỉ còn **một** đường dữ liệu (Supabase Postgres +
 - Hàm thuần tách khỏi SQLite: `server/lib/names.js`, `server/lib/tournamentFormat.js`;
   `requireLocalAdmin` chuyển vào `server/shared/accounts.js`.
 - Worker: `server/worker.js` chỉ còn entry → `shared/worker.js` (claim/lease 60 s + heartbeat 10 s + token fencing).
-- Test offline: **74/74 pass** (`npm test`, ~3,2 s). Chín bộ test cũ chạy trên SQLite/`testEnv`
+- Test offline: **77/77 pass** (`npm test`). Chín bộ test cũ chạy trên SQLite/`testEnv`
   (`api`, `tournamentFlow`, `workerE2E`, `liveApi`, `liveEvents`, `localPortal`, `judgeMonitor`,
   `publicHardening`, `staticServing`) đã bị xoá vì đường API mà chúng kiểm tra không còn tồn tại.
   Bù lại có `tests/liveStream.test.js` (4 test) kiểm tra snapshot whitelist, seq/upsert/terminal,
@@ -42,6 +42,28 @@ Quyết định: chỉ còn **một** đường dữ liệu (Supabase Postgres +
   `GET /api/live/overview` → 200. Build Vite pass (1636 modules, 4,3 s).
 - **Nợ kỹ thuật phải trả**: chưa có bộ test end-to-end trên Supabase thật (cần project test riêng);
   validation bot vẫn chạy Python ngay trên API host — phần "bỏ thực thi bot khỏi API" của M1 chưa xong.
+
+## M1 (một phần) — Tách API khỏi SQLite/filesystem/Python (23/10/2026)
+
+Đã xong trong đợt này:
+
+- **API không còn chạy code bot**: upload chỉ kiểm tra tĩnh (`inspectSourceBuffer`: kích thước,
+  NUL byte, UTF-8) rồi lưu `status='uploaded'` + receipt (`id`, `sha256`, `status`) và upload
+  artifact lên Storage. Không spawn Python, không smoke test trên API host.
+- **Worker chấm thử bài mới**: `validatePendingSubmissions()` tải artifact (kiểm hash/kích thước),
+  chạy `validateBotFile` rồi ghi `valid`/`invalid` + `validation_error`. Lỗi hạ tầng giữ nguyên
+  `uploaded` để poll sau thử lại (không oan cho đội).
+- **Entrypoint Vercel**: `api/[...path].js` export Express app; function **không** chạy worker/Python/git;
+  `app.js` bỏ phục vụ `dist/` khi `process.env.VERCEL` (CDN phục vụ web).
+- **`vercel.json`**: thêm `functions` (`maxDuration` 30, `includeFiles` cho bot mẫu),
+  `headers` no-store cho `/api/*`; rewrite SPA giữ nguyên — Vercel ưu tiên file trong `api/`
+  nên `/api/*` không bị nuốt. **Cần xác nhận trên deployment thật** (`GET /api/health` phải trả JSON).
+
+Còn lại của M1 (chưa làm):
+
+- Kiểm thử cookie `Secure`/CSRF/origin trên deployment HTTPS thật (code đã có, chưa nghiệm thu từ xa).
+- Rate limit theo IP thật sau proxy trên Vercel (`trust proxy` của Vercel khác loopback).
+- Đo tải 50/100/200 viewer (M5) và bộ test end-to-end trên project Supabase riêng.
 
 ## Cập nhật runtime shared MVP
 

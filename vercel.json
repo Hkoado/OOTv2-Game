@@ -1,7 +1,20 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "functions": {
+    "api/[...path].js": {
+      "maxDuration": 30,
+      "includeFiles": "examples/**"
+    }
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",
@@ -9,3 +22,4 @@
     }
   ]
 }
+

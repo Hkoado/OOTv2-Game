@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { rows, insert, uuid } from './client.js';
-import { temporaryBot, hashBuffer, uploadArtifact } from './artifacts.js';
+import { rows, insert, update, uuid } from './client.js';
+import { hashBuffer, uploadArtifact } from './artifacts.js';
+import { inspectSourceBuffer } from '../services/botValidation.js';
 import { normalizeParticipantName } from '../lib/names.js';
-import { validateBotFile } from '../services/botValidation.js';
 import { HttpError } from '../lib/httpError.js';
 import config from '../config.js';
 
@@ -25,10 +25,15 @@ export async function createSubmission(id,upload) {
   uuid(id);
   if (!(await rows('participants',`id=eq.${id}`)).length) throw new HttpError(404,'participant_not_found','Không tìm thấy đội.');
   if (!Buffer.isBuffer(upload?.buffer)||upload.buffer.length>config.limits.maxSourceBytes) throw new HttpError(400,'bad_file',`Thiếu file hoặc quá ${config.limits.maxSourceBytes/1024} KiB.`);
-  const local=temporaryBot(upload.buffer),submissionId=randomUUID();let validation;
-  try {validation=await validateBotFile(local.file);} finally {local.cleanup();}
-  // Source is private and available to all trusted workers, never a local path.
-  const storage_path=validation.ok?await uploadArtifact(submissionId,upload.buffer):`${submissionId}.py`;
-  const [row]=await insert('submissions',{id:submissionId,participant_id:id,storage_path,sha256:hashBuffer(upload.buffer),status:validation.ok?'valid':'invalid',validation_error:validation.ok?null:`${validation.error}: ${validation.message}`.slice(0,500),created_at:new Date().toISOString()});
+  // API chỉ kiểm tra tĩnh (kích thước/UTF-8/NUL): KHÔNG chạy Python và KHÔNG chạy code bot.
+  const checked=inspectSourceBuffer(upload.buffer),submissionId=randomUUID();
+  const storage_path=checked.ok?await uploadArtifact(submissionId,upload.buffer):`${submissionId}.py`;
+  const [row]=await insert('submissions',{
+    id:submissionId,participant_id:id,storage_path,sha256:hashBuffer(upload.buffer),
+    // `uploaded` = việc chờ worker chấm thử; worker chuyển thành valid/invalid.
+    status:checked.ok?'uploaded':'invalid',
+    validation_error:checked.ok?null:`${checked.error}: ${checked.message}`.slice(0,500),
+    created_at:new Date().toISOString(),
+  });
   return safe(row);
 }

@@ -188,7 +188,7 @@ khi nạp module → React không mount → `#root` rỗng, trang trắng dù AP
 | Lệnh | Kết quả |
 | --- | --- |
 | `npm run build` | Pass (Vite 6, 1636 modules, ~4,3 s) |
-| `npm test` | **74/74 pass** (~3,2 s) sau khi bỏ SQLite; 9 bộ test cũ chạy trên SQLite đã xoá |
+| `npm test` | **77/77 pass** sau khi bỏ SQLite; 9 bộ test cũ chạy trên SQLite đã xoá |
 | `node --test tests/liveStream.test.js` | Snapshot whitelist, seq/upsert/terminal, log L2, overview (PostgREST giả lập) |
 | `node --test tests/liveView.test.js` | Hash `#/live`, gộp event, nhãn trạng thái, rate limiter |
 | `GET /api/health` (smoke thật) | 200, `driver=supabase`, `workerLeases=true` |

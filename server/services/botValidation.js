@@ -56,25 +56,32 @@ export function checkSourceFile(filePath) {
   if (!stat.isFile()) {
     return { ok: false, error: 'not_a_file', message: 'Không phải file thường' };
   }
-  if (stat.size === 0) {
+  return inspectSourceBuffer(readFileSync(filePath), stat.size);
+}
+
+/**
+ * Kiểm tra tĩnh một buffer bot — **không chạy code**, không spawn Python.
+ * API dùng hàm này để nhận bài; phần chạy thử (syntax + protocol smoke) do worker
+ * thực hiện sau khi tải artifact từ Storage.
+ */
+export function inspectSourceBuffer(buffer, size = buffer?.length) {
+  if (!Buffer.isBuffer(buffer) || !buffer.length) {
     return { ok: false, error: 'empty_file', message: 'File rỗng' };
   }
-  if (stat.size > config.limits.maxSourceBytes) {
+  if (Number(size) > config.limits.maxSourceBytes) {
     return {
       ok: false,
       error: 'file_too_large',
       message: `File vượt quá ${config.limits.maxSourceBytes} bytes`,
     };
   }
-
-  const raw = readFileSync(filePath);
-  if (raw.includes(0)) {
+  if (buffer.includes(0)) {
     return { ok: false, error: 'binary_file', message: 'File chứa NUL byte, không phải text .py' };
   }
 
   let text;
   try {
-    text = raw.toString('utf8');
+    text = buffer.toString('utf8');
   } catch {
     return { ok: false, error: 'bad_encoding', message: 'File không đọc được dạng UTF-8' };
   }

@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { rpc, rows, health } from './client.js';
+import { rpc, rows, update, health } from './client.js';
 import { materialize } from './artifacts.js';
 import { runMatch } from '../judge/matchRunner.js';
 import { advanceTournament } from './tournaments.js';
 import { recordSharedMatchLog } from './judgeMonitor.js';
+import { validateBotFile } from '../services/botValidation.js';
 import {
   startLiveMatch,
   recordLiveMove,
@@ -30,6 +31,35 @@ function liveQueue() {
     },
     flush: () => tail,
   };
+}
+
+/**
+ * Chấm thử các bài vừa upload (`status = 'uploaded'`) trên worker, KHÔNG trên API.
+ * - Tải artifact từ Storage, kiểm hash/kích thước, chạy syntax + protocol smoke.
+ * - Kết quả ghi `valid`/`invalid` để BTC chốt được snapshot.
+ * - Lỗi hạ tầng (mạng/Storage) giữ nguyên `uploaded` để lần poll sau thử lại;
+ *   không bao giờ đánh dấu bài là sai vì lỗi của máy chấm.
+ */
+export async function validatePendingSubmissions({ limit = 4 } = {}) {
+  const pending = await rows('submissions', `status=eq.uploaded&order=created_at.asc&limit=${limit}`);
+  let done = 0;
+  for (const submission of pending) {
+    let local = null;
+    try {
+      local = await materialize(submission);
+      const result = await validateBotFile(local.file);
+      await update('submissions', `id=eq.${submission.id}`, {
+        status: result.ok ? 'valid' : 'invalid',
+        validation_error: result.ok ? null : `${result.error}: ${result.message}`.slice(0, 500),
+      });
+      done += 1;
+    } catch {
+      // Giữ `uploaded` cho lần chạy sau.
+    } finally {
+      if (local) local.cleanup();
+    }
+  }
+  return done;
 }
 
 export async function processSharedMatch({workerId,run=runMatch,verbose=true}) {
@@ -103,6 +133,8 @@ export async function runSharedWorker({once=false,drain=false}={}) {
     while(!stop) {
       try {
         await heartbeatLiveWorker(workerId).catch(()=>{});
+        // Nhận bài mới: chấm thử trên worker để API không bao giờ chạy code bot.
+        await validatePendingSubmissions().catch(()=>{});
         const result=await processSharedMatch({workerId});
         if(once||(drain&&!result.processed))break;
         if(!result.processed||result.reason==='infrastructure')await sleep(3000);

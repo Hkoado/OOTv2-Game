@@ -21,7 +21,6 @@ function readSampleBot() {
   const samplePath = path.join(ROOT_DIR, 'examples', 'sample_bot.py');
   return fs.readFileSync(samplePath, 'utf8');
 }
-
 export function createApp() {
   const app = express();
 
@@ -46,7 +45,12 @@ export function createApp() {
   app.use('/api/live', liveRouter());
 
   app.get('/api/sample-bot', (req, res) => {
-    res.type('text/plain').send(readSampleBot());
+    try {
+      res.type('text/plain').send(readSampleBot());
+    } catch {
+      // Serverless bundle không kèm examples/: không làm sập API.
+      res.status(503).json({ error: 'sample_unavailable', message: 'Không đọc được bot mẫu trên môi trường này.' });
+    }
   });
 
   app.use('/api/local', sharedRouter());
@@ -58,8 +62,10 @@ export function createApp() {
   // --- Web tĩnh cùng origin với API (chế độ triển khai qua Cloudflare Tunnel) ---
   // `dist/` do Vite build; chỉ phục vụ đúng thư mục này, không đụng `data/`, `src/`,
   // và không bao giờ "nuốt" request `/api/*`.
+  // Trên Vercel, `dist/` do CDN phục vụ nên function không đọc đĩa.
+  const isServerless = Boolean(process.env.VERCEL);
   const indexHtml = path.join(config.distDir, 'index.html');
-  if (config.serveDist && fs.existsSync(indexHtml)) {
+  if (!isServerless && config.serveDist && fs.existsSync(indexHtml)) {
     app.use(
       express.static(config.distDir, {
         index: false,
