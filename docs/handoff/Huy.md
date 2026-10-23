@@ -227,12 +227,43 @@ Worker BTC (Khoa/H2) dùng `server/shared/githubJobs.js`; mọi kiểm quyền n
 | `node --test tests/uploadTrustedDev.test.js` | **1/1 pass** — admin opt-in 201, đội vẫn 403, sai đuôi 400, không lộ `storage_path` |
 
 
-| `node --test tests/*.test.js` | **247/247 pass**, exit 0 |
+| `node --test tests/*.test.js` | **282/282 pass**, exit 0 |
 | `npm run build` | **pass** (4.79 s, exit 0) |
 
 Môi trường: Windows, Node 24.18.0; không có test bị skip.
 
+## DB thật — trạng thái & cách áp migration (24/10/2026)
+
+Đã kiểm project thật `https://wsyfcgurnrowcuefwynx.supabase.co` bằng service role (không in key):
+
+- `npm run db:verify` OK: participants 11, accounts 5, tournaments 1, entries 8, submissions 4, matches 0.
+- **Đã apply**: `campus_foundation` (`maps`/`round_maps`/`games`), `shared_mvp_runtime_tables`
+  (`mvp_tournaments`, `mvp_submissions`).
+- **CHƯA apply (7 file, đúng thứ tự)**: `20261022150000_judge_monitor` → `20261023120000_live_stream`
+  → `20261023160000_official_setup` → `20261024130000_github_intake` → `20261024150000_broadcast_schedule`
+  → `20261024160000_github_jobs_worker` → `20261024170000_github_jobs_hardening`.
+  Bằng chứng: REST `PGRST205` cho `mvp_match_logs`/`mvp_match_events`/`mvp_official_setups`/
+  `mvp_repo_sync_jobs`/`mvp_match_broadcasts`; `PGRST202` cho `mvp_github_intake`/`mvp_github_claim`/
+  `mvp_repo_connection_revoke`.
+- **Chặn hiện tại**: máy chỉ có `SUPABASE_URL` + service role (PostgREST không chạy DDL), **không có**
+  `SUPABASE_ACCESS_TOKEN`/`SUPABASE_DB_URL`, không có `psql`/Supabase CLI ⇒ chưa thể apply từ máy này.
+- Công cụ đã thêm (dry-run mặc định): `npm run db:check-github` (probe bảng/RPC),
+  `npm run db:apply-migrations` (xem kế hoạch), `npm run db:apply-migrations -- --apply` (apply).
+  Runner kiểm baseline `mvp_tournaments`/`mvp_submissions`/`maps`, skip file đã apply, mỗi file một
+  transaction, dừng ngay khi lỗi, kiểm lại object đại diện sau mỗi file.
+- Cách cấp quyền (chọn 1) trong `.env`:
+  `SUPABASE_ACCESS_TOKEN=sbp_...` (Personal Access Token) **hoặc**
+  `SUPABASE_DB_URL=postgresql://postgres.<ref>:<password>@<host>:5432/postgres` (cần `psql`).
+  Sau đó: `npm run db:apply-migrations -- --apply --smoke` (apply rồi chạy `supabase/tests/github_intake.sql`
+  trong transaction + ROLLBACK) → `node tools/cli/check-github-db.js`.
+  `--smoke` dùng chính kênh DDL đã chọn nên chỉ cần MỘT credential, không bắt buộc cài `psql`.
+- Chưa mở Start/deploy; consumer vẫn `enabled=false` cho tới khi 7 migration trên được apply + smoke PASS.
+
+
 ## NOT RUN / giới hạn
+
+- **DB thật**: kết nối OK nhưng DDL chưa chạy (thiếu token/DB URL) → 7 migration vẫn chưa apply; chưa coi
+  intake/job/receipt/broadcast là VERIFIED trên Postgres thật.
 
 - **Postgres integration: NOT RUN**. Script `supabase/tests/github_intake.sql` (BEGIN/ROLLBACK) phủ hai
   worker, stale token/generation, duplicate finish, crash/retry, cutoff, revoke; chạy
@@ -275,6 +306,10 @@ Môi trường: Windows, Node 24.18.0; không có test bị skip.
 3. Đo tải 50–200 viewer, chốt chu kỳ poll; rà UI Live/B2 sau khi API ổn định.
 
 ## Lịch sử checkpoint
+
+- 24/10/2026: **Kiểm DB thật** — `db:verify` OK (11 đội, 1 giải, 4 submission); phát hiện **7 migration chưa
+  apply**; thêm `db:check-github`/`db:apply-migrations` (dry-run mặc định, skip theo object, transaction từng
+  file); bị chặn apply vì môi trường không có `SUPABASE_ACCESS_TOKEN`/`SUPABASE_DB_URL` hoặc `psql`.
 
 - 24/10/2026: **Tích hợp consumer Khoa** — `processGithubJob` dùng envelope finish
   (`recorded = applied || alreadyFinished`, `leaseLost` → `lease_lost`); bỏ comment cũ về release thiếu
