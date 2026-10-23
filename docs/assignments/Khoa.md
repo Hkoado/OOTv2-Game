@@ -42,6 +42,17 @@ Runtime không thay đổi luật game phòng; regression engine/replay cũ, tes
 Không bỏ trigger `official_scheduler_not_ready` cho đến khi snapshot/runner/privacy của Huy đạt gate;
 thay bằng migration reviewed chứ không sửa migration đã apply. Không tự bật giải thật/deploy/apply remote.
 
+## Bàn giao kết quả bắt buộc trong thư mục chung
+
+- Đọc [quy ước bàn giao](../handoff/README.md); sau mỗi PR/milestone và trước khi dừng phiên,
+  cập nhật **`docs/handoff/Khoa.md`**, commit cùng code, không chỉ báo trong chat.
+- Ghi branch/SHA/PR, scheduler/worker exports và contract, snapshot/map/runtime versions, migration
+  applied/not applied, test counts/exit, mock/DB/Linux phân biệt; không gọi subprocess là sandbox đã đạt.
+- Nêu gate Start, lease/fencing/recovery và offline còn thiếu, dependency Huy/Bảo, cách tái hiện và bước tiếp;
+  chỉ sửa báo cáo của mình. Lỗi/NOT RUN không được chuyển thành PASS để đóng milestone.
+- Xem [checklist sau tích hợp](../handoff/SAU-TICH-HOP.md): pure tests hoặc K1 không thay K2–K4,
+  E2E/privacy/load/restore và diễn tập giải. Chuyển phần chưa làm cho agent sau bằng chứng cụ thể.
+
 ## Prompt tiếp tục
 
 > Tôi là Khoa. Đọc AGENTS.md, docs/16-THIET-LAP-CHINH-THUC-VA-CHIA-VIEC.md và docs/assignments/Khoa.md.
@@ -50,3 +61,5 @@ thay bằng migration reviewed chứ không sửa migration đã apply. Không t
 > Đọc campusEngine/code export thật, giữ profile MVP/replay cũ, không mở Start hoặc sửa router/UI.
 > Chốt DTO với Huy/Bảo, tests counts 35/40/48/50 và tie nhiều đội; không DB thật mặc định.
 > Chạy full test/build, báo kết quả/giới hạn, không tự deploy/apply SQL hoặc chạy bot lạ. Dừng sau K1.
+> Trước khi dừng, đọc docs/handoff/README.md và cập nhật docs/handoff/Khoa.md theo mẫu chung, commit cùng code;
+> ghi SHA/PR, scheduler/worker contract, migration, tests/exit, NOT RUN Linux/offline, blocker và bước tiếp.

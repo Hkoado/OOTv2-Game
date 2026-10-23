@@ -3,6 +3,8 @@
 Cập nhật 23/10/2026. Dành để bổ sung vào repository [Hkoado/OOTv2-Game](https://github.com/Hkoado/OOTv2-Game), phát triển tiếp nhánh `tournament/initial`. Đây là thiết kế/handoff, không phải tuyên bố các tính năng đã được triển khai.
 
 **Code hiện tại:** xem [trạng thái triển khai và migration](07-TRANG-THAI-TRIEN-KHAI.md).
+**Kết quả ba thành viên và việc còn lại:** [thư mục bàn giao chung](handoff/README.md),
+[checklist hoàn thiện sau tích hợp](handoff/SAU-TICH-HOP.md). Báo cáo khởi tạo chưa có nghĩa công việc đã xong.
 **Yêu cầu tiếp theo 23/10:** [thiết lập giải chính thức và kế hoạch 3 thành viên](16-THIET-LAP-CHINH-THUC-VA-CHIA-VIEC.md),
 prompt riêng cho [Huy](assignments/Huy.md), [Bảo](assignments/Bao.md), [Khoa](assignments/Khoa.md).
 Setup mới không còn giới hạn 8 đội; chưa phải runtime giải chính thức đã nghiệm thu.

@@ -38,6 +38,16 @@ Mọi action thật có trạng thái thành công/thất bại; không tự m�
 Chạy full suite/build, verify browser thực và screenshot local gitignored; báo phần chưa chạy.
 Không copy UI Backend nguyên vì routes/driver cũ khác dev; tận dụng bố cục sau đối chiếu contract.
 
+## Bàn giao kết quả bắt buộc trong thư mục chung
+
+- Đọc [quy ước bàn giao](../handoff/README.md); sau mỗi PR/milestone và trước khi dừng phiên,
+  cập nhật **`docs/handoff/Bao.md`**, commit cùng code, không chỉ báo trong chat.
+- Ghi branch/SHA/PR, màn hình/API thật vs fixture, DTO phiên bản, browser/theme/viewport/kịch bản,
+  test/exit và số đo tải có log sạch. Chưa chạy ghi NOT RUN; không commit cookie/ảnh chứa dữ liệu riêng.
+- Nêu dependency Huy/Khoa, blocker/dirty draft/ACL chưa nối, cách demo và bước tiếp; chỉ sửa báo cáo của mình.
+- Xem [checklist sau tích hợp](../handoff/SAU-TICH-HOP.md): build/UI pass không thay E2E DB,
+  sandbox, recovery/offline và nghiệm thu vận hành. Ghi phần còn thiếu để agent sau tiếp tục.
+
 ## Prompt tiếp tục
 
 > Tôi là Bảo. Đọc AGENTS.md, docs/16-THIET-LAP-CHINH-THUC-VA-CHIA-VIEC.md và docs/assignments/Bao.md.
@@ -46,3 +56,5 @@ Không copy UI Backend nguyên vì routes/driver cũ khác dev; tận dụng b�
 > không viết API giả hoặc tự bật chấm. Dùng React/style kit đang có; không sửa router/schema/engine.
 > Phối hợp Huy/Khoa khi DTO chưa chốt thay vì đoán. Chạy test/build và browser QA nếu có thể, báo mock vs
 > integration/NOT RUN, không tự deploy hoặc dùng credential thật. Dừng sau B1.
+> Trước khi dừng, đọc docs/handoff/README.md và cập nhật docs/handoff/Bao.md theo mẫu chung, commit cùng code;
+> ghi API thật/fixture, SHA/PR, test/browser/load đã chạy, NOT RUN, blocker và bước tiếp; không chỉ báo qua chat.

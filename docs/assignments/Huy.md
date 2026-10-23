@@ -35,6 +35,16 @@ Publication không trả tương lai/kết quả kín dù client sửa afterSeq;
 Không PAT sinh viên trong form/URL/log; service role backend-only. Sandbox chưa có thì trusted-only.
 Chạy full test/build, `git diff --check`, bàn giao DTO + migration ordering/rollback/recovery.
 
+## Bàn giao kết quả bắt buộc trong thư mục chung
+
+- Đọc [quy ước bàn giao](../handoff/README.md); sau mỗi PR/milestone và trước khi dừng phiên,
+  cập nhật **`docs/handoff/Huy.md`**, commit cùng code, không chỉ báo trong chat.
+- Ghi branch/SHA/PR, file/route/RPC/DTO thực tế, migration applied/not applied, lệnh test và exit code,
+  mock vs integration, NOT RUN, blocker, gate và bước tiếp có thể tái hiện. Không lưu token/log nhạy cảm.
+- Nêu rõ API nào đã nối với Bảo/Khoa, phần nào còn đề xuất; không sửa báo cáo hai người khác.
+- Xem [checklist sau tích hợp](../handoff/SAU-TICH-HOP.md): hoàn thành gói Huy chưa đồng nghĩa
+  hoàn thành E2E, sandbox, offline/restore hoặc sẵn sàng deploy; chuyển phần chưa xong cho agent sau.
+
 ## Prompt tiếp tục
 
 > Tôi là Huy. Đọc AGENTS.md, docs/16-THIET-LAP-CHINH-THUC-VA-CHIA-VIEC.md và docs/assignments/Huy.md.
@@ -43,3 +53,5 @@ Chạy full test/build, `git diff --check`, bàn giao DTO + migration ordering/r
 > membership, receipt private. Đọc code/schema thật; trước code nêu DTO và ownership cho Bảo/Khoa.
 > Không merge nguyên Backend, không sửa worker/UI, không tự deploy/apply SQL/seed remote. Thêm tests chặn
 > mạng thật mặc định, test/build cuối và báo chính xác phần chưa nghiệm thu. Dừng sau H1 để review.
+> Trước khi dừng, đọc docs/handoff/README.md và cập nhật docs/handoff/Huy.md theo mẫu chung, commit cùng code;
+> ghi contract thực tế, SHA/PR, migration, test/exit, NOT RUN, blocker và bước tiếp. Không chỉ bàn giao qua chat.

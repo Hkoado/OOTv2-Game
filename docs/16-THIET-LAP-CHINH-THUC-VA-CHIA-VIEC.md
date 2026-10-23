@@ -125,6 +125,11 @@ Không cần nhiều agent cùng sửa workspace này; thành viên làm checkou
 
 ## 6. Nghiệm thu
 
+Kết quả sau mỗi PR bắt buộc ghi chung ở [docs/handoff](handoff/README.md), mỗi người một báo cáo
+Huy/Bao/Khoa; không chỉ nằm trong chat. Agent sau đọc ba báo cáo rồi theo
+[checklist sau tích hợp](handoff/SAU-TICH-HOP.md). H1/B1/K1 chỉ là bước đầu; ngay cả khi cả gói của
+ba người hoàn thành vẫn cần xác minh tích hợp, E2E thật, an toàn runtime, tải, offline/restore và vận hành.
+
 - Giải 35/40/48/50 đội đúng counts; tie/mini-table chính xác, tránh cùng bảng, bye không ván giả,
   main 4/final 6/extra 2, tranh ba/vé không trùng. Fixtures thuần không thay DB integration.
 - GitHub: cutoff đồng thời/force-push/revoke/rate limit, receipt cross-team 403, retries không duplicate;
