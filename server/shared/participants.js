@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { rows, insert, update, uuid } from './client.js';
+import { rows, insert, uuid } from './client.js';
 import { hashBuffer, uploadArtifact } from './artifacts.js';
 import { inspectSourceBuffer } from '../services/botValidation.js';
 import { normalizeParticipantName } from '../lib/names.js';
