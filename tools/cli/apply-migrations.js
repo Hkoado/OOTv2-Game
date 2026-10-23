@@ -42,6 +42,7 @@ function loadEnv() {
 const env = loadEnv();
 const args = process.argv.slice(2);
 const apply = args.includes('--apply');
+const smoke = args.includes('--smoke');
 const onlyArg = args.find((value) => value.startsWith('--only='));
 const only = onlyArg ? new Set(onlyArg.slice('--only='.length).split(',').map((v) => v.trim()).filter(Boolean)) : null;
 
@@ -141,6 +142,9 @@ const PLAN = [
 
 const readSql = (relative) => readFileSync(path.join(root, relative), 'utf8');
 
+/** Management API không hiểu meta-command `\echo`; bỏ các dòng đó trước khi gửi. */
+const sanitizeSql = (sql) => sql.replace(/^\s*\\echo[^\n]*$/gmu, '');
+
 async function runManagementSql(sql) {
   if (!accessToken || !projectRef) throw new Error('missing_access_token_or_ref');
   const response = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
@@ -206,10 +210,27 @@ async function main() {
 
   if (!pending.length) {
     console.log('\nTất cả migration trong kế hoạch đã áp dụng.');
+    if (smoke && apply) {
+      const transport = pickTransport();
+      if (!transport) {
+        console.error('\nKhông có kênh DDL để chạy smoke test (cần SUPABASE_ACCESS_TOKEN hoặc psql + SUPABASE_DB_URL).');
+        process.exit(2);
+      }
+      const smokeSql = sanitizeSql(readSql('supabase/tests/github_intake.sql'));
+      console.log(`\n→ smoke PostgreSQL qua ${transport.name} (transaction + ROLLBACK)`);
+      try {
+        await transport.run(smokeSql);
+        console.log('OK   smoke PASS (đã rollback, không để lại dữ liệu)');
+      } catch (error) {
+        console.error(`LỖI smoke: ${error.message}`);
+        process.exit(5);
+      }
+    }
     return;
   }
   if (!apply) {
     console.log(`\nDry-run: ${pending.length} migration cần apply. Chạy lại với --apply.`);
+    if (smoke) console.log('(--smoke chỉ chạy cùng --apply sau khi migration đã có đủ.)');
     return;
   }
 
@@ -237,6 +258,16 @@ async function main() {
     if (!ok) process.exit(4);
   }
   console.log('\nHoàn tất: các migration còn thiếu đã apply và kiểm tra lại.');
+  if (smoke) {
+    console.log(`\n→ smoke PostgreSQL qua ${transport.name} (transaction + ROLLBACK)`);
+    try {
+      await transport.run(sanitizeSql(readSql('supabase/tests/github_intake.sql')));
+      console.log('OK   smoke PASS (đã rollback, không để lại dữ liệu)');
+    } catch (error) {
+      console.error(`LỖI smoke: ${error.message}`);
+      process.exit(5);
+    }
+  }
   console.log('Bước tiếp: node tools/cli/check-github-db.js');
 }
 

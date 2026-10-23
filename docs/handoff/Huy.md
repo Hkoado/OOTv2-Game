@@ -254,8 +254,9 @@ Môi trường: Windows, Node 24.18.0; không có test bị skip.
 - Cách cấp quyền (chọn 1) trong `.env`:
   `SUPABASE_ACCESS_TOKEN=sbp_...` (Personal Access Token) **hoặc**
   `SUPABASE_DB_URL=postgresql://postgres.<ref>:<password>@<host>:5432/postgres` (cần `psql`).
-  Sau đó: `npm run db:apply-migrations -- --apply` → `node tools/cli/check-github-db.js` →
-  `psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/github_intake.sql`.
+  Sau đó: `npm run db:apply-migrations -- --apply --smoke` (apply rồi chạy `supabase/tests/github_intake.sql`
+  trong transaction + ROLLBACK) → `node tools/cli/check-github-db.js`.
+  `--smoke` dùng chính kênh DDL đã chọn nên chỉ cần MỘT credential, không bắt buộc cài `psql`.
 - Chưa mở Start/deploy; consumer vẫn `enabled=false` cho tới khi 7 migration trên được apply + smoke PASS.
 
 
