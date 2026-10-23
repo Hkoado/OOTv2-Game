@@ -2,6 +2,41 @@
 
 ## Trạng thái mới nhất
 
+### 24/10/2026 — K3e Storage adapter cho consumer: READY FOR REVIEW (consumer vẫn tắt)
+
+- Tiếp tục từ `dev @ 3ff49e7` (đã fetch/merge Huy+Bảo, working tree sạch, không conflict). Không đổi
+  contract H1/H2/H3, không sửa báo cáo Huy/Bảo, không apply migration, không deploy.
+- Thêm `server/shared/artifactUpload.js` — `storeVerifiedSource(source,{sourceHash,signal,timeoutMs})`
+  là implementation cụ thể của callback `storeSource` mà `processGithubJob` yêu cầu:
+  key tự sinh `<uuid>.py`, bucket cố định `ootv2-bots`, origin HTTPS từ `SUPABASE_URL`,
+  `x-upsert:false`, `redirect:'error'`, deadline 20 s, honor `signal`.
+  Sau POST phải **tải lại bằng `downloadStorageArtifact`** và so bytes + SHA-256; chỉ khớp mới trả
+  `{storage_path, sha256}`. Lỗi chuẩn hoá `invalid_source|invalid_budget|storage_configuration|
+  upload_rejected|upload_timeout|upload_cancelled|upload_integrity|upload_unavailable`; không đọc body
+  lỗi, không retry, **không xoá** object (có thể là bài đã được `finish` nhận).
+- Không import vào `runSharedWorker`/API/router/React; consumer vẫn `enabled:false`; không polling,
+  không chạy Python. Đây là adapter Storage, **không phải sandbox** và không thay validation.
+- Test bổ sung nằm trong `tests/artifactDownload.test.js` (7 test, mock `fetch`), gồm 1 test tích hợp
+  `processGithubJob` + adapter: finish nhận đúng `{storage_path,sha256}`, không gửi `submission_id`.
+  Cố ý không tạo file test mới để không thêm process song song làm nhiễu load test của Bảo.
+- Contract và giới hạn: `docs/STORAGE-ADAPTER.md`; `docs/GITHUB-CONSUMER.md` đã trỏ tới adapter này.
+- Exit code/lệnh (Windows, Node v24.18.0, lưu `data/khoa-next/*.json|log`):
+
+  | Lệnh | Exit | Kết quả |
+  |---|---|---|
+  | `node --test tests/artifactDownload.test.js tests/githubConsumer.test.js` | 0 | 29/29 pass |
+  | `node --test "tests/*.test.js"` | 0 | **282/282 pass**, 0 fail, 0 skip |
+  | `node node_modules/vite/bin/vite.js build` | 0 | Vite build, 1649 modules, 4,70 s |
+  | `git fetch origin --prune` | 0 | `HEAD == origin/dev == 3ff49e7` trước commit; không phân kỳ |
+  | `git diff --check` | 0 | không output (không whitespace error) |
+
+- **Load test nhạy cảm tải máy:** hai lượt full đầu fail ngưỡng P95 của Bảo
+  (`1881.3 ms` và `1700.6 ms` so 1500 ms; `887.6 ms` so 800 ms) khi suite chạy thêm process;
+  lượt chốt pass (`864.8 ms`, RPS 365, lỗi 0%). Không sửa ngưỡng hay test của Bảo; số đo phụ thuộc
+  CPU/máy và chưa phải benchmark production.
+- NOT RUN: Supabase Storage/PostgreSQL thật, GitHub thật, sandbox Linux, browser/pass, offline restore.
+  Orphan khi upload xong nhưng finish không rõ vẫn chưa có inventory/GC tự động.
+
 ### 24/10/2026 — K3d consumer coordinator: READY FOR REVIEW (chưa bật)
 
 - Tiếp tục từ `dev @ ec7d2f4`, working tree sạch; không fetch/merge remote trong đợt này.
@@ -328,25 +363,40 @@ map/seed cặp, đảo thứ tự roster/results, seed 0, không mutation, khôn
 điểm ván/cặp, partial pair, head-to-head, chu trình tie ba đội và seeded draw.
 Lượt đầu 10/11 pass: fixture tie ba đội sai kỳ vọng; đã sửa fixture và chạy lại toàn bộ thành công.
 
-## Blocker / NOT RUN / bước tiếp
+## Blocker / NOT RUN / bước tiếp (cập nhật 24/10/2026)
 
-- **NOT RUN:** PostgreSQL/Supabase integration, apply SQL, worker E2E, browser, multiplayer hai máy,
-  Linux sandbox/preflight/fault/cleanup, load, offline bundle/restore: K1 chỉ hàm thuần.
-- K2 còn bracket fixed/permutation tránh cùng bảng, so phân số, bye/double-DQ/walkover,
-  main/final/extra/tranh ba/vé không trùng, snapshot/map/runtime manifest bất biến.
-- K3 còn GitHub consumer contract của Huy, bounded SHA/blob/hash/cache/GC, lease/retry/fencing
-  cho result **và** event/log/terminal; thiếu hạ tầng không được forfeit.
-- K4 còn persistent bot.v1/SDK/Campus runtime và sandbox Linux đã kiểm thử. Subprocess không phải sandbox.
-- Dependency Huy: review DTO, thiết kế persistence snapshot/accepted attempt/publication/ACL;
-  dependency Bảo: review standings fields/state partial/complete trước nối UI. Chưa tự tuyên bố đã chốt.
-- Start phải tiếp tục chặn cho tới khi snapshot/runner/privacy đạt gate. Không mở giải thật.
-- Tái hiện: từ root repo chạy `node --test tests/officialGroups.test.js`, `npm.cmd test`, `npm.cmd run build`.
-- Rollback runtime: module chưa được import từ đường runtime/API/UI nên không đổi hành vi đang chạy.
-  Gỡ PR/commit K1 là phương án đề xuất, chưa diễn tập revert. Không cần rollback DB.
-- Bước nhỏ kế tiếp **K2**: review DTO với Huy/Bảo rồi thêm helper/test bracket thuần riêng;
-  không bỏ trigger Start, không làm K3/K4 hoặc offline trong PR đó.
+**Đã có bằng chứng mock/unit:** K1 thuần, K2 helper bracket, K3a–K3e (download/cache/pinned GitHub/
+consumer/Storage adapter), worker Campus trusted-dev. Không có nghĩa giải đã chạy được end-to-end.
+
+**Gate còn lại, theo thứ tự phụ thuộc (chưa mục nào VERIFIED trên hạ tầng thật):**
+
+1. **H4 PostgreSQL thật** — chạy `supabase/tests/github_intake.sql` trên project disposable được phép:
+   2 worker tranh job, lease hết hạn/crash/reclaim cap, duplicate finish, revoke repo, cutoff race,
+   RLS + service_role. Bằng chứng cần: log, row count trước/sau, danh sách migration đã apply.
+   Owner Huy (DB); Khoa kiểm lại consumer sau khi có kết quả.
+2. **Storage + GitHub thật** — bucket private, quyền service_role, upload/readback SHA-256, quota/
+   rate limit, inventory orphan. Adapter K3e mới chỉ mock.
+3. **Sandbox Linux (K4)** — filesystem/network/CPU/RAM/process/flood/timeout/cleanup trên VM sạch,
+   xác nhận không secret vào bot. Chưa có bằng chứng thì **không mở nhận bot lạ**; `local-dev`
+   trusted không thay thế sandbox.
+4. **K2 persistence + scheduler/màu** — chưa có persistence/queue/API runtime, chưa có UI công bố màu
+   trước ván. Giữ trigger `official_scheduler_not_ready` và Start khóa.
+5. **H3 browser/privacy pass** — 401/403, `afterSeq`/clock client, replay/log ẩn; hiện chỉ mock.
+6. **Offline chung kết** — export/import gói giải (map v2 + bot + seed/replay), diễn tập restore
+   không mạng; chưa có script hay lần chạy thật.
+7. **B4 load** — số đo in-process, nhạy cảm CPU; cần benchmark trên hạ tầng triển khai thật.
+8. **Cổng đang tắt** — `storeVerifiedSource`/consumer chưa nối worker, `enabled:false`, upload online
+   tắt mặc định, Start khóa, chưa deploy/apply remote.
+
+- Tái hiện: `node --test tests/artifactDownload.test.js tests/githubConsumer.test.js`,
+  `node --test "tests/*.test.js"`, `node node_modules/vite/bin/vite.js build`.
+- Rollback: bỏ import `artifactUpload`/`githubConsumer` (chưa có đường gọi runtime), không migration/
+  env mới; không cần rollback DB.
+- **Bước nhỏ kế tiếp:** chọn một — (a) inventory/quarantine artifact Storage để GC sau đối soát
+  (không xóa mù), hoặc (b) validation adapter sau khi có sandbox. Không bật polling trước H4 + sandbox.
 
 ## Lịch sử checkpoint
 
 - 23/10/2026: tạo khung bàn giao, chưa thực hiện thay người được giao.
 - 24/10/2026: K1 thuần READY FOR REVIEW; test/build local pass, integration/runtime chưa nghiệm thu.
+- 24/10/2026: K3e Storage adapter + test tích hợp; full 282/282 pass, vẫn tắt consumer/Start.

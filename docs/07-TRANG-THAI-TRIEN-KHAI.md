@@ -20,6 +20,17 @@
   Logs cục bộ: data/v2-tests.log, data/v2-build.log, data/ui-smoke-report.json.
   Baseline npm install vẫn báo 2 high vulnerabilities; không tự audit fix/đổi dependency.
 
+## Storage adapter cho consumer GitHub — 24/10/2026
+
+- Thêm `server/shared/artifactUpload.js` (`storeVerifiedSource`): upload bucket private cố định
+  `ootv2-bots`, key UUID, `x-upsert:false`, `redirect:'error'`, deadline 20 s/honor abort; **đọc lại**
+  qua `downloadStorageArtifact` và chỉ trả `{storage_path,sha256}` khi bytes + SHA-256 khớp.
+- Không xoá object sau lỗi/không rõ finish (có thể là bài đã được nhận); orphan cần inventory/GC sau
+  đối soát. Không import vào worker/API/UI; consumer vẫn `enabled:false`, không chạy Python.
+- Test mock `fetch` + tích hợp `processGithubJob` (7 test mới trong `tests/artifactDownload.test.js`).
+  Toàn bộ **282/282 pass**, 0 skip; Vite build 1649 modules pass. Supabase Storage/PostgreSQL/GitHub
+  thật, sandbox Linux, browser và offline restore **NOT RUN**. Chi tiết: [Storage adapter](STORAGE-ADAPTER.md).
+
 ## Luật v2 — 24/10/2026
 
 - [Luật địa hình/xếp kín/phân màu](17-LUAT-DIA-HINH-VA-XEP-KIN.md): engine Campus,

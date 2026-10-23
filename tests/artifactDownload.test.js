@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { downloadStorageArtifact } from '../server/shared/artifactDownload.js';
+import { storeVerifiedSource } from '../server/shared/artifactUpload.js';
 
 const key = '00000000-0000-4000-8000-000000000001.py';
 function setup(t, fetcher) {
@@ -140,4 +142,110 @@ test('validation worker keeps uploaded candidate on bounded download failure; no
   assert.equal(await validatePendingSubmissions({ limit: 1 }), 0);
   assert.equal(calls.length, 2);
   assert.equal(calls.some(({ options }) => ['PATCH', 'POST'].includes(options.method)), false);
+});
+
+// Upload adapter shares the same test origin/credential as the download transport.
+const upload = Buffer.from('trusted source, not executed\n');
+const uploadHash = createHash('sha256').update(upload).digest('hex');
+
+test('verified upload uses private UUID key, no upsert/redirect, reads back same bytes/hash', async (t) => {
+  const calls = []; let discarded = false;
+  setup(t, async (url, options) => {
+    calls.push({ url, options });
+    assert.equal(new URL(url).origin, 'https://artifact-test.invalid');
+    assert.match(new URL(url).pathname, /^\/storage\/v1\/object\/ootv2-bots\/[a-f0-9-]{36}\.py$/);
+    assert.equal(options.redirect, 'error'); assert.equal(options.headers.Authorization, 'Bearer private-test-token');
+    if (options.method === 'POST') {
+      assert.equal(options.headers['x-upsert'], 'false'); assert.deepEqual(options.body, upload);
+      return new Response(new ReadableStream({ cancel() { discarded = true; } }));
+    }
+    return new Response(upload);
+  });
+  const result = await storeVerifiedSource(upload, { sourceHash: uploadHash });
+  assert.equal(result.sha256, uploadHash); assert.equal(calls.length, 2);
+  assert.equal(calls[0].url, calls[1].url); assert.ok(discarded);
+  assert.ok(calls[0].url.endsWith(result.storage_path));
+});
+
+test('upload rejects invalid bytes, hashes, budgets and credentials before network', async (t) => {
+  setup(t, () => assert.fail('no network'));
+  for (const bytes of [Buffer.alloc(0), Buffer.alloc(262145), 'text']) {
+    await assert.rejects(storeVerifiedSource(bytes, { sourceHash: uploadHash }), { code: 'invalid_source' });
+  }
+  await assert.rejects(storeVerifiedSource(upload, { sourceHash: 'a'.repeat(64) }), { code: 'invalid_source' });
+  for (const timeoutMs of [0, 20001, 1.5]) {
+    await assert.rejects(storeVerifiedSource(upload, { sourceHash: uploadHash, timeoutMs }), { code: 'invalid_budget' });
+  }
+  process.env.SUPABASE_URL = 'https://user:pass@artifact-test.invalid';
+  await assert.rejects(storeVerifiedSource(upload, { sourceHash: uploadHash }), { code: 'storage_configuration' });
+});
+
+test('failed upload redirect, error body and transport error stay redacted', async (t) => {
+  let calls = 0;
+  setup(t, async (_url, options) => { calls++; assert.equal(options.method, 'POST'); return new Response('private source/token', { status: 403 }); });
+  await assert.rejects(storeVerifiedSource(upload, { sourceHash: uploadHash }), { code: 'upload_rejected' });
+  assert.equal(calls, 1);
+  globalThis.fetch = async () => new Response(null, { status: 302, headers: { location: 'https://evil.invalid' } });
+  await assert.rejects(storeVerifiedSource(upload, { sourceHash: uploadHash }), { code: 'upload_rejected' });
+  globalThis.fetch = async () => { throw Error('private credential'); };
+  await assert.rejects(storeVerifiedSource(upload, { sourceHash: uploadHash }), (error) => error.code === 'upload_unavailable' && !error.message.includes('credential'));
+});
+
+test('successful upload with corrupt readback never returns an accepted reference', async (t) => {
+  setup(t, async (_url, options) => options.method === 'POST' ? new Response('{}') : new Response('tampered'));
+  await assert.rejects(storeVerifiedSource(upload, { sourceHash: uploadHash }), { code: 'upload_integrity' });
+});
+
+test('upload deadline and abort bound stalled POST/readback even if fetch ignores signal', async (t) => {
+  setup(t, async () => new Promise(() => {}));
+  await assert.rejects(storeVerifiedSource(upload, { sourceHash: uploadHash, timeoutMs: 15 }), { code: 'upload_timeout' });
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(storeVerifiedSource(upload, { sourceHash: uploadHash, signal: controller.signal }), { code: 'upload_cancelled' });
+  let observedSignal;
+  globalThis.fetch = async (_url, options) => {
+    if (options.method === 'POST') return new Response('{}');
+    observedSignal = options.signal; return new Promise(() => {});
+  };
+  await assert.rejects(storeVerifiedSource(upload, { sourceHash: uploadHash, timeoutMs: 15 }), { code: 'upload_timeout' });
+  assert.equal(observedSignal.aborted, true);
+});
+
+test('upload accepts a max-size source and cancellation mid-upload never retries', async (t) => {
+  const bytes = Buffer.alloc(262144, 32), sha = createHash('sha256').update(bytes).digest('hex');
+  setup(t, async (_url, options) => options.method === 'POST' ? new Response('{}') : new Response(bytes));
+  assert.equal((await storeVerifiedSource(bytes, { sourceHash: sha })).sha256, sha);
+  const controller = new AbortController(); let calls = 0;
+  globalThis.fetch = async () => { calls++; controller.abort(); return new Response('{}'); };
+  await assert.rejects(storeVerifiedSource(upload, { sourceHash: uploadHash, signal: controller.signal }), { code: 'upload_cancelled' });
+  assert.equal(calls, 1);
+});
+
+test('upload adapter plugs into consumer and finish receives the exact storage reference', async (t) => {
+  const id = '11111111-1111-4111-8111-111111111111';
+  const token = '22222222-2222-4222-8222-222222222222';
+  const job = { id, event_id: id, team_id: id, repo_id: 123, repository: 'https://github.com/team/bot',
+    commit_sha: 'a'.repeat(40), file_path: 'bot.py' };
+  const calls = [];
+  const jobApi = {
+    claimGithubJob: async () => ({ job, receipt: { ...job, job_id: id, source_hash: uploadHash },
+      lease: { token, generation: 3 } }),
+    heartbeatGithubJob: async () => true,
+    progressGithubJob: async (args) => { calls.push(['progress', args.status]); return true; },
+    finishGithubJob: async (args) => { calls.push(['finish', args.outcome]); return { applied: true }; },
+    releaseGithubJob: async () => assert.fail('valid job must not release'),
+  };
+  setup(t, async (_url, options) => options.method === 'POST' ? new Response('{}') : new Response(upload));
+  // Import after env setup: githubConsumer -> client.js caches the configured cache root at load.
+  const { processGithubJob } = await import('../server/shared/githubConsumer.js');
+  const result = await processGithubJob({ enabled: true, workerId: 'integration-worker', jobApi,
+    acquireSource: async () => ({ source: upload, sourceHash: uploadHash }),
+    validateSource: async () => ({ status: 'valid' }),
+    storeSource: (bytes, options) => storeVerifiedSource(bytes, options) });
+  assert.deepEqual(result, { processed: true, recorded: true, reason: 'valid' });
+  assert.deepEqual(calls.map(([name, value]) => name === 'progress' ? value : name),
+    ['fetching', 'checking', 'finish']);
+  const outcome = calls.at(-1)[1];
+  assert.equal(outcome.status, 'valid'); assert.equal(outcome.source_hash, uploadHash);
+  assert.match(outcome.submission.storage_path, /^[a-f0-9-]{36}\.py$/);
+  assert.equal(outcome.submission.sha256, uploadHash); assert.equal(outcome.submission_id, undefined);
 });

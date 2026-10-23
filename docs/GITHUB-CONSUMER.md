@@ -15,7 +15,9 @@ sandbox Linux được nghiệm thu. Không nối thẳng `validateBotFile` trus
   Consumer không chấp nhận `{ok:true}` cũ như bằng chứng validation protocol mới.
 - `storeSource(Buffer,{signal,sourceHash}) -> {storage_path:'<uuid>.py',sha256}`.
   Adapter tự sinh UUID/storage key, kiểm ghi đúng bytes và hash, không dùng tên repo/file từ đội.
-  Hiện chỉ kiểm DTO trả về; không thể thay cho kiểm upload/download thực tế.
+  **Đã có implementation tham chiếu** `storeVerifiedSource` (`server/shared/artifactUpload.js`):
+  POST private bucket cố định + tải lại kiểm SHA-256, deadline/abort, không upsert/redirect/xoá.
+  Đọc [giới hạn và orphan](STORAGE-ADAPTER.md); chưa kiểm Storage thật nên chưa phải bằng chứng production.
 - Adapter nhận Buffer riêng, signal và hash; không nhận raw job/credential/lease token.
   Phải honor abort và cleanup tài nguyên/process riêng. Promise race chỉ ngừng chờ, không kill
   callback hoặc subprocess phớt lờ signal, không preempt callback JS đồng bộ chặn event loop.
