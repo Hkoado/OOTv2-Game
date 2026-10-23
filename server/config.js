@@ -66,6 +66,16 @@ function parseLiveBotOutput(raw) {
   return !['0', 'false', 'off', 'no'].includes(String(raw).trim().toLowerCase());
 }
 
+/**
+ * H2: upload file qua HTTP mặc định TẮT. Đội online nộp bằng GitHub; chỉ admin/BTC
+ * bật `OOTV2_ALLOW_ONLINE_UPLOAD=1` cho trusted-dev/import offline. Không ảnh hưởng
+ * quy trình phát/thu file offline qua USB (ngoài HTTP).
+ */
+function parseOnlineUploads(raw) {
+  if (raw === undefined || raw === '') return false;
+  return ['1', 'true', 'on', 'yes'].includes(String(raw).trim().toLowerCase());
+}
+
 const dataDir = resolveFromRoot(process.env.OOTV2_DATA_DIR, path.join(ROOT_DIR, 'data'));
 /** Thư mục cache tạm cho bot tải từ Supabase Storage (dọn ngay sau mỗi trận). */
 const artifactCacheDir = path.join(dataDir, 'cache');
@@ -137,6 +147,14 @@ export const config = {
      * xem trực tiếp để khán giả kịp theo dõi từng ván.
      */
     workerPauseMs: Number(process.env.OOTV2_WORKER_PAUSE_MS || 0),
+  },
+
+  /**
+   * H2: cổng upload file qua HTTP. Mặc định tắt với đội; admin chỉ dùng khi opt-in.
+   * GitHub intake là đường chính cho đội online.
+   */
+  uploads: {
+    allowOnlineAdmin: parseOnlineUploads(process.env.OOTV2_ALLOW_ONLINE_UPLOAD),
   },
 
   /**

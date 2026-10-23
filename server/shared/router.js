@@ -11,6 +11,8 @@ import * as githubIntake from '../services/githubIntake.js';
 import * as publication from './publication.js';
 import { rows, uuid } from './client.js';
 import { isAllowedOrigin } from '../lib/origin.js';
+import config from '../config.js';
+import { onlineUploadDecision } from './uploadPolicy.js';
 
 const forbidden=()=>new HttpError(403,'scope_denied','Không có quyền truy cập dữ liệu này.');
 /** Cookie session: HttpOnly + SameSite=strict, thêm `Secure` khi request đi qua HTTPS. */
@@ -77,6 +79,9 @@ export function sharedRouter() {
     res.json({submissions:await participants.listSubmissions(id)});
   });
   router.post('/submissions/:team',async(req,res,next)=>{
+    // H2: upload HTTP mặc định tắt (đội nộp qua GitHub); admin chỉ khi BTC opt-in trusted-dev.
+    const decision=onlineUploadDecision({role:req.account.role,allowOnline:config.uploads.allowOnlineAdmin});
+    if (!decision.allowed) throw new HttpError(403,decision.error,decision.message);
     if (req.account.role!=='admin'&&req.account.participant_id!==req.params.team) throw forbidden();
     if (req.account.role!=='admin') {
       const [entries,events]=await Promise.all([rows('tournament_entries',`participant_id=eq.${uuid(req.params.team)}`),rows('tournaments','status=in.(group_running,semifinal_running,final_running)')]);
@@ -89,7 +94,7 @@ export function sharedRouter() {
   router.get('/events/:id/repositories',requireLocalAdmin,async(req,res)=>res.json(await githubIntake.listConnections({eventId:req.params.id})));
   router.get('/events/:id/repository',async(req,res)=>{
     const teamId=githubIntake.scopeTeam(req.account,typeof req.query.team==='string'?req.query.team:null);
-    res.json(await githubIntake.getConnection({eventId:req.params.id,teamId}));
+    res.json(await githubIntake.getConnection({eventId:req.params.id,teamId,account:req.account}));
   });
   router.put('/events/:id/repository',async(req,res)=>{
     const teamId=githubIntake.scopeTeam(req.account,req.body?.team);
@@ -101,7 +106,7 @@ export function sharedRouter() {
   });
   router.get('/events/:id/submissions/from-github',async(req,res)=>{
     const teamId=githubIntake.scopeTeam(req.account,typeof req.query.team==='string'?req.query.team:null);
-    res.json(await githubIntake.getLatest({eventId:req.params.id,teamId}));
+    res.json(await githubIntake.getLatest({eventId:req.params.id,teamId,account:req.account}));
   });
   router.get('/repo-sync-jobs/:id',async(req,res)=>res.json(await githubIntake.getJob({jobId:req.params.id,account:req.account})));
   // H3: lịch phát + gói dữ liệu phát. Mọi mốc tính bằng giờ server; đội phải thuộc giải.
