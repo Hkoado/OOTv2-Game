@@ -8,6 +8,7 @@ import * as tournaments from './tournaments.js';
 import { getSharedJudgeMatch, getSharedJudgeOverview } from './judgeMonitor.js';
 import { listBotOutput } from './live.js';
 import * as githubIntake from '../services/githubIntake.js';
+import * as publication from './publication.js';
 import { rows, uuid } from './client.js';
 import { isAllowedOrigin } from '../lib/origin.js';
 
@@ -25,6 +26,24 @@ export async function checkStage(account,id,stage=null) {
     if (!matches.length) throw forbidden();
   }
 }
+/**
+ * Bracket dựng từ dữ liệu đã lọc công bố (không đọc DB lần nữa, không lộ ván chưa phát).
+ * Dùng hàm thuần của Khoa (`seriesFrom`) để không phải sửa module scheduler.
+ */
+export function bracketFromData(tournaments, data) {
+  const semifinals = tournaments.seriesFrom(data, 'semifinal');
+  const final = tournaments.seriesFrom(data, 'final')[0] || null;
+  const winner = final?.winner_entry_id ? data.entries.find((entry) => entry.id === final.winner_entry_id) : null;
+  return {
+    tournament_id: data.event.id,
+    status: data.event.status,
+    semifinals,
+    final,
+    champion: winner ? { entry_id: winner.id, name: winner.participant_name, participant_id: winner.participant_id } : null,
+    tie_breaker: 'seed_order',
+  };
+}
+
 export function sharedRouter() {
   const router=Router(),attempts=new Map();
   router.use((req,res,next)=>{
@@ -85,6 +104,11 @@ export function sharedRouter() {
     res.json(await githubIntake.getLatest({eventId:req.params.id,teamId}));
   });
   router.get('/repo-sync-jobs/:id',async(req,res)=>res.json(await githubIntake.getJob({jobId:req.params.id,account:req.account})));
+  // H3: lịch phát + gói dữ liệu phát. Mọi mốc tính bằng giờ server; đội phải thuộc giải.
+  router.get('/events/:id/broadcasts',async(req,res)=>res.json(await publication.listBroadcastsForEvent({eventId:req.params.id,account:req.account})));
+  router.get('/broadcasts/:matchId',async(req,res)=>res.json(await publication.viewerPackage({matchId:req.params.matchId,afterSeq:req.query.afterSeq,account:req.account})));
+  router.post('/admin/broadcasts',requireLocalAdmin,async(req,res)=>res.status(201).json(await publication.scheduleBroadcast({matchId:req.body?.match_id,startsAt:req.body?.starts_at,plyIntervalMs:req.body?.ply_interval_ms,releaseMode:req.body?.release_mode,actor:req.account.id})));
+  router.post('/admin/broadcasts/:matchId/cancel',requireLocalAdmin,async(req,res)=>res.json(await publication.cancelBroadcast({matchId:req.params.matchId})));
   // Quan sát chấm bài (chỉ admin, chỉ đọc): shape cố định cho UI.
   router.get('/admin/judge',requireLocalAdmin,async(req,res)=>res.json(await getSharedJudgeOverview({eventId:typeof req.query.event==='string'&&req.query.event?req.query.event:null})));
   router.get('/admin/judge/matches/:id',requireLocalAdmin,async(req,res)=>res.json(await getSharedJudgeMatch(req.params.id)));
@@ -100,15 +124,29 @@ export function sharedRouter() {
     const id=req.params.id;await checkStage(req.account,id);
     const event = await tournaments.getTournament(id);
     if (event.competition) { res.json({event,standings:{groups:{}},matches:[],bracket:null}); return; }
-    const [standings,matches,bracket]=await Promise.all([tournaments.computeStandings(id),tournaments.listMatches(id),req.account.role==='admin'?tournaments.computeBracket(id):null]);
-    const allowed=[];
-    for (const stage of ['group','semifinal','final']) {try {await checkStage(req.account,id,stage);allowed.push(stage);} catch(error) {if (error.status!==403&&error.statusCode!==403) {if(error.code!=='scope_denied') throw error;}}}
-    res.json({event,standings,matches:matches.filter((m)=>allowed.includes(m.stage)),bracket});
+    const matches = await tournaments.listMatches(id);
+    if (req.account.role==='admin') {
+      const [standings,bracket]=await Promise.all([tournaments.computeStandings(id),tournaments.computeBracket(id)]);
+      res.json({event,standings,matches,bracket});
+      return;
+    }
+    // H3: đội chỉ thấy ván đã công bố đầy đủ; standings/bracket tính lại từ đúng tập đã mở.
+    const [publicMatches, data] = await Promise.all([tournaments.listMatches(id), tournaments.loadEvent(id)]);
+    const { reveal } = await publication.publishedMatchSets(id);
+    const rawVisible = data.matches.filter((match) => reveal.has(match.id));
+    const visible = publicMatches.filter((match) => reveal.has(match.id));
+    const scoped = { event: data.event, entries: data.entries, matches: rawVisible };
+    res.json({ event, standings: tournaments.standingsFrom(scoped), matches: visible, bracket: bracketFromData(tournaments, scoped) });
   });
   router.get('/matches/:id/replay',async(req,res)=>{
     const [row]=await rows('matches',`id=eq.${uuid(req.params.id)}`);
     if (!row) throw new HttpError(404,'match_not_found','Không tìm thấy trận.');
     await checkStage(req.account,row.tournament_id,row.stage);
+    // H3: replay chỉ mở khi lịch phát đã phát hết và release_mode = full (admin bỏ qua).
+    if (req.account.role!=='admin') {
+      const { info } = await publication.broadcastStateForMatch(row.id);
+      if (!info.reveal_result) throw new HttpError(404,'replay_not_ready','Replay chưa được công bố.');
+    }
     if (row.status!=='finished'||!row.replay_json) throw new HttpError(404,'replay_not_ready','Replay chưa sẵn sàng.');
     const matches=await tournaments.listMatches(row.tournament_id),m=matches.find((m)=>m.id===row.id);
     res.json({match:{...m,replay_url:`/api/local/matches/${row.id}/replay`},replay:JSON.parse(row.replay_json)});
@@ -129,6 +167,11 @@ export function sharedRouter() {
       const mine = entries.find((entry) => entry.participant_id === req.account.participant_id);
       if (!mine) throw forbidden();
       side = mine.id === match.red_entry_id ? 'red' : 'blue';
+    }
+    // H3: log bot có thể lộ nước đi sớm; đội chỉ đọc khi ván đã công bố đầy đủ.
+    if (req.account.role !== 'admin') {
+      const { info } = await publication.broadcastStateForMatch(matchId);
+      if (!info.reveal_result) throw new HttpError(404, 'broadcast_not_published', 'Ván chưa được công bố.');
     }
     res.json({ match_id: matchId, ...(await listBotOutput(matchId, { side, afterId: req.query.after, limit: req.query.limit })) });
   });
