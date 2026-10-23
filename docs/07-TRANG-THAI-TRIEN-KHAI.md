@@ -31,6 +31,17 @@
   Toàn bộ **282/282 pass**, 0 skip; Vite build 1649 modules pass. Supabase Storage/PostgreSQL/GitHub
   thật, sandbox Linux, browser và offline restore **NOT RUN**. Chi tiết: [Storage adapter](STORAGE-ADAPTER.md).
 
+## Gói offline tự chứa — 24/10/2026
+
+- `server/shared/offlineBundle.js` + CLI `tools/cli/offline-bundle.js` (`npm run offline:bundle`):
+  build/verify thư mục gồm `manifest.json`, `snapshot.json` (canonical của `campus-round-snapshot.v1`)
+  và `bots/<participantId>.py`. Kiểm contentHash manifest/snapshot, đúng tập bot, hash từng source,
+  giới hạn 256 KiB/bot, 16 MiB/tổng, chặn path traversal/extra/duplicate, từ chối symlink.
+- Ghi vào thư mục rỗng bằng temp + fsync + rename, manifest cuối; đọc chỉ file trong manifest.
+  Test **5/5**; diễn tập CLI 2 bot build/verify pass, sửa 1 byte → fail, phục hồi → pass.
+- Chưa xuất từ giải thật/56 đội, chưa restore VM Linux, chưa ký manifest, chưa nhập kết quả offline.
+  Chi tiết: [Gói offline](OFFLINE-BUNDLE.md).
+
 ## Luật v2 — 24/10/2026
 
 - [Luật địa hình/xếp kín/phân màu](17-LUAT-DIA-HINH-VA-XEP-KIN.md): engine Campus,

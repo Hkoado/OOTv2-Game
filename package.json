@@ -17,6 +17,7 @@
     "test:engine": "node --test tests/gameAdapter.test.js tests/campusEngine.test.js",
     "map:validate": "node tools/cli/validate-map.js",
     "replay:verify": "node tools/cli/verify-replay.js",
+    "offline:bundle": "node tools/cli/offline-bundle.js",
     "demo:campus": "node tools/cli/demo-campus.js",
     "smoke:ui": "node tools/cli/smoke-ui.js",
     "db:verify": "node tools/cli/verify-shared-db.js",

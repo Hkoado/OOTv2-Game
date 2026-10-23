@@ -2,6 +2,29 @@
 
 ## Trạng thái mới nhất
 
+### 24/10/2026 — K6a gói offline tự chứa: READY FOR REVIEW (chưa nối giải thật)
+
+- Người dùng yêu cầu chờ H4 và làm trước những gì không phụ thuộc DB. Đợt này chỉ dùng filesystem +
+  contract K2 sẵn có, không cần PostgreSQL/Storage/GitHub/sandbox.
+- Thêm `server/shared/offlineBundle.js`: `buildOfflineBundle`, `verifyOfflineBundle`,
+  `writeOfflineBundle`, `readOfflineBundle`; schema `campus-offline-bundle.v1`.
+  Gói = `manifest.json` + `snapshot.json` (canonical JSON của `campus-round-snapshot.v1`) +
+  `bots/<participantId>.py`; map chính/dự phòng và runtime hash nằm trong snapshot.
+- Kiểm: manifest/snapshot contentHash, snapshot hợp lệ, tập bot đúng bằng snapshot, từng bot khớp
+  `sourceSha256`, size/giới hạn, path chỉ `snapshot.json|bots/<safe-id>.py` (chặn traversal/extra/
+  duplicate). Ghi vào thư mục rỗng, temp + fsync + rename, manifest cuối; đọc chỉ file trong manifest,
+  từ chối symlink/không phải regular file và kiểm size trước khi đọc.
+- CLI `tools/cli/offline-bundle.js` + script `npm run offline:bundle` (`build`/`verify`).
+- Diễn tập thật trên Windows (không mạng/DB/Python): snapshot 2 bot → build 3 file/1754 byte → verify
+  pass; sửa 1 byte → exit 1 `offline_bundle_invalid: file_hash_mismatch, bot_hash_mismatch`;
+  phục hồi → exit 0. Log: `data/khoa-next/offline-demo-*.txt`, `offline-demo-tamper.json`
+  (gitignored). Chi tiết: `docs/OFFLINE-BUNDLE.md`.
+- **NOT RUN:** xuất từ giải thật, bundle 56 đội, restore VM Linux sạch, chạy bot trong phòng thi,
+  ký số manifest, nhập kết quả/replay sau chấm offline. Chưa đổi consumer/Start/migration/env.
+- Kiểm chứng đợt này: `node --test tests/offlineBundle.test.js` **5/5 pass**;
+  `node --test "tests/*.test.js"` **287/287 pass**, 0 fail/skip; Vite build exit 0 (1649 modules,
+  3,65 s); `git diff --check` sạch.
+
 ### 24/10/2026 — K3e Storage adapter cho consumer: READY FOR REVIEW (consumer vẫn tắt)
 
 - Tiếp tục từ `dev @ 3ff49e7` (đã fetch/merge Huy+Bảo, working tree sạch, không conflict). Không đổi
@@ -382,8 +405,9 @@ consumer/Storage adapter), worker Campus trusted-dev. Không có nghĩa giải �
 4. **K2 persistence + scheduler/màu** — chưa có persistence/queue/API runtime, chưa có UI công bố màu
    trước ván. Giữ trigger `official_scheduler_not_ready` và Start khóa.
 5. **H3 browser/privacy pass** — 401/403, `afterSeq`/clock client, replay/log ẩn; hiện chỉ mock.
-6. **Offline chung kết** — export/import gói giải (map v2 + bot + seed/replay), diễn tập restore
-   không mạng; chưa có script hay lần chạy thật.
+6. **Offline chung kết** — K6a đã có manifest/CLI build-verify + diễn tập filesystem không mạng.
+   Còn: xuất từ giải thật (snapshot + source), bundle 56 đội, ký manifest, restore VM sạch,
+   nhập kết quả/replay sau chấm, diễn tập có BTC.
 7. **B4 load** — số đo in-process, nhạy cảm CPU; cần benchmark trên hạ tầng triển khai thật.
 8. **Cổng đang tắt** — `storeVerifiedSource`/consumer chưa nối worker, `enabled:false`, upload online
    tắt mặc định, Start khóa, chưa deploy/apply remote.
@@ -400,3 +424,4 @@ consumer/Storage adapter), worker Campus trusted-dev. Không có nghĩa giải �
 - 23/10/2026: tạo khung bàn giao, chưa thực hiện thay người được giao.
 - 24/10/2026: K1 thuần READY FOR REVIEW; test/build local pass, integration/runtime chưa nghiệm thu.
 - 24/10/2026: K3e Storage adapter + test tích hợp; full 282/282 pass, vẫn tắt consumer/Start.
+- 24/10/2026: K6a gói offline tự chứa + CLI; full 287/287 pass, chưa xuất từ giải thật.
