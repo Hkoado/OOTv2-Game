@@ -23,6 +23,15 @@ export async function saveRepositoryConnection(eventId, { repository, branch = '
   return data?.connection || null;
 }
 
+export async function revokeRepositoryConnection(eventId, teamId) {
+  if (!eventId) throw new Error('Cần mã giải đấu (eventId).');
+  const query = teamId ? `?team=${encodeURIComponent(teamId)}` : '';
+  const data = await apiRequest(`/events/${encodeURIComponent(eventId)}/repository${query}`, {
+    method: 'DELETE',
+  });
+  return data?.connection || null;
+}
+
 export async function fetchEventRepositories(eventId) {
   if (!eventId) return [];
   const data = await apiRequest(`/events/${encodeURIComponent(eventId)}/repositories`);
@@ -55,6 +64,7 @@ export async function fetchRepoSyncJob(jobId) {
 export default {
   fetchRepositoryConnection,
   saveRepositoryConnection,
+  revokeRepositoryConnection,
   fetchEventRepositories,
   requestGithubSubmission,
   fetchLatestGithubSubmission,

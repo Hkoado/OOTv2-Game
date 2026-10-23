@@ -24,13 +24,16 @@ Truy cập trang Cấu hình (`#/setup`) bằng tài khoản Quản trị viên 
 
 ## 2. Quản lý & Phê duyệt Kho mã GitHub
 
-1. Truy cập trang **Nộp bài** (`#/submissions`).
-2. Tab **Quản lý phê duyệt** hiển thị toàn bộ danh sách repository đăng ký của các đội.
+1. Truy cập trang **Nộp bài** (`#/submissions`) bằng tài khoản Admin.
+2. Chọn đội cần thao tác từ bộ lọc **Chọn đội thi đấu**.
 3. **Tiêu chí duyệt**:
-   - URL repository đúng định dạng HTTPS GitHub công khai.
+   - URL repository đúng định dạng HTTPS GitHub công khai (`https://github.com/owner/repo`).
    - Nhánh thi đấu chính xác (`main` hoặc `master`).
    - Mỗi repository chỉ được đại diện cho một đội duy nhất trong cùng một giải đấu.
-4. Bấm nút **"Phê duyệt"** (1-click approval) để cấp quyền đồng bộ commit cho đội.
+4. **Phê duyệt**: Bấm nút **"Phê duyệt repository này"** để cấp quyền đồng bộ commit cho đội.
+5. **Thu hồi phê duyệt (Admin Revoke)**:
+   - Nếu phát hiện đội vi phạm quy chế hoặc đội yêu cầu đổi repository khác trước hạn cutoff, Admin bấm **"Thu hồi phê duyệt"**.
+   - Hệ thống sẽ gọi lệnh hủy duyệt (`DELETE /api/local/events/:id/repository?team=...`), tự động hủy mọi job đang xếp hàng (`canceled`) và đóng băng thẻ biên nhận đang xử lý dở dang (`frozen: repository_revoked`). Bản bot hợp lệ trước đó vẫn được giữ nguyên an toàn.
 
 ---
 

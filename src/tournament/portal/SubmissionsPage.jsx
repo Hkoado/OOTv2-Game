@@ -9,6 +9,7 @@ import {
   Github,
   Lock,
   RefreshCw,
+  ShieldAlert,
   ShieldCheck,
   UploadCloud,
 } from 'lucide-react';
@@ -33,6 +34,7 @@ import {
   fetchRepositoryConnection,
   fetchRepoSyncJob,
   requestGithubSubmission,
+  revokeRepositoryConnection,
   saveRepositoryConnection,
 } from './githubApi.js';
 
@@ -179,6 +181,26 @@ export default function SubmissionsPage({
       });
       setConnection(updated);
       setSyncNotice({ tone: 'success', message: 'Đã phê duyệt quyền repository cho đội.' });
+    } catch (error) {
+      setSyncNotice({ tone: 'danger', message: humanizeIntakeError(error.code, error.message) });
+    }
+  }
+
+  // Admin revokes repository approval
+  async function handleRevokeRepository() {
+    if (!targetId || !selectedEventId) return;
+    if (typeof window !== 'undefined' && window.confirm && !window.confirm('Bạn có chắc chắn muốn thu hồi phê duyệt repository này? Mọi tác vụ đồng bộ đang chờ sẽ bị hủy.')) {
+      return;
+    }
+    setSyncNotice(null);
+    try {
+      const revoked = await revokeRepositoryConnection(selectedEventId, targetId);
+      setConnection(revoked);
+      setSyncNotice({ tone: 'warning', message: 'Đã thu hồi phê duyệt repository của đội.' });
+      const latest = await fetchLatestGithubSubmission(selectedEventId, isAdmin ? targetId : null);
+      if (latest?.receipt) {
+        setReceipt(formatReceipt(latest.receipt));
+      }
     } catch (error) {
       setSyncNotice({ tone: 'danger', message: humanizeIntakeError(error.code, error.message) });
     }
@@ -417,6 +439,19 @@ export default function SubmissionsPage({
                     >
                       <ShieldCheck size={16} aria-hidden="true" />
                       Phê duyệt repository này
+                    </button>
+                  )}
+
+                  {/* Admin Revoke Button */}
+                  {isAdmin && connection && connection.approved && (
+                    <button
+                      type="button"
+                      className="tt-btn tt-btn--danger"
+                      onClick={handleRevokeRepository}
+                      disabled={syncing}
+                    >
+                      <ShieldAlert size={16} aria-hidden="true" />
+                      Thu hồi phê duyệt
                     </button>
                   )}
                 </div>
