@@ -152,8 +152,10 @@ BEGIN
   WHERE event_id=p_event AND team_id=p_team AND created_at>clock_timestamp()-interval '24 hours';
  IF used>=COALESCE(p_daily_quota,10) THEN RETURN jsonb_build_object('ok',false,'error','quota_exceeded'); END IF;
 
- SELECT id INTO previous FROM public.mvp_github_receipts
-  WHERE event_id=p_event AND team_id=p_team AND status='valid' ORDER BY created_at DESC LIMIT 1;
+ -- Chỉ lấy submission của receipt hợp lệ (FK trỏ mvp_submissions(id), KHÔNG phải receipt id).
+ SELECT submission_id INTO previous FROM public.mvp_github_receipts
+  WHERE event_id=p_event AND team_id=p_team AND status='valid' AND submission_id IS NOT NULL
+  ORDER BY created_at DESC LIMIT 1;
 
  BEGIN
   INSERT INTO public.mvp_repo_sync_jobs(id,event_id,team_id,repo_id,repository,branch,file_path,commit_sha,status,requested_by)

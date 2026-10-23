@@ -79,3 +79,43 @@ test('GitHub intake migration keeps jobs/receipts private and idempotent', () =>
   assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.mvp_github_intake\(uuid,uuid,uuid,text,text,text,bigint,text,integer\) TO service_role/u);
   assert.doesNotMatch(sql, /DROP TABLE|DROP COLUMN|SECURITY DEFINER/i);
 });
+
+test('broadcast schedule migration keeps publication private', () => {
+  const sql = readFileSync(new URL('../supabase/migrations/20261024150000_broadcast_schedule.sql', import.meta.url), 'utf8');
+  assert.match(sql, /CREATE TABLE public\.mvp_match_broadcasts/u);
+  assert.match(sql, /match_id uuid PRIMARY KEY REFERENCES public\.mvp_matches\(id\)/u);
+  assert.match(sql, /state text NOT NULL DEFAULT 'scheduled' CHECK\(state IN \('scheduled','canceled','ended'\)\)/u);
+  assert.match(sql, /ply_interval_ms integer NOT NULL DEFAULT 2000 CHECK\(ply_interval_ms BETWEEN 250 AND 60000\)/u);
+  assert.match(sql, /release_mode text NOT NULL DEFAULT 'window' CHECK\(release_mode IN \('window','full'\)\)/u);
+  assert.match(sql, /ENABLE ROW LEVEL SECURITY/u);
+  assert.match(sql, /REVOKE ALL ON public\.mvp_match_broadcasts FROM PUBLIC, anon, authenticated/u);
+  assert.match(sql, /GRANT SELECT, INSERT, UPDATE ON public\.mvp_match_broadcasts TO service_role/u);
+  assert.doesNotMatch(sql, /DROP TABLE|SECURITY DEFINER|ADD COLUMN status/i);
+});
+
+
+test('github jobs migration fixes previous submission and defines lease contract', () => {
+  const base = readFileSync(new URL('../supabase/migrations/20261024130000_github_intake.sql', import.meta.url), 'utf8');
+  assert.match(base, /SELECT submission_id INTO previous FROM public\.mvp_github_receipts/u);
+  assert.match(base, /status='valid' AND submission_id IS NOT NULL/u);
+
+  const sql = readFileSync(new URL('../supabase/migrations/20261024160000_github_jobs_worker.sql', import.meta.url), 'utf8');
+  assert.match(sql, /ADD COLUMN IF NOT EXISTS generation integer NOT NULL DEFAULT 0/u);
+  const signatures = [
+    'mvp_github_intake(uuid,uuid,uuid,text,text,text,bigint,text,integer)',
+    'mvp_github_claim(text,integer)',
+    'mvp_github_heartbeat(uuid,uuid,integer,integer)',
+    'mvp_github_progress(uuid,uuid,integer,text,text)',
+    'mvp_github_finish(uuid,uuid,integer,jsonb)',
+    'mvp_github_release(uuid,uuid,integer,text,integer)',
+  ];
+  for (const signature of signatures) {
+    assert.ok(sql.includes(`GRANT EXECUTE ON FUNCTION public.${signature} TO service_role`), `grant thiếu: ${signature}`);
+    assert.ok(sql.includes(`REVOKE ALL ON FUNCTION public.${signature} FROM PUBLIC,anon,authenticated`), `revoke thiếu: ${signature}`);
+  }
+  assert.match(sql, /lease_token=p_token AND generation=p_generation/u);
+  assert.match(sql, /status IN \('leased','running'\) AND lease_until>clock_timestamp\(\)/u);
+  assert.match(sql, /SELECT submission_id INTO previous/u);
+  assert.match(sql, /make_interval\(secs=>LEAST\(300, 15\*GREATEST\(attempt,1\)\)\)/u);
+  assert.doesNotMatch(sql, /SECURITY DEFINER|DROP TABLE/i);
+});
