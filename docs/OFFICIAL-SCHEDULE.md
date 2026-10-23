@@ -1,12 +1,14 @@
-# K2 schedule persistence — migration + client, chưa apply
+# K2 schedule persistence — migration + client + drill thật
 
-Trạng thái 24/10/2026: **schema + RPC + client + test mock đã có; PostgreSQL thật NOT RUN.**
-Không thay đổi trigger `official_scheduler_not_ready`, không mở Start, không thêm API route/UI,
-không chạy bot. Đây là lớp lưu lịch/màu để sau này nối runtime chính thức.
+Trạng thái 24/10/2026 (sau H4): **migration đã apply trên Supabase thật** (nằm trong 10 file
+H4 apply, `20261025090000_official_schedule`) và **drill DB thật PASS 14/14** (`npm run db:k2`).
+Không thay đổi trigger `official_scheduler_not_ready`, không mở Start, chưa thêm API/UI,
+chưa chạy bot. Đây là lớp lưu lịch/màu để sau này nối runtime chính thức.
 
-- Migration: `supabase/migrations/20261025090000_official_schedule.sql` — **CHƯA apply remote**.
+- Migration: `supabase/migrations/20261025090000_official_schedule.sql` — **đã apply remote**.
 - Client: `server/shared/officialSchedule.js`.
-- Test: `tests/officialSchedule.test.js` (mock PostgREST + guardrail SQL).
+- Test mock: `tests/officialSchedule.test.js` (8/8); guardrail drill: `tests/k2Drill.test.js`.
+- Drill thật: `tools/cli/k2-schedule-drill.js` (`npm run db:k2`, cần `.env` service role).
 
 ## Bảng và bất biến
 
@@ -55,11 +57,26 @@ thiếu → `409 result_pending`; lệch lịch → `409 schedule_mismatch`. Kh�
 disposable được phép**, không áp remote trong phiên này. Rollback (chỉ khi chưa có dữ liệu thật) ghi
 cuối file SQL: drop 4 function rồi drop 2 bảng.
 
+## Đã kiểm trên DB thật (24/10/2026)
+
+`npm run db:k2` tạo event + 4 đội tạm, mở vòng `group`, rồi kiểm **14/14 PASS**:
+
+- Open round + `round_exists`; load khớp snapshot/genesis.
+- **2 writer tranh append**: đúng một thắng, writer thua `stale_prefix`.
+- Chain seq 1 khớp; record lặp idempotent; record kết quả khác `result_conflict`.
+- Freeze thiếu ván `incomplete_schedule`; append/record đủ 12 ván; load xác minh toàn chain;
+  freeze `frozen=true`; freeze lặp idempotent.
+- Cleanup xoá games → rounds → entries → tournaments → participants; query leftover = 0.
+
+Chưa kiểm: RLS bằng JWT anon/authenticated (`.env` chỉ có service role), crash giữa transaction,
+2 writer trên nhiều process/region, tải 35–56 đội.
+
 ## Chưa làm / NOT RUN
 
-- **NOT RUN:** apply PostgreSQL, 2 writer tranh `append`, crash giữa transaction, RLS/service_role
-  thật, tải 35–50 đội. Chưa có API/admin route hay UI công bố màu trước ván (Bảo/Huy).
+- **API admin + UI công bố màu trước ván** (Huy router / Bảo React) — chưa có.
+- **Snapshot builder từ giải thật**: cần chốt runtime identity/hash, map pack, cutoff, và pin
+  submission/bot theo từng vòng; hiện caller phải cung cấp snapshot đã verify.
 - Chưa persist series knockout (main/final/extra) — bảng riêng và bracket pinning còn thiếu.
-- Chưa nối kết quả từ worker/replay đã accepted vào `record_result`; hiện caller phải cung cấp
+- Chưa nối kết quả từ worker/replay đã accepted vào `record_result`; caller phải cung cấp
   `replay_hash` của attempt đã chấp nhận.
-- Trigger Start vẫn khóa; không có scheduler queue/runner.
+- Trigger Start vẫn khóa; không có scheduler queue/runner thật.

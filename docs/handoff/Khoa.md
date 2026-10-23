@@ -2,6 +2,25 @@
 
 ## Trạng thái mới nhất
 
+### 24/10/2026 — K2 real DB sau H4: PASS 14/14 (migration đã apply)
+
+- Đồng bộ `origin/dev` (merge `e0075a4`): H4 đã apply **10/10 migration** trên Supabase thật,
+  gồm `20261025090000_official_schedule`; `db:verify` OK (driver/workerLeases/auth-CSRF, counts đọc được).
+- Thêm `tools/cli/k2-schedule-drill.js` + `npm run db:k2` + `tests/k2Drill.test.js` (**2/2**).
+  Drill tạo event/4 đội tạm, **không đụng dữ liệu thật**, cleanup trong `finally`.
+- **DB thật PASS 14/14**: open round + `round_exists`; load snapshot/genesis; **2 writer tranh
+  append** (một thắng, một `stale_prefix`); chain seq 1; record lặp idempotent; record khác
+  `result_conflict`; freeze thiếu ván `incomplete_schedule`; append/record đủ **12 ván**; load
+  xác minh toàn chain; freeze `frozen=true`; freeze lặp idempotent. Leftover sau drill = 0.
+- Lưu ý: chưa kiểm RLS bằng JWT anon/authenticated (`.env` chỉ có service role), crash giữa
+  transaction, nhiều process/region, tải 35–56 đội.
+- **Còn thiếu K2:** API admin + UI công bố màu (Huy/Bảo), snapshot builder từ giải thật
+  (runtime identity/hash + pin submission theo vòng), persist knockout, nối result accepted.
+  Trigger `official_scheduler_not_ready` và Start vẫn khóa.
+- Cập nhật `docs/OFFICIAL-SCHEDULE.md`, `docs/07`; migration không sửa lại.
+- Full suite **319/319 pass**, 0 skip; Vite build exit 0 (1650 modules); `git diff --check` sạch.
+
+
 ### 24/10/2026 — K4 seccomp + CPU budget + attestation (dev 14/14, production chưa mở)
 
 - **Chọn công cụ** sau khi đối chiếu judge thật: `bubblewrap` (nhẹ, không setuid, Flatpak dùng,

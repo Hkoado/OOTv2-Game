@@ -83,16 +83,19 @@
 
 ## K2 schedule persistence — 24/10/2026
 
-- Thêm migration `20261025090000_official_schedule.sql` (**CHƯA apply**): bảng `mvp_official_rounds`
-  (snapshot + genesis/chain head + frozen) và `mvp_official_games` (seq/game_key unique, màu khác nhau,
-  seed uint32, map khớp snapshot, kết quả một lần kèm replay hash), RLS + `service_role` only.
+- Migration `20261025090000_official_schedule.sql` **đã apply remote** (trong 10 file H4 apply):
+  bảng `mvp_official_rounds` (snapshot + genesis/chain head + frozen) và `mvp_official_games`
+  (seq/game_key unique, màu khác nhau, seed uint32, map khớp snapshot, kết quả một lần kèm replay hash),
+  RLS + `service_role` only.
 - 4 RPC: open (pin genesis), append (chặn `stale_prefix`, `round_frozen`, `map_mismatch`,
   `duplicate_game`), record_result (`result_conflict`), freeze (`incomplete_schedule`,
   `pending_results`). Client `server/shared/officialSchedule.js` chuẩn hoá payload + verify toàn bộ
   chain khi load; `nextPinnedGroupGame` trả ván kế tiếp kèm màu đã chốt từ prefix có kết quả.
-- Test **8/8** mock PostgREST + guardrail SQL; full suite/build xem handoff. **PostgreSQL thật,
-  API/UI công bố màu, series knockout và nối kết quả accepted đều NOT RUN.** Trigger Start giữ khóa.
-  Chi tiết: [K2 schedule persistence](OFFICIAL-SCHEDULE.md).
+- **Drill DB thật `npm run db:k2` PASS 14/14** (4 đội/12 ván): open idempotent, 2 writer (một
+  `stale_prefix`), chain, record idempotent/conflict, freeze thiếu/đủ/lặp; cleanup leftover=0.
+- Test mock **8/8** + guardrail drill **2/2**. Full suite/build xem handoff.
+  **Còn thiếu:** API admin/UI công bố màu, snapshot builder từ giải thật, series knockout,
+  nối result accepted. Trigger Start giữ khóa. Chi tiết: [K2 schedule persistence](OFFICIAL-SCHEDULE.md).
 
 ## Gói offline tự chứa — 24/10/2026
 
