@@ -50,13 +50,18 @@
 - `sandbox/linux/run-bot.sh`: `--unshare-all`, `clearenv`, `--cap-drop ALL`, `/usr` read-only,
   `/proc` + `/dev` riêng, `/tmp` tmpfs 16 MiB, không `/mnt|/home|/sys`; cgroup v2
   memory/pids/cpu + watchdog + cleanup; stdin/stdout JSONL truyền nguyên.
-- `sandbox/linux/selftest.sh` **11/11 PASS**: JSONL round-trip, FS/network/env isolation, fork bomb
-  (124), memory 64 MiB (137), CPU/timeout (124), CPU accounting, stdout flood (cắt 64 KiB),
-  wall timeout, cgroup + process cleanup.
-- Adapter `server/judge/linuxSandboxSession.js` test **7/7** + E2E thật trong WSL (setup 9 quân/move);
-  Linux-only mặc định, Windows phải truyền bridge `launch`. Chưa đo CPU/RAM per request.
-- **Chưa production:** chưa seccomp/attestation, WSL chia sẻ host kernel; không dùng cho code sinh viên.
-  Chi tiết: [Sandbox WSL](SANDBOX-WSL.md).
+- `sandbox/linux/selftest.sh` **14/14 PASS**: JSONL round-trip, metrics + seccomp mode, seccomp probe
+  (`Seccomp:2`, 6 syscall escape → EPERM), mode off, FS/network/env isolation, fork bomb (124),
+  memory 64 MiB (137), CPU/timeout (124), CPU accounting, stdout flood (cắt 64 KiB), wall timeout,
+  cgroup + process cleanup.
+- Seccomp deny-list 67 syscall qua `bwrap --seccomp` + libseccomp (`python3-seccomp`), fail-closed;
+  `attest.sh` xuất receipt 24 h (hash profile, probe, selftest); factory `campusSandboxFactory.js`
+  từ chối WSL/hết hạn/seccomp off và mặc định vẫn `trusted-dev`.
+- Adapter `server/judge/linuxSandboxSession.js` **9/9** + E2E thật trong WSL (setup 9 quân/move);
+  đo CPU theo cgroup (50 ms), map 137 → `BOT_MEMORY_LIMIT`; profile `linux-sandbox.v2`.
+- **Chưa production:** deny-list (chưa allowlist), chưa nghiệm thu VM Linux thật, WSL chia sẻ host kernel.
+  Ngân sách phần cứng + checklist: [Sandbox production](SANDBOX-PRODUCTION.md); dev:
+  [Sandbox WSL](SANDBOX-WSL.md).
 
 ## K2 schedule persistence — 24/10/2026
 

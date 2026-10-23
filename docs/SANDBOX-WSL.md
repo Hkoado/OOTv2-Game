@@ -54,16 +54,21 @@ wsl.exe -d ootv2-sandbox -u root -- /bin/bash /mnt/d/OOTv2-Game/sandbox/linux/se
 ## Adapter Node
 
 `server/judge/linuxSandboxSession.js` — `createLinuxSandboxSession({filePath, allowedRoot, runnerPath,
-launch?, memoryBytes, pids, cpuMax, timeoutMs, responseTotalMs, spawnProcess?, killProcess?, runnerEnv?})`.
+launch?, memoryBytes, pids, cpuMax, timeoutMs, responseTotalMs, cpuTotalMs?, cgroupRoot?, cgroupId?,
+measureResources?, seccompMode?, spawnProcess?, killProcess?, runnerEnv?})`.
 
-- Mặc định chỉ chạy khi `process.platform === 'linux'`; Windows phải truyền `launch` tường minh
-  (ví dụ bridge WSL) — không tự bật, không dùng `shell`.
+- Profile `linux-sandbox.v2`. Mặc định chỉ chạy khi `process.platform === 'linux'`; Windows phải
+  truyền `launch` tường minh (bridge WSL), không dùng `shell`.
 - Kiểm artifact qua `resolveBotPath` (chỉ `.py`, không symlink, trong `allowedRoot`), dựng argv runner
-  với limit cụ thể, `runnerEnv` mặc định `{PATH:'/usr/bin:/bin'}` (không mang secret).
+  với `--cpu-seconds`, `--cgroup-root`, `--cgroup-id`, `--seccomp-mode`; `runnerEnv` mặc định
+  `{PATH:'/usr/bin:/bin'}` (không mang secret).
 - Dùng lại `parseBotJson`/`validateBotResponse` của `bot.v1`; giới hạn request/response/stdout/stderr;
-  timeout theo request + tổng; lỗi runner `78` → `sandbox_unavailable`, `124` → `BOT_TIMEOUT`.
-- `metrics()` chỉ đếm bytes/thời gian chờ; **chưa đo CPU/RAM per request** (runner có metrics cuối
-  phiên nhưng adapter chưa đọc). `productionReady:false`.
+  timeout theo request + tổng; runner `78` → `sandbox_unavailable`, `124` → `BOT_TIMEOUT`,
+  `137` → `BOT_MEMORY_LIMIT`.
+- **Đo CPU thật**: đọc `cpu.stat` trong cgroup của ván mỗi 50 ms; vượt `cpuTotalMs` → `BOT_CPU_LIMIT`
+  và kill session. `metrics()` trả `cpuMeasured`, `cpuUsec`, `memoryMeasured`, `memoryPeakBytes`,
+  `oomKills`, `seccomp`, `cgroup`.
+- Vẫn `productionReady:false`: chưa attestation, seccomp là deny-list, WSL chia sẻ kernel.
 
 Ví dụ bridge dev (chạy Node trong distro WSL):
 
@@ -73,44 +78,53 @@ const session = await createLinuxSandboxSession({
   allowedRoot: '/mnt/d/OOTv2-Game/sandbox/fixtures',
   runnerPath: '/mnt/d/OOTv2-Game/sandbox/linux/run-bot.sh',
   launch: (runner, args) => ({ command: '/bin/bash', args: [runner, ...args] }),
+  cgroupId: 'e2e-session-01', cpuTotalMs: 10000,
 });
 ```
 
-Bằng chứng 24/10/2026: `node /mnt/d/.../sandbox-session-e2e.mjs` trong distro (Node 18.19.1) trả
-`{"ok":true,"profile":"linux-sandbox.v1","placements":9,"move":{"pieceId":"p1","to":"a1"}}`,
-`stdoutBytes=497`, không còn cgroup sau khi đóng. Unit test `tests/linuxSandboxSession.test.js` 7/7
-(fake child): argv/limit/env, round-trip setup+move, envelope sai, budget, timeout/exit 78/spawn fail,
-close hủy request.
+Bằng chứng 24/10/2026: `sandbox-session-e2e.mjs` trong distro (Node 18.19.1) trả
+`{"ok":true,"profile":"linux-sandbox.v2","placements":9,"move":{"pieceId":"p1","to":"a1"}}`;
+metrics `cpuMeasured=true`, `memoryPeakBytes≈5 MiB`, `seccomp=deny-list.v1`, cgroup dọn sạch.
+Unit test `tests/linuxSandboxSession.test.js` **9/9** (fake child): argv/limit/env, round-trip,
+envelope sai, budget, timeout/78/137/spawn fail, CPU budget, close.
 
 
 
 Preflight: `kernel=6.18.54.1-microsoft-standard-WSL2`, `python=3.12.3`, `bwrap=0.9.0`,
-`cgroup_controllers=cpuset cpu io memory hugetlb pids rdma`, `preflight=ok`.
+`cgroup_controllers=cpuset cpu io memory hugetlb pids rdma`, `seccomp_bindings=ok`,
+`bwrap_seccomp=1`, profile `blocked=67`, `preflight=ok`.
 
-Selftest **11/11 PASS**:
+Selftest **14/14 PASS**:
 
 | Kiểm tra | Kết quả |
 |---|---|
 | JSONL round-trip (stdin/stdout) | pass |
-| Metrics cgroup ghi được | pass |
+| Metrics cgroup ghi được | pass (`seccomp=deny-list.v1`) |
+| Seccomp probe | pass — `Seccomp:2`; ptrace/mount/unshare/keyctl/bpf/io_uring_setup đều `EPERM` |
+| `--seccomp-mode off` | pass — ghi `off`, `Seccomp:0` (chỉ dùng dev) |
 | FS/network/env isolation | pass — không thấy `/mnt`, `/home`; không đọc `/etc/shadow`, `/root`; `/usr` read-only; `/tmp` ghi được; không nối mạng; env không có `SUPABASE_*` |
 | Fork bomb | bị chặn, exit 124 |
 | Memory limit 64 MiB | exit 137 (OOM) |
 | CPU + wall timeout | exit 124 sau ~2 s |
-| CPU accounting | ~262 ms, dưới hạn |
-| Stdout flood | cắt ở 65 536 B, exit 1, 81 ms |
-| Wall timeout khi sleep | exit 124 sau ~1,3 s |
+| CPU accounting | ~261 ms, dưới hạn |
+| Stdout flood | cắt ở 65 536 B, exit 1, 109 ms |
+| Wall timeout khi sleep | exit 124 sau ~1,35 s |
 | Cgroup cleanup | pass, không còn thư mục |
 | Process cleanup | pass, không còn `/work/bot.py` |
 
-Log: `data/khoa-next/sandbox-preflight.txt`, `sandbox-selftest3.txt` (gitignored).
+Log: `data/khoa-next/preflight2.txt`, `selftest3.txt`, `e2e2.txt`, `attest-run2.txt` (gitignored).
+`attest.sh` trên WSL trả `result=dev-only` (đúng: WSL bị factory từ chối), probe/hash pass.
 
 ## Giới hạn / chưa đạt gate production
 
-- **Chưa nối worker**: `server/judge/*` vẫn dùng trusted session; chưa có adapter Node gọi runner.
-- **Chưa có seccomp/syscall allowlist**, chưa attestation, chưa đo CPU/RAM theo từng request.
+- **Chưa nối worker/API**: `server/judge/campusSandboxFactory.js` đã sẵn để chọn adapter, nhưng
+  worker campus/API chưa tồn tại; mặc định vẫn `trusted-dev`.
+- Seccomp hiện là **deny-list**, chưa phải allowlist; chưa attestation trên VM thật; adapter
+  chưa đo RAM theo từng request (chỉ peak cả ván + OOM kill).
 - WSL2 chia sẻ kernel/tài nguyên với Windows host; không tương đương **VM sạch** cho code lạ.
-  Không dùng cho sinh viên cho tới khi có VM Linux riêng + seccomp + review.
-- Chưa thử escape nâng cao (ptrace, keyring, `/proc/sys`, binfmt interop); mới chặn các đường cơ bản.
+  Factory từ chối receipt WSL. Không dùng cho sinh viên tới khi có VM Linux riêng + review.
+- Chưa thử escape nâng cao (kernel bug, side-channel, binfmt interop).
 - Distro nằm trong `data/` (gitignored), không tự xóa; muốn reset thì `wsl --unregister ootv2-sandbox`
   rồi import lại.
+
+Kế hoạch production + ngân sách phần cứng: [SANDBOX-PRODUCTION.md](SANDBOX-PRODUCTION.md).

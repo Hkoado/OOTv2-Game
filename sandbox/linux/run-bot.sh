@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
-# Linux sandbox launcher for trusted dev acceptance. NOT a production sandbox:
-# no seccomp profile yet, no OS-level attestation, no student-code gate.
+# Linux sandbox launcher (dev acceptance profile, not an attestation).
+# Layers: user/mount/net/pid/uts/ipc namespaces (bwrap), read-only root,
+# dropped capabilities, cgroup v2 memory/pids/cpu, rlimits, wall watchdog and a
+# seccomp deny-list (libseccomp -> bwrap --seccomp).
 # Usage: run-bot.sh --bot /abs/bot.py [--timeout-ms 10000] [--memory-bytes N]
-#        [--pids 32] [--cpu-max "50000 100000"] [--metrics /abs/metrics.json]
+#        [--pids 32] [--cpu-max "50000 100000"] [--cpu-seconds 30]
+#        [--cgroup-root /sys/fs/cgroup/ootv2-sandbox] [--cgroup-id ID]
+#        [--seccomp-mode deny-list.v1|off] [--metrics /abs/metrics.json]
 # stdin/stdout/stderr are passed through unchanged; stdout is reserved for bot JSONL.
 set -euo pipefail
 
 BWRAP="${OOTV2_BWRAP:-/usr/bin/bwrap}"
 PYTHON="${OOTV2_PYTHON:-/usr/bin/python3}"
 CGROUP_ROOT="${OOTV2_CGROUP_ROOT:-/sys/fs/cgroup/ootv2-sandbox}"
-bot="" timeout_ms=10000 memory_bytes=268435456 pids_max=32 cpu_max="50000 100000" metrics=""
+bot="" timeout_ms=10000 memory_bytes=134217728 pids_max=16 cpu_max="100000 100000"
+cpu_seconds=25 cgroup_id="" seccomp_mode="${OOTV2_SECCOMP:-deny-list.v1}" metrics=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --bot) bot="${2:-}"; shift 2 ;;
@@ -17,6 +22,10 @@ while [ $# -gt 0 ]; do
     --memory-bytes) memory_bytes="${2:-}"; shift 2 ;;
     --pids) pids_max="${2:-}"; shift 2 ;;
     --cpu-max) cpu_max="${2:-}"; shift 2 ;;
+    --cpu-seconds) cpu_seconds="${2:-}"; shift 2 ;;
+    --cgroup-root) CGROUP_ROOT="${2:-}"; shift 2 ;;
+    --cgroup-id) cgroup_id="${2:-}"; shift 2 ;;
+    --seccomp-mode) seccomp_mode="${2:-}"; shift 2 ;;
     --metrics) metrics="${2:-}"; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 64 ;;
   esac
@@ -34,16 +43,40 @@ size=$(stat -c %s -- "$bot")
 case "$timeout_ms" in ''|*[!0-9]*) die "invalid_timeout" 64 ;; esac
 case "$memory_bytes" in ''|*[!0-9]*) die "invalid_memory" 64 ;; esac
 case "$pids_max" in ''|*[!0-9]*) die "invalid_pids" 64 ;; esac
+case "$cpu_seconds" in ''|*[!0-9]*) die "invalid_cpu_seconds" 64 ;; esac
 [ "$timeout_ms" -ge 100 ] && [ "$timeout_ms" -le 120000 ] || die "invalid_timeout" 64
 [ "$memory_bytes" -ge 33554432 ] && [ "$memory_bytes" -le 2147483648 ] || die "invalid_memory" 64
 [ "$pids_max" -ge 4 ] && [ "$pids_max" -le 256 ] || die "invalid_pids" 64
+[ "$cpu_seconds" -ge 1 ] && [ "$cpu_seconds" -le 120 ] || die "invalid_cpu_seconds" 64
 case "$cpu_max" in *' '*) : ;; *) die "invalid_cpu_max" 64 ;; esac
+case "$CGROUP_ROOT" in /*) : ;; *) die "invalid_cgroup_root" 64 ;; esac
+case "$CGROUP_ROOT" in *..*) die "invalid_cgroup_root" 64 ;; esac
+if [ -z "$cgroup_id" ]; then cgroup_id="$(cat /proc/sys/kernel/random/uuid)"; fi
+[[ "$cgroup_id" =~ ^[A-Za-z0-9_-]{8,64}$ ]] || die "invalid_cgroup_id" 64
+case "$seccomp_mode" in deny-list.v1|off) : ;; *) die "invalid_seccomp_mode" 64 ;; esac
 if [ -n "$metrics" ]; then case "$metrics" in /*) : ;; *) die "invalid_metrics_path" 64 ;; esac; fi
 
 [ -f /sys/fs/cgroup/cgroup.controllers ] || die "cgroup_v2_missing"
 grep -qw memory /sys/fs/cgroup/cgroup.controllers || die "cgroup_memory_missing"
 grep -qw pids /sys/fs/cgroup/cgroup.controllers || die "cgroup_pids_missing"
-run_id="$(cat /proc/sys/kernel/random/uuid)"
+
+# Seccomp deny-list. Fails closed: a missing generator/bindings stops the run
+# instead of silently starting a sandbox without syscall filtering.
+seccomp_fd=""
+if [ "$seccomp_mode" = "deny-list.v1" ]; then
+  generator="${OOTV2_SECCOMP_GENERATOR:-$(dirname "$(realpath "$0")")/seccomp-profile.py}"
+  [ -f "$generator" ] || die "seccomp_generator_missing"
+  cache="${OOTV2_SECCOMP_CACHE:-/run/ootv2-sandbox-seccomp}"
+  mkdir -p "$cache" || die "seccomp_cache_failed"
+  profile="$cache/$(uname -m).bpf"
+  if [ ! -s "$profile" ] || [ "$generator" -nt "$profile" ]; then
+    "$PYTHON" "$generator" "$profile" >&2 || die "seccomp_profile_failed"
+    chmod 0644 "$profile"
+  fi
+  exec 9<"$profile"
+  seccomp_fd=9
+fi
+run_id="$cgroup_id"
 mkdir -p "$CGROUP_ROOT" || die "cgroup_root_failed"
 # Best effort: the root cgroup may already delegate these controllers.
 printf '+cpu +memory +pids' > /sys/fs/cgroup/cgroup.subtree_control 2>/dev/null || true
@@ -62,9 +95,10 @@ write_metrics() {
   mem_peak=$(cat "$CG/memory.peak" 2>/dev/null || echo 0)
   cpu_usage=$(awk '/^usage_usec / { print $2 }' "$CG/cpu.stat" 2>/dev/null || echo 0)
   oom=$(awk '/^oom_kill / { print $2 }' "$CG/memory.events" 2>/dev/null || echo 0)
-  printf '{"exitCode":%s,"memoryPeakBytes":%s,"cpuUsageUsec":%s,"oomKills":%s,"timedOut":%s}\n' \
+  printf '{"exitCode":%s,"memoryPeakBytes":%s,"cpuUsageUsec":%s,"oomKills":%s,"timedOut":%s,"seccomp":"%s","cpuSeconds":%s,"cgroup":"%s"}\n' \
     "${final_status:-0}" "${mem_peak:-0}" "${cpu_usage:-0}" "${oom:-0}" \
-    "$([ "${final_status:-0}" = 124 ] && echo true || echo false)" > "$metrics_file" 2>/dev/null || true
+    "$([ "${final_status:-0}" = 124 ] && echo true || echo false)" \
+    "$seccomp_mode" "$cpu_seconds" "$CG" > "$metrics_file" 2>/dev/null || true
   metrics_written=1
 }
 cleanup() {
@@ -89,7 +123,7 @@ on_signal() { timed_out=1; final_status=124; cleanup; exit 124; }
 trap cleanup EXIT
 trap on_signal INT TERM
 
-ulimit -t 5 || die "rlimit_cpu_failed"
+ulimit -t "$cpu_seconds" || die "rlimit_cpu_failed"
 ulimit -f 4096 || die "rlimit_file_failed"
 ulimit -n 64 || die "rlimit_fds_failed"
 
@@ -105,6 +139,7 @@ mount_args=(
   --setenv PATH /usr/bin:/bin --setenv LANG C.UTF-8 --setenv LC_ALL C.UTF-8
   --cap-drop ALL
 )
+if [ -n "$seccomp_fd" ]; then mount_args+=(--seccomp "$seccomp_fd"); fi
 [ -f /etc/ld.so.cache ] && mount_args+=(--ro-bind /etc/ld.so.cache /etc/ld.so.cache)
 [ -f /etc/localtime ] && mount_args+=(--ro-bind /etc/localtime /etc/localtime)
 watchdog() {

@@ -2,7 +2,38 @@
 
 ## Trạng thái mới nhất
 
-### 24/10/2026 — K4a sandbox Linux trên WSL: dev acceptance 11/11 (chưa production)
+### 24/10/2026 — K4 seccomp + CPU budget + attestation (dev 14/14, production chưa mở)
+
+- **Chọn công cụ** sau khi đối chiếu judge thật: `bubblewrap` (nhẹ, không setuid, Flatpak dùng,
+  có `--seccomp`) + cgroup v2 + libseccomp. nsjail/isolate là phương án allowlist/judge thuần;
+  gVisor/Firecracker cho code công khai. Bảng so sánh + link trong `docs/SANDBOX-PRODUCTION.md`.
+- **Seccomp**: `sandbox/linux/seccomp-profile.py` sinh BPF deny-list 67 syscall (mount*, unshare,
+  setns, ptrace, process_vm_*, keyctl/add_key, bpf, perf_event_open, io_uring_*, userfaultfd,
+  open_by_handle_at, kexec/module, swap/reboot...) → `EPERM`; runner fail-closed nếu thiếu
+  `python3-seccomp`/generator; `--seccomp-mode off` chỉ để dev và được ghi vào metrics.
+- **Runner**: `--cpu-seconds`, `--cgroup-id`/`--cgroup-root` (adapter đọc đúng cgroup), metrics
+  thêm `seccomp`, `cpuSeconds`, `cgroup`; exit 0/124/137/78/64 giữ nguyên.
+- **Selftest 14/14 PASS** (WSL, kernel 6.18.54.1): thêm probe `Seccomp:2` + 6 syscall escape
+  (`EPERM`), mode off (`Seccomp:0`); các test cũ vẫn pass (fork 124, mem 137, CPU/wall 124,
+  flood cắt 64 KiB, FS/net/env, cleanup).
+- **Adapter `linux-sandbox.v2`**: đọc `cpu.stat` mỗi 50 ms, vượt `cpuTotalMs` → `BOT_CPU_LIMIT`;
+  exit 137 → `BOT_MEMORY_LIMIT`; metrics `cpuMeasured`, `cpuUsec`, `memoryMeasured`,
+  `memoryPeakBytes`, `oomKills`, `seccomp`, `cgroup`; unit **9/9**. E2E WSL: setup 9 quân + move,
+  `cpuMeasured=true`, `memoryPeak≈5 MiB`, `seccomp=deny-list.v1`, cgroup sạch.
+- **Attestation + factory**: `sandbox/linux/attest.sh` xuất receipt 24 h (kernel, hash BPF, probe,
+  selftest); `server/judge/campusSandboxFactory.js` từ chối WSL, receipt hết hạn/sai, seccomp off,
+  runner tương đối; mặc định vẫn `trusted-dev`. Test **4/4**.
+- **Ngân sách đề xuất**: 128 MiB RAM/bot, 20 s CPU/ván/bot, setup 5 s, move 1 s, pids 16,
+  `cpu.max` 1 core; VM 4 vCPU/8 GiB/80 GiB cho ~200 ván/ngày (4 ván đồng thời). Chi tiết +
+  checklist production trong `docs/SANDBOX-PRODUCTION.md`.
+- `campusMatchRunner` giờ trả `sandboxProfiles` và limitations lấy từ session (không còn ghi
+  "No OS sandbox" khi chạy sandbox thật).
+- **Chưa production**: deny-list (chưa allowlist), chưa chạy `attest.sh --full` trên VM Linux thật,
+  campus worker/API chưa nối factory. H4/DB và gate Start/consumer giữ nguyên.
+- Full suite **312/312 pass**, 0 skip; Vite build exit 0 (1650 modules); `git diff --check` sạch.
+
+
+### 24/10/2026 — K4a (bản đầu, trước seccomp): dev acceptance 11/11
 
 - Dựng **distro WSL2 riêng** `ootv2-sandbox` từ Ubuntu base 24.04.3, import vào
   `data/wsl/ootv2-sandbox` (gitignored, D:), không dùng Ubuntu cá nhân. WSL 3.0.3 / kernel
@@ -25,7 +56,7 @@
   Windows, chưa thử escape nâng cao. Không dùng cho code sinh viên; mọi gate Start/consumer giữ nguyên.
 - Đã merge thêm `origin/dev` (`4477be5`, sửa SubmissionsPage/githubSyncState) không conflict.
   Sau merge: **306/306 test pass**, Vite build exit 0 (1650 modules), `git diff --check` sạch.
-- Bước tiếp: budget CPU/RAM per request từ adapter, seccomp profile, rồi nghiệm thu trên VM Linux sạch.
+- (Đã thực hiện ở mục K4 phía trên; còn nghiệm thu trên VM Linux sạch.)
 
 ### 24/10/2026 — K2 schedule persistence + màu: READY FOR REVIEW (migration chưa apply)
 

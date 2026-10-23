@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createLinuxSandboxSession } from '../server/judge/linuxSandboxSession.js';
@@ -45,7 +45,7 @@ function setup(t, overrides = {}) {
       return child;
     },
     killProcess: (target) => target.kill('SIGKILL'),
-    responseTotalMs: 5000, timeoutMs: 4000, ...overrides,
+    responseTotalMs: 5000, timeoutMs: 4000, cgroupId: 'testsandbox01', ...overrides,
   };
   return { root, bot, child, calls, options };
 }
@@ -64,6 +64,10 @@ test('sandbox session validates platform, runner, limits and artifact path', asy
   await assert.rejects(createLinuxSandboxSession({ ...options, cpuMax: 'many' }), { code: 'invalid_limits' });
   await assert.rejects(createLinuxSandboxSession({ ...options, launch: () => null }), { code: 'invalid_launch' });
   await assert.rejects(createLinuxSandboxSession({ ...options, runnerEnv: { PATH: 1 } }), { code: 'invalid_env' });
+  await assert.rejects(createLinuxSandboxSession({ ...options, cgroupRoot: 'relative' }), { code: 'invalid_cgroup' });
+  await assert.rejects(createLinuxSandboxSession({ ...options, cgroupId: '../escape' }), { code: 'invalid_cgroup' });
+  await assert.rejects(createLinuxSandboxSession({ ...options, seccompMode: 'off ' }), { code: 'invalid_seccomp' });
+  await assert.rejects(createLinuxSandboxSession({ ...options, cpuTotalMs: 10 }), { code: 'invalid_limits' });
   const outside = path.join(root, '..', 'outside.py');
   await assert.rejects(createLinuxSandboxSession({ ...options, filePath: outside }), { code: 'invalid_artifact' });
   await assert.rejects(createLinuxSandboxSession({ ...options, filePath: path.join(root, 'bot.txt') }), { code: 'invalid_artifact' });
@@ -151,9 +155,9 @@ test('sandbox session close cancels work and rejects later requests', async (t) 
 });
 
 test('sandbox session spawns the runner with explicit limits, no shell and empty env', async (t) => {
-  const { child, calls, options } = setup(t, { memoryBytes: 67108864, pids: 16, cpuMax: '20000 100000' });
+  const { child, calls, options } = setup(t, { memoryBytes: 67108864, pids: 16, cpuMax: '20000 100000', cpuTotalMs: 30000 });
   const session = await createLinuxSandboxSession(options);
-  assert.equal(session.profile, 'linux-sandbox.v1');
+  assert.equal(session.profile, 'linux-sandbox.v2');
   assert.equal(session.productionReady, false);
   assert.equal(calls.length, 1);
   const { command, args, spawnOptions } = calls[0];
@@ -162,7 +166,45 @@ test('sandbox session spawns the runner with explicit limits, no shell and empty
   assert.deepEqual(spawnOptions.env, { PATH: '/usr/bin:/bin' });
   assert.deepEqual(args.slice(0, 2), ['--bot', realpathSync(options.filePath)]);
   assert.deepEqual(args.slice(2), ['--timeout-ms', '4000', '--memory-bytes', '67108864',
-    '--pids', '16', '--cpu-max', '20000 100000']);
+    '--pids', '16', '--cpu-max', '20000 100000', '--cpu-seconds', '35',
+    '--cgroup-root', '/sys/fs/cgroup/ootv2-sandbox', '--cgroup-id', 'testsandbox01',
+    '--seccomp-mode', 'deny-list.v1']);
   await session.close();
   assert.deepEqual(child.killed, ['SIGKILL']);
+});
+
+test('sandbox session enforces the cgroup CPU budget and reports measured usage', async (t) => {
+  const { root, child, options } = setup(t, { measureResources: true, cpuTotalMs: 120 });
+  const cgroupRoot = path.join(root, 'cg');
+  const cgroupDir = path.join(cgroupRoot, 'testsandbox01');
+  mkdirSync(cgroupDir, { recursive: true });
+  writeFileSync(path.join(cgroupDir, 'cpu.stat'), 'usage_usec 1000\n');
+  writeFileSync(path.join(cgroupDir, 'memory.current'), '4096\n');
+  writeFileSync(path.join(cgroupDir, 'memory.peak'), '8192\n');
+  writeFileSync(path.join(cgroupDir, 'memory.events'), 'oom_kill 0\n');
+  const session = await createLinuxSandboxSession({ ...options, cgroupRoot });
+  const pending = session.request(request('cpu:1'));
+  const rejected = assert.rejects(pending, { code: 'BOT_CPU_LIMIT', name: 'BotProtocolError' });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  writeFileSync(path.join(cgroupDir, 'cpu.stat'), 'usage_usec 501000\n');
+  await rejected;
+  assert.ok(child.killed.includes('SIGKILL'));
+  const metrics = session.metrics();
+  assert.equal(metrics.cpuMeasured, true);
+  assert.equal(metrics.memoryMeasured, true);
+  assert.equal(metrics.cpuUsec, 500000);
+  assert.equal(metrics.memoryPeakBytes, 8192);
+  assert.equal(metrics.seccomp, 'deny-list.v1');
+  assert.equal(metrics.cgroup, cgroupDir);
+  await session.close();
+});
+
+test('sandbox session maps an OOM kill to BOT_MEMORY_LIMIT', async (t) => {
+  const { child, options } = setup(t);
+  const session = await createLinuxSandboxSession(options);
+  const pending = session.request(request('oom:1'));
+  await new Promise((resolve) => setImmediate(resolve));
+  child.emit('close', 137);
+  await assert.rejects(pending, { code: 'BOT_MEMORY_LIMIT' });
+  await session.close();
 });

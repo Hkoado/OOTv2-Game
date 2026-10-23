@@ -30,6 +30,33 @@ else
 fi
 [ "$(metric "$tmp/echo.json" memoryPeakBytes)" -gt 0 ] 2>/dev/null \
   && ok "metrics collected" || no "metrics collected" "missing memoryPeakBytes"
+[ "$(metric "$tmp/echo.json" seccomp)" = "deny-list.v1" ] \
+  && ok "seccomp mode recorded" || no "seccomp mode recorded" "missing seccomp field"
+
+run seccomp "$fixtures/syscall_probe.py" 5000 </dev/null
+if [ "$code" -eq 0 ] && /usr/bin/python3 - "$tmp/seccomp.out" <<'PY'
+import json
+import sys
+report = json.load(open(sys.argv[1]))
+assert report["seccomp"] == "2", report["seccomp"]
+assert report["blocked"] is True, report["checks"]
+for name in ("ptrace", "mount", "unshare", "keyctl", "bpf", "io_uring_setup"):
+    check = report["checks"][name]
+    assert check["result"] == -1 and check["errno"] == 1, (name, check)
+PY
+then
+  ok "seccomp deny-list blocks escape syscalls"
+else
+  no "seccomp deny-list blocks escape syscalls" "exit=$code $(head -c 300 "$tmp/seccomp.out")"
+fi
+
+run seccomp_off "$fixtures/syscall_probe.py" 5000 --seccomp-mode off </dev/null
+if [ "$code" -eq 0 ] && [ "$(metric "$tmp/seccomp_off.json" seccomp)" = "off" ] \
+  && /usr/bin/python3 -c 'import json,sys; assert json.load(open(sys.argv[1]))["seccomp"] == "0"' "$tmp/seccomp_off.out"; then
+  ok "seccomp-mode off is explicit and recorded"
+else
+  no "seccomp-mode off is explicit and recorded" "exit=$code"
+fi
 
 run probe "$fixtures/probe.py" 5000 </dev/null
 if [ "$code" -eq 0 ] && /usr/bin/python3 - "$tmp/probe.out" <<'PY'
