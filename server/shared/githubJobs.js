@@ -31,6 +31,13 @@ export function clampLeaseSeconds(value) {
   return Math.min(900, Math.max(10, Math.round(seconds)));
 }
 
+/** Giới hạn 1..10 lần claim/retry (DB cũng kẹp). */
+export function clampMaxAttempts(value) {
+  const attempts = Number(value);
+  if (!Number.isFinite(attempts)) return DEFAULT_MAX_ATTEMPTS;
+  return Math.min(10, Math.max(1, Math.round(attempts)));
+}
+
 /** Chuẩn hoá outcome trước khi gửi RPC; ném `HttpError` nếu thiếu dữ liệu bắt buộc. */
 export function validateFinishOutcome(outcome) {
   if (!outcome || typeof outcome !== 'object' || Array.isArray(outcome)) throw fail('bad_outcome', 'Outcome phải là object.');
@@ -86,11 +93,12 @@ function assertJob({ jobId, token, generation }) {
 }
 
 /** Claim một job đang chờ/lease hết hạn; trả `null` khi không có việc. */
-export async function claimGithubJob({ worker, leaseSeconds = DEFAULT_LEASE_SECONDS } = {}) {
+export async function claimGithubJob({ worker, leaseSeconds = DEFAULT_LEASE_SECONDS, maxAttempts = DEFAULT_MAX_ATTEMPTS } = {}) {
   if (typeof worker !== 'string' || !worker.trim()) throw fail('bad_worker', 'worker id không hợp lệ.');
   const result = await rpc('mvp_github_claim', {
     p_worker: worker.trim().slice(0, 120),
     p_lease_seconds: clampLeaseSeconds(leaseSeconds),
+    p_max_attempts: clampMaxAttempts(maxAttempts),
   });
   if (!result) return null;
   return {
@@ -131,31 +139,64 @@ export async function progressGithubJob({ jobId, token, generation, status, note
   }));
 }
 
-/** Ghi kết quả (submission + receipt + job nguyên tử). `false` = mất lease, không được coi là đã ghi. */
+/**
+ * Ghi kết quả và trả envelope để đối soát: `{ applied, alreadyFinished, leaseLost, receipt }`.
+ * - `alreadyFinished=true`: lần trước đã commit nhưng mất response → KHÔNG tạo submission lần 2;
+ *   dùng `receipt.submission_id` để biết artifact của mình đã được nhận hay chưa.
+ * - `leaseLost=true`: worker cũ/lease hết hạn → dừng, không coi là đã ghi.
+ */
 export async function finishGithubJob({ jobId, token, generation, outcome }) {
   assertJob({ jobId, token, generation });
   const payload = validateFinishOutcome(outcome);
-  return Boolean(await rpc('mvp_github_finish', {
+  const result = await rpc('mvp_github_finish', {
     p_job: jobId,
     p_token: token,
     p_generation: generation,
     p_outcome: payload,
-  }));
+  });
+  if (!result || typeof result !== 'object') throw fail('bad_finish_response', 'DB không trả kết quả finish hợp lệ.');
+  if (result.ok === false) {
+    if (result.error === 'lease_lost') {
+      return { applied: false, alreadyFinished: false, leaseLost: true, receipt: null, job: null };
+    }
+    throw fail(result.error || 'finish_rejected', `Không ghi được kết quả: ${result.error || 'unknown'}`);
+  }
+  return {
+    applied: result.applied === true,
+    alreadyFinished: result.already_finished === true,
+    leaseLost: false,
+    receipt: result.receipt || null,
+    job: result.job || null,
+  };
 }
 
-/** Trả job để retry (backoff) hoặc đánh dấu infra_fault khi quá số lần. */
+/** Trả job để retry (backoff) hoặc `infra_fault`; lease hết hạn/sai token => `leaseLost`. */
 export async function releaseGithubJob({ jobId, token, generation, error = null, maxAttempts = DEFAULT_MAX_ATTEMPTS }) {
   assertJob({ jobId, token, generation });
   const safeError = typeof error === 'string' ? error.slice(0, 400) : null;
-  const attempts = Math.min(10, Math.max(1, Math.round(Number(maxAttempts) || DEFAULT_MAX_ATTEMPTS)));
   const result = await rpc('mvp_github_release', {
     p_job: jobId,
     p_token: token,
     p_generation: generation,
     p_error: safeError,
-    p_max_attempts: attempts,
+    p_max_attempts: clampMaxAttempts(maxAttempts),
   });
-  return result || { ok: false, reason: 'lease_lost' };
+  if (!result || typeof result !== 'object') throw fail('bad_release_response', 'DB không trả kết quả release hợp lệ.');
+  if (result.ok === false) {
+    return {
+      ok: false, applied: false, leaseLost: result.error === 'lease_lost',
+      status: null, attempt: null, availableAt: null, receipt: null,
+    };
+  }
+  return {
+    ok: true,
+    applied: result.applied === true,
+    leaseLost: false,
+    status: result.status || null,
+    attempt: Number(result.attempt || 0),
+    availableAt: result.available_at || null,
+    receipt: result.receipt || null,
+  };
 }
 
 export default {
@@ -168,4 +209,5 @@ export default {
   releaseGithubJob,
   validateFinishOutcome,
   clampLeaseSeconds,
+  clampMaxAttempts,
 };

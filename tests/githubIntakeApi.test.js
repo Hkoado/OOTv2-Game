@@ -80,7 +80,7 @@ function fakeRest(store) {
     if (op === 'in') return value.replace(/^\(|\)$/gu, '').split(',').includes(String(row[key]));
     return true;
   };
-  const rpcHandlers = { mvp_repo_connection_upsert: connectionUpsert, mvp_github_intake: intake };
+  const rpcHandlers = { mvp_repo_connection_upsert: connectionUpsert, mvp_repo_connection_revoke: connectionRevoke, mvp_github_intake: intake };
   return async (url, options = {}) => {
     const target = new URL(String(url));
     if (target.origin !== 'https://example.invalid') throw new Error(`Test không được gọi DB thật: ${target.origin}`);
@@ -157,16 +157,65 @@ function connectionUpsert(store, body) {
     };
     store.repo_connections.push(connection);
   } else {
-    const changed = Number(connection.repo_id) !== Number(body.p_repo_id)
-      || connection.repository !== body.p_repository || connection.branch !== body.p_branch;
+    const keep = Number(connection.repo_id) === Number(body.p_repo_id)
+      && connection.repository === body.p_repository
+      && connection.branch === body.p_branch
+      && connection.approved === true;
     connection.repo_id = Number(body.p_repo_id);
     connection.repository = body.p_repository;
     connection.branch = body.p_branch;
-    connection.approved = changed ? body.p_approved === true : connection.approved || body.p_approved === true;
+    connection.approved = body.p_approved === true || keep;
     if (body.p_approved) connection.approved_by = body.p_actor;
     connection.updated_at = now;
   }
-  return { ok: true, connection };
+  // Mirror SQL 20261024170000: thu hồi/đổi repo => hủy job chờ + đóng băng receipt chưa kết thúc.
+  let canceledJobs = 0;
+  if (connection.approved !== true) {
+    const mine = store.repo_sync_jobs.filter((job) => job.event_id === body.p_event && job.team_id === body.p_team
+      && ['queued', 'leased', 'running'].includes(job.status));
+    for (const job of mine) {
+      job.status = 'canceled';
+      job.lease_token = null;
+      job.lease_until = null;
+      job.error = 'repository_changed';
+      job.error_category = 'repo';
+      const receipt = store.github_receipts.find((row) => row.job_id === job.id);
+      if (receipt && ['resolving', 'fetching', 'checking'].includes(receipt.status)) {
+        receipt.status = 'frozen';
+        receipt.error = 'repository_changed';
+        receipt.error_category = 'repo';
+      }
+    }
+    canceledJobs = mine.length;
+  }
+  return { ok: true, connection, canceled_jobs: canceledJobs };
+}
+
+/** Bản JS mô phỏng `mvp_repo_connection_revoke`: luôn thu hồi duyệt + hủy job chờ. */
+function connectionRevoke(store, body) {
+  const event = store.tournaments.find((row) => row.id === body.p_event);
+  if (!event) return { ok: false, error: 'event_not_found' };
+  if (event.status !== 'draft') return { ok: false, error: 'event_frozen' };
+  const connection = store.repo_connections.find((row) => row.event_id === body.p_event && row.team_id === body.p_team);
+  if (!connection) return { ok: false, error: 'repository_not_registered' };
+  connection.approved = false;
+  connection.approved_by = null;
+  const mine = store.repo_sync_jobs.filter((job) => job.event_id === body.p_event && job.team_id === body.p_team
+    && ['queued', 'leased', 'running'].includes(job.status));
+  for (const job of mine) {
+    job.status = 'canceled';
+    job.lease_token = null;
+    job.lease_until = null;
+    job.error = 'repository_revoked';
+    job.error_category = 'repo';
+    const receipt = store.github_receipts.find((row) => row.job_id === job.id);
+    if (receipt && ['resolving', 'fetching', 'checking'].includes(receipt.status)) {
+      receipt.status = 'frozen';
+      receipt.error = 'repository_revoked';
+      receipt.error_category = 'repo';
+    }
+  }
+  return { ok: true, connection, canceled_jobs: mine.length };
 }
 
 /** Bản JS mô phỏng `mvp_github_intake`: idempotency theo SHA + quota 24h + freeze. */
@@ -463,3 +512,43 @@ test('GET trạng thái mới nhất: trả connection + receipt, đóng băng k
   assert.match(frozenView.body.receipt.note, /cutoff/u);
 });
 
+
+test('admin thu hồi repo: hủy job chờ, đóng băng receipt, chặn intake và chặn start khi còn pending', async (t) => {
+  const store = seedStore();
+  const { base } = await startApp(t, store);
+  const admin = await login(base, 'admin');
+  const team = await login(base, 'delta');
+
+  await call(base, `/api/local/events/${EVENT_ID}/repository`, {
+    method: 'PUT', session: admin, body: { team: TEAM_PARTICIPANT, repository: REPO_URL, branch: 'main' },
+  });
+  const submitted = await call(base, `/api/local/events/${EVENT_ID}/submissions/from-github`, {
+    method: 'POST', session: team, body: {},
+  });
+  assert.equal(submitted.status, 202);
+
+  // Còn job chờ => freeze phải đợi, không start.
+  const blockedStart = await call(base, `/api/local/events/${EVENT_ID}/start`, { method: 'POST', session: admin });
+  assert.equal(blockedStart.status, 409);
+  assert.equal(blockedStart.body.error, 'repo_sync_pending');
+
+  const revoked = await call(base, `/api/local/events/${EVENT_ID}/repository?team=${TEAM_PARTICIPANT}`, {
+    method: 'DELETE', session: admin,
+  });
+  assert.equal(revoked.status, 200);
+  assert.equal(revoked.body.connection.approved, false);
+  assert.equal(revoked.body.canceled_jobs, 1, 'hủy đúng job đang chờ');
+  assert.equal(store.repo_sync_jobs[0].status, 'canceled');
+  assert.equal(store.github_receipts[0].status, 'frozen', 'receipt chưa kết thúc bị đóng băng');
+
+  const afterRevoke = await call(base, `/api/local/events/${EVENT_ID}/submissions/from-github`, {
+    method: 'POST', session: team, body: {},
+  });
+  assert.equal(afterRevoke.status, 403);
+  assert.equal(afterRevoke.body.error, 'repo_not_approved');
+
+  // Hết job chờ: guard nhường cho logic giải (giải thiếu 8 đội nên 400, không còn 409 pending).
+  const afterCancel = await call(base, `/api/local/events/${EVENT_ID}/start`, { method: 'POST', session: admin });
+  assert.notEqual(afterCancel.body.error, 'repo_sync_pending');
+  assert.ok([400, 409].includes(afterCancel.status));
+});
