@@ -2,8 +2,8 @@
 
 ## Trạng thái mới nhất
 
-- Trạng thái: **H1 (+ fix review) và H3 DONE (mock-verified)** — intake, contract worker, lịch phát/privacy
-  đã có; **chưa chạy Postgres thật**; H2/H4 chưa làm.
+- Trạng thái: **H1 (+ fix review), H2 và H3 DONE (mock-verified)** — intake, contract worker, ACL/cổng upload,
+  đã có; **chưa chạy Postgres thật**; H4 chưa làm.
 - Phạm vi: H1 trong [phân công Huy](../assignments/Huy.md).
 - Checkpoint nguồn: `3de220e`; **commit kết quả H1: `be22c09`** trên nhánh `dev` (đã push `origin/dev`).
 - Migration `20261024130000_github_intake.sql`: **CHƯA apply remote** (quy ước repo: cần operator duyệt).
@@ -132,6 +132,26 @@ Worker BTC (Khoa/H2) dùng `server/shared/githubJobs.js`; mọi kiểm quyền n
   migration mới (ai đã apply bản nháp thì apply lại file cũ hoặc chạy migration mới).
 
 
+## H2 — transaction/ACL/intake (audit + đóng cổng upload)
+
+| Yêu cầu H2 | Trạng thái | Bằng chứng |
+| --- | --- | --- |
+| Receipt whitelist (không storage path/token/raw error) | DONE | `receiptView()` chỉ trả field DTO; test `githubIntakeApi` |
+| Cross-team denial | DONE | `scopeTeam`, `getJob` (owner/admin) và **`requireEventMember` mới** cho `getConnection`/`getLatest`/`requestSubmission` → 403 `scope_denied` trước khi gọi GitHub/DB |
+| Clock DB cho cutoff/freeze/quota | DONE | `mvp_github_intake` dùng `clock_timestamp()` + `FOR UPDATE`; giờ server chỉ dùng để chọn SHA |
+| Unique `(event, team, repo_id, commit_sha, path)` | DONE | unique index ở `mvp_github_receipts`/`mvp_repo_sync_jobs`; `unique_violation` trả receipt cũ |
+| Pending trước cutoff được chấm sau | DONE | job `queued` không có hạn; claim không kiểm cutoff |
+| Giữ bản valid cũ khi lỗi | DONE | `finish` invalid/infrastructure không tạo submission; `previous_valid_submission_id` trỏ submission cũ |
+| Repo chưa verify phải BTC duyệt | DONE | `approved=false` mặc định; chỉ admin PUT set `approved=true`; intake `repo_not_approved` |
+| **Tắt upload HTTP cho đội + admin opt-in** | **DONE (mới)** | `server/shared/uploadPolicy.js` + `config.uploads.allowOnlineAdmin` (`OOTV2_ALLOW_ONLINE_UPLOAD`, mặc định tắt) |
+
+- Đội: **luôn** `403 upload_disabled` (kể cả khi bật cờ) — nộp qua GitHub.
+- Admin/BTC: `403 upload_disabled` mặc định; chỉ `201` khi `OOTV2_ALLOW_ONLINE_UPLOAD=1` (trusted-dev/import
+  offline). Multer vẫn chặn đuôi/kích thước khi cổng mở; response không lộ `storage_path`.
+- Không chặn quy trình phát/thu file offline qua USB (ngoài HTTP).
+- UI Bảo: nút "Nộp file USB" chỉ dành admin và cần cờ trên; đội dùng luồng GitHub.
+
+
 ## Schema / RPC (migration `20261024130000_github_intake.sql`, additive, CHƯA apply)
 
 - **Thứ tự áp dụng**: `20261024130000` (bảng + intake) → `20261024160000` (generation + worker RPC). Cả hai
@@ -165,8 +185,11 @@ Worker BTC (Khoa/H2) dùng `server/shared/githubJobs.js`; mọi kiểm quyền n
 | `node --test tests/supabaseSchema.test.js` | **8/8 pass** — guardrail SQL tĩnh cho migration mới |
 | `node --test tests/githubJobs.test.js` | **5/5 pass** — claim/lease/generation, heartbeat/progress, finish chuẩn hoá + chặn payload sai, release retry |
 | `node --test tests/publication.test.js` | **9/9 pass** — mốc phát, window vs full, ẩn ván chưa công bố, replay/log/live gate, cancel |
+| `node --test tests/uploadDisabled.test.js` | **2/2 pass** — policy matrix + admin/đội 403 `upload_disabled`, không tạo submission |
+| `node --test tests/uploadTrustedDev.test.js` | **1/1 pass** — admin opt-in 201, đội vẫn 403, sai đuôi 400, không lộ `storage_path` |
 
-| `node --test tests/*.test.js` | **212/212 pass**, exit 0 |
+
+| `node --test tests/*.test.js` | **215/215 pass**, exit 0 |
 | `npm run build` | **pass** (4.96 s, exit 0) |
 
 Môi trường: Windows, Node 24.18.0; không có test bị skip.
@@ -188,6 +211,11 @@ Môi trường: Windows, Node 24.18.0; không có test bị skip.
 - `state` trong `mvp_match_broadcasts` không tự chuyển sang `ended`: giai đoạn `ended` suy ra từ giờ server +
   `ply_interval_ms`; DB chỉ đổi khi admin đặt lại lịch hoặc hủy.
 
+- **H2 mức Postgres**: `requireEventMember` và cổng upload đã kiểm bằng HTTP mock; chưa chạy trên project DB thật.
+- **Quota**: còn race nhỏ giữa `count` và `INSERT` (hai request đồng thời cùng vượt quota 1 đơn vị); unique
+  `(event,team,repo_id,sha,path)` vẫn chặn trùng. Chưa có API trả "quota còn lại".
+- **UI B2/Bảo**: nút "Nộp file USB" phải giới hạn admin và hiển thị lỗi `upload_disabled` khi BTC chưa bật cờ.
+
 ## Blocker / rủi ro cần biết
 
 - `approved=false` là mặc định: B2 cần màn admin duyệt (dùng `GET /repositories` + `PUT` kèm `team`),
@@ -200,13 +228,17 @@ Môi trường: Windows, Node 24.18.0; không có test bị skip.
 
 ## Bước tiếp (đúng thứ tự, chưa làm)
 
-1. **H2**: worker claim job (`queued → leased`), tải blob `bot.py` tại SHA qua GitHub API (bounded,
+1. **H2 worker (Khoa)**: claim job (`queued → leased`) qua `githubJobs.js`, tải blob `bot.py` tại SHA (bounded,
    verify regular file), kiểm size/UTF-8/hash + validate trên worker, tạo `mvp_submissions` valid và
    cập nhật receipt (`fetching → checking → valid|invalid|infrastructure`), giữ bản valid cũ khi lỗi.
-2. **H2**: tắt upload HTTP mặc định cho đội online (opt-in admin/trusted-dev), giữ import offline.
-3. **H4**: integration/ops trên project DB test, hai worker claim/retry (H3 đã xong ở mức mock).
+2. **H4**: integration/ops trên project DB test, hai worker claim/retry.
+3. Đo tải 50–200 viewer, chốt chu kỳ poll; rà UI Live/B2 sau khi API ổn định.
 
 ## Lịch sử checkpoint
+
+- 24/10/2026: **H2 audit + đóng cổng upload** — thêm `requireEventMember` cho connection/receipt/intake
+  (403 `scope_denied`), chặn upload HTTP mặc định (`403 upload_disabled`; admin chỉ khi
+  `OOTV2_ALLOW_ONLINE_UPLOAD=1`); test `uploadDisabled`/`uploadTrustedDev`, tổng 215/215 pass.
 
 - 24/10/2026: **H1 fix + worker contract** — sửa `previous_valid_submission_id` (dùng `submission_id`, bỏ
   receipt chưa có submission) và thêm `generation` + `mvp_github_claim/heartbeat/progress/finish/release`
