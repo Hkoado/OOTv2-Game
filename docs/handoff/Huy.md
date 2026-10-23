@@ -108,6 +108,9 @@ Bảng `mvp_match_broadcasts` (1 row/ván, RLS private) tách khỏi trạng th�
   đã mở), `/api/live`, replay, bot-output; đội giải khác → 403 `scope_denied`.
 - Ẩn danh: mọi route `/api/live` trả `401 login_required` (thay chính sách L1 công khai trước đây).
 - UI Bảo: trang Live cần hiện nhắc đăng nhập; dùng `phase`/`visible_plies`/`next_poll_ms` của gói phát.
+- `/api/live/overview` chỉ chọn trong các giải mà đội tham gia (`getLiveOverview({eventIds})`); đội khác
+  giải không thấy tên giải/đội/matches (test `publication` phủ trường hợp này).
+
 
 
 ## H1 — contract RPC worker (`20261024160000_github_jobs_worker.sql`)
@@ -184,12 +187,12 @@ Worker BTC (Khoa/H2) dùng `server/shared/githubJobs.js`; mọi kiểm quyền n
 | `node --test tests/githubIntakeApi.test.js` | **6/6 pass** — duyệt repo, 202 + receipt whitelist, idempotent SHA, cross-team 403, quota 429, CSRF/frozen/admin-only |
 | `node --test tests/supabaseSchema.test.js` | **8/8 pass** — guardrail SQL tĩnh cho migration mới |
 | `node --test tests/githubJobs.test.js` | **5/5 pass** — claim/lease/generation, heartbeat/progress, finish chuẩn hoá + chặn payload sai, release retry |
-| `node --test tests/publication.test.js` | **9/9 pass** — mốc phát, window vs full, ẩn ván chưa công bố, replay/log/live gate, cancel |
+| `node --test tests/publication.test.js` | **10/10 pass** — mốc phát, window vs full, ẩn ván chưa công bố, replay/log/live gate, cancel |
 | `node --test tests/uploadDisabled.test.js` | **2/2 pass** — policy matrix + admin/đội 403 `upload_disabled`, không tạo submission |
 | `node --test tests/uploadTrustedDev.test.js` | **1/1 pass** — admin opt-in 201, đội vẫn 403, sai đuôi 400, không lộ `storage_path` |
 
 
-| `node --test tests/*.test.js` | **215/215 pass**, exit 0 |
+| `node --test tests/*.test.js` | **233/233 pass**, exit 0 |
 | `npm run build` | **pass** (4.96 s, exit 0) |
 
 Môi trường: Windows, Node 24.18.0; không có test bị skip.
@@ -235,6 +238,10 @@ Môi trường: Windows, Node 24.18.0; không có test bị skip.
 3. Đo tải 50–200 viewer, chốt chu kỳ poll; rà UI Live/B2 sau khi API ổn định.
 
 ## Lịch sử checkpoint
+
+- 24/10/2026: **H3 hardening live overview** — `/api/live/overview` lọc theo giải của đội
+  (`getLiveOverview({eventIds})`); đội khác giải không thấy tên giải/đội/matches. `publication` 10/10,
+  tổng 233/233 pass.
 
 - 24/10/2026: **H2 audit + đóng cổng upload** — thêm `requireEventMember` cho connection/receipt/intake
   (403 `scope_denied`), chặn upload HTTP mặc định (`403 upload_disabled`; admin chỉ khi
