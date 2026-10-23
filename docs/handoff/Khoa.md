@@ -4,8 +4,10 @@
 
 ### 24/10/2026 — K2 schedule persistence + màu: READY FOR REVIEW (migration chưa apply)
 
-- Bối cảnh: H4 chưa push (`origin/dev` = `b2600e2` sau fetch), nên làm phần **không cần Postgres thật**
-  nhưng vẫn giữ đúng gate: không Start, không API/UI, không chạy bot.
+- Bối cảnh: H4 chưa push (`origin/dev` = `2d8f6a3` lúc bắt đầu); giữa đợt remote nhảy 5 commit
+  (`23b59c9`: live view trong login, `apply-migrations`/`check-github-db` dry-run mặc định). Đã merge
+  `origin/dev` vào `dev`, không conflict; package.json giữ cả `offline:bundle` và 2 script DB mới.
+  **Huy handoff vẫn ghi H4 chưa làm; chưa có bằng chứng apply Postgres thật.**
 - Migration `supabase/migrations/20261025090000_official_schedule.sql` (**CHƯA apply**):
   `mvp_official_rounds` (snapshot jsonb + snapshot/genesis/chain hash + game_count + frozen) và
   `mvp_official_games` (seq/game_key unique trong vòng, hai màu khác nhau, seed uint32,
@@ -23,8 +25,8 @@
 - Test `tests/officialSchedule.test.js` **8/8**: genesis/normalize, open, append + stale fence,
   result idempotent/conflict, freeze, load + 4 kiểu tamper, next-game màu, guardrail SQL
   (RLS/revoke/unique/`$$` chẵn/không grant anon/không tự BEGIN-COMMIT).
-  Full: `node --test "tests/*.test.js"` **295/295 pass**, 0 fail/skip; Vite build exit 0
-  (1649 modules, 3,43 s); `git diff --check` sạch.
+  Full sau merge: `node --test "tests/*.test.js"` **295/295 pass**, 0 fail/skip; Vite build exit 0
+  (1649 modules); `git diff --check` sạch.
 - **NOT RUN:** apply PostgreSQL, 2 writer tranh append, crash giữa transaction, RLS/service_role thật,
   API admin, UI công bố màu (Bảo), persist series knockout, nối accepted result. Trigger
   `official_scheduler_not_ready` và Start vẫn khóa. Chi tiết `docs/OFFICIAL-SCHEDULE.md`.
