@@ -1,13 +1,23 @@
 import config from '../config.js';
 import { HttpError } from '../lib/httpError.js';
 
-export const sharedEnabled = process.env.OOTV2_DB_DRIVER !== 'sqlite' && !process.env.NODE_TEST_CONTEXT;
+/** Kiểm tra cấu hình Supabase mà không gọi mạng (dùng lúc boot để fail fast). */
+export function assertSharedConfig() {
+  connection();
+}
 
 function connection() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('Thiếu SUPABASE_URL hoặc SUPABASE_SERVICE_ROLE_KEY trong .env. Dùng OOTV2_DB_DRIVER=sqlite chỉ cho test/offline legacy.');
-  const parsed = new URL(url);
+  if (!url || !key) {
+    throw new Error('Thiếu SUPABASE_URL hoặc SUPABASE_SERVICE_ROLE_KEY trong .env. Driver SQLite đã bị bỏ.');
+  }
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error('SUPABASE_URL không phải URL hợp lệ.');
+  }
   if (parsed.protocol !== 'https:') throw new Error('Supabase URL phải dùng HTTPS.');
   return { url: parsed.origin, key };
 }
@@ -21,7 +31,7 @@ export async function request(endpoint, { method = 'GET', body, headers = {}, ra
       body: body === undefined ? undefined : Buffer.isBuffer(body) ? body : JSON.stringify(body),
       signal: AbortSignal.timeout(20000),
     });
-  } catch { throw new HttpError(503, 'database_unavailable', 'Không kết nối được DB chung. Không tự chuyển sang SQLite.'); }
+  } catch { throw new HttpError(503, 'database_unavailable', 'Không kết nối được DB chung. Không có driver dự phòng.'); }
   if (!response.ok) {
     const detail = await response.json().catch(() => ({}));
     const code = detail.code;
@@ -53,4 +63,4 @@ export function uuid(value) {
   return value;
 }
 export async function health() { await rows('imports', 'limit=1'); return { driver: 'supabase', profile: 'mvp.v1', workerLeases: true }; }
-export const cacheRoot = config.submissionsDir;
+export const cacheRoot = config.artifactCacheDir;

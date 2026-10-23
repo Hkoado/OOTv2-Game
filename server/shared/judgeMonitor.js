@@ -1,6 +1,6 @@
 /**
- * judgeMonitor.js (shared/Supabase) — Cùng shape với `services/judgeMonitor.js` cho
- * driver DB chung. Đọc bằng service role nhưng API vẫn gate `requireLocalAdmin`,
+ * judgeMonitor.js (shared/Supabase) — Mặt quan sát chấm bài cho portal admin.
+ * Đọc bằng service role nhưng API vẫn gate `requireLocalAdmin`,
  * nên đội thi không bao giờ nhận được nhật ký chấm.
  *
  * Bảng `mvp_match_logs` do migration `20261022150000_judge_monitor.sql` tạo. Nếu

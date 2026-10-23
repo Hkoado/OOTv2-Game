@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import { HttpError } from '../lib/httpError.js';
-import { requireLocalAdmin } from '../services/localAccounts.js';
+import { requireLocalAdmin } from './accounts.js';
 import { acceptBotUpload } from '../middleware/upload.js';
 import * as accounts from './accounts.js';
 import * as participants from './participants.js';
 import * as tournaments from './tournaments.js';
 import { getSharedJudgeMatch, getSharedJudgeOverview } from './judgeMonitor.js';
+import { listBotOutput } from './live.js';
 import { rows, uuid } from './client.js';
 import { isAllowedOrigin } from '../lib/origin.js';
 
@@ -63,7 +64,7 @@ export function sharedRouter() {
     }
     next();
   },acceptBotUpload,async(req,res)=>res.status(201).json(await participants.createSubmission(req.params.team,req.file)));
-  // Quan sát chấm bài (chỉ admin, chỉ đọc): cùng shape với driver SQLite.
+  // Quan sát chấm bài (chỉ admin, chỉ đọc): shape cố định cho UI.
   router.get('/admin/judge',requireLocalAdmin,async(req,res)=>res.json(await getSharedJudgeOverview({eventId:typeof req.query.event==='string'&&req.query.event?req.query.event:null})));
   router.get('/admin/judge/matches/:id',requireLocalAdmin,async(req,res)=>res.json(await getSharedJudgeMatch(req.params.id)));
   router.get('/events',async(req,res)=>{
@@ -88,6 +89,25 @@ export function sharedRouter() {
     if (row.status!=='finished'||!row.replay_json) throw new HttpError(404,'replay_not_ready','Replay chưa sẵn sàng.');
     const matches=await tournaments.listMatches(row.tournament_id),m=matches.find((m)=>m.id===row.id);
     res.json({match:{...m,replay_url:`/api/local/matches/${row.id}/replay`},replay:JSON.parse(row.replay_json)});
+  });
+  // Log bot (L2): đội chỉ thấy bên của mình, admin thấy cả hai. Không công khai.
+  router.get('/live/matches/:id/bot-output', async (req, res) => {
+    const matchId = uuid(req.params.id);
+    const [match] = await rows('matches', `id=eq.${matchId}&select=id,red_entry_id,blue_entry_id`);
+    if (!match) throw new HttpError(404, 'match_not_found', 'Không tìm thấy ván đấu.');
+    let side = null;
+    if (req.account.role === 'admin') {
+      side = ['red', 'blue'].includes(req.query.side) ? req.query.side : null;
+    } else {
+      const entries = await rows(
+        'tournament_entries',
+        `id=in.(${match.red_entry_id},${match.blue_entry_id})&select=id,participant_id`
+      );
+      const mine = entries.find((entry) => entry.participant_id === req.account.participant_id);
+      if (!mine) throw forbidden();
+      side = mine.id === match.red_entry_id ? 'red' : 'blue';
+    }
+    res.json({ match_id: matchId, ...(await listBotOutput(matchId, { side, afterId: req.query.after, limit: req.query.limit })) });
   });
   return router;
 }

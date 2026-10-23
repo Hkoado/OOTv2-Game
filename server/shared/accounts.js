@@ -2,11 +2,17 @@ import { randomBytes, randomUUID, scrypt, timingSafeEqual, createHash } from 'no
 import { promisify } from 'node:util';
 import { rows, rpc, insert, remove, update, uuid } from './client.js';
 import { HttpError } from '../lib/httpError.js';
-import { normalizeParticipantName } from '../services/participants.js';
+import { normalizeParticipantName } from '../lib/names.js';
 
 const derive = promisify(scrypt);
 export const COOKIE_NAME = 'oot_local_session';
 export const SESSION_MS = 8 * 60 * 60 * 1000;
+
+/** Guard dùng chung cho các route chỉ admin (đặt ở đây vì không còn driver SQLite). */
+export function requireLocalAdmin(req, res, next) {
+  if (req.account?.role !== 'admin') return next(new HttpError(403, 'admin_required', 'Chỉ admin được thao tác.'));
+  next();
+}
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const fail = (status, code, message) => new HttpError(status, code, message);
 export const view = (row, name) => ({ id: row.id, username: row.username, role: row.role, participant_id: row.participant_id, name: name || row.username, members: row.members, contact: row.contact, repository: row.repository, branch: row.branch });

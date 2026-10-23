@@ -3,7 +3,7 @@ import { rows, rpc, uuid } from './client.js';
 import { HttpError } from '../lib/httpError.js';
 import { normalizeMap, EMPTY_MAP } from '../../src/game/maps.js';
 import { randomSeed, deriveSeed } from '../judge/rng.js';
-import { GROUP_SEEDS, TIE_BREAKERS } from '../services/tournaments.js';
+import { GROUP_SEEDS, TIE_BREAKERS } from '../lib/tournamentFormat.js';
 
 const fail = (status,code,message) => new HttpError(status,code,message);
 const stageStatus = {group_running:'group',semifinal_running:'semifinal',final_running:'final'};

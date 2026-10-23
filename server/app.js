@@ -2,8 +2,8 @@
  * app.js — Tạo Express app cho API tournament (tách khỏi `index.js` để test được
  * bằng cách import app mà không cần mở cổng mạng).
  *
- * Bảo mật MVP: chỉ bind loopback, chỉ phục vụ API + file bot mẫu; không phục vụ
- * thư mục `data/` (DB và bot upload của người dùng).
+ * Toàn bộ dữ liệu đi qua Supabase (`shared/*`); không còn driver SQLite dự phòng.
+ * API chỉ bind loopback và không phục vụ thư mục dữ liệu riêng (`data/`).
  */
 
 import fs from 'node:fs';
@@ -12,13 +12,8 @@ import express from 'express';
 
 import config, { ROOT_DIR } from './config.js';
 import { badRequest, sendError } from './lib/httpError.js';
-import participantsRouter from './routes/participants.js';
-import tournamentsRouter from './routes/tournaments.js';
-import matchesRouter from './routes/matches.js';
-import { localPortalRouter } from './routes/localPortal.js';
 import { liveRouter } from './routes/live.js';
-import { initAccounts } from './services/localAccounts.js';
-import { sharedEnabled, health } from './shared/client.js';
+import { health } from './shared/client.js';
 import { sharedRouter } from './shared/router.js';
 
 /** Nội dung `examples/sample_bot.py` cho UI hướng dẫn (không phải input của bot). */
@@ -27,7 +22,7 @@ function readSampleBot() {
   return fs.readFileSync(samplePath, 'utf8');
 }
 
-export function createApp({ legacyAccess = false } = {}) {
+export function createApp() {
   const app = express();
 
   app.disable('x-powered-by');
@@ -44,7 +39,7 @@ export function createApp({ legacyAccess = false } = {}) {
   });
 
   app.get('/api/health', async (req, res) => {
-    res.json({ ok: true, service: 'ootv2-tournament-api', ...(sharedEnabled ? await health() : { driver: 'sqlite' }) });
+    res.json({ ok: true, service: 'ootv2-tournament-api', ...(await health()) });
   });
 
   // Công khai, ẩn danh: chỉ dữ liệu L1 (bàn cờ + nước đi), có rate limit riêng.
@@ -54,13 +49,7 @@ export function createApp({ legacyAccess = false } = {}) {
     res.type('text/plain').send(readSampleBot());
   });
 
-  if (!sharedEnabled) initAccounts();
-  app.use('/api/local', sharedEnabled ? sharedRouter() : localPortalRouter());
-  if (legacyAccess && !sharedEnabled) {
-    app.use('/api/participants', participantsRouter);
-    app.use('/api/tournaments', tournamentsRouter);
-    app.use('/api/matches', matchesRouter);
-  }
+  app.use('/api/local', sharedRouter());
 
   app.use('/api', (req, res) => {
     res.status(404).json({ error: 'endpoint_not_found', message: 'Endpoint không tồn tại' });

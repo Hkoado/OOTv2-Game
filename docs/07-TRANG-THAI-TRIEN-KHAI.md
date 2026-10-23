@@ -19,6 +19,30 @@
 Chưa làm ở M0: bảng công bố/lịch phát, API cắt theo mốc, viewer từng nước, chuyển validation khỏi API host,
 cách ly cấp OS cho bot sinh viên, đo tải thật.
 
+## Supabase là DB duy nhất — bỏ SQLite (23/10/2026)
+
+Quyết định: chỉ còn **một** đường dữ liệu (Supabase Postgres + Storage) để thao tác dev/prod giống nhau.
+
+- Bỏ hẳn: `server/db.js` (schema SQLite), `server/routes/{localPortal,participants,tournaments,matches}.js`,
+  `server/services/{localAccounts,participants,tournaments,matches,liveEvents,eventFolder,judgeMonitor}.js`,
+  `server/middleware/adminKey.js`, `tools/cli/{live-demo,reset-live-demo,migrate-shared-db}.js`,
+  dependency `better-sqlite3`, các biến `OOTV2_DB_DRIVER`/`OOTV2_DB_PATH`/`OOTV2_ADMIN_KEY`.
+- Giữ và port: `/api/live` chạy trên bảng mới `mvp_match_events`, `mvp_match_bot_output`,
+  `mvp_worker_state` (migration `20261023120000_live_stream.sql`). Worker ghi event qua hàng đợi tuần tự;
+  API trả `503 live_not_ready` khi chưa chạy migration thay vì 500 mơ hồ.
+- Hàm thuần tách khỏi SQLite: `server/lib/names.js`, `server/lib/tournamentFormat.js`;
+  `requireLocalAdmin` chuyển vào `server/shared/accounts.js`.
+- Worker: `server/worker.js` chỉ còn entry → `shared/worker.js` (claim/lease 60 s + heartbeat 10 s + token fencing).
+- Test offline: **74/74 pass** (`npm test`, ~3,2 s). Chín bộ test cũ chạy trên SQLite/`testEnv`
+  (`api`, `tournamentFlow`, `workerE2E`, `liveApi`, `liveEvents`, `localPortal`, `judgeMonitor`,
+  `publicHardening`, `staticServing`) đã bị xoá vì đường API mà chúng kiểm tra không còn tồn tại.
+  Bù lại có `tests/liveStream.test.js` (4 test) kiểm tra snapshot whitelist, seq/upsert/terminal,
+  log L2 và overview bằng PostgREST giả lập.
+- Smoke thật với `.env` hiện tại: `GET /api/health` → 200 (`driver=supabase`),
+  `GET /api/live/overview` → 200. Build Vite pass (1636 modules, 4,3 s).
+- **Nợ kỹ thuật phải trả**: chưa có bộ test end-to-end trên Supabase thật (cần project test riêng);
+  validation bot vẫn chạy Python ngay trên API host — phần "bỏ thực thi bot khỏi API" của M1 chưa xong.
+
 ## Cập nhật runtime shared MVP
 
 API/worker MVP đã nối Supabase qua các bảng `mvp_*`, độc lập 13 bảng Campus.

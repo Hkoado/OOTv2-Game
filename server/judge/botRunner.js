@@ -80,10 +80,11 @@ function emitOutput(onOutput, stream, text) {
 }
 
 /**
- * Kiểm tra file bot nằm trong thư mục submissions (chống path traversal/symlink).
- * Client không bao giờ quyết định tên file; server tự sinh `<uuid>.py`.
+ * Kiểm tra file bot nằm trong thư mục cache bot (chống path traversal/symlink).
+ * Client không bao giờ quyết định tên file; server tự sinh `<uuid>.py` và chỉ tải
+ * bot từ Supabase Storage vào `config.artifactCacheDir` trước khi chạy.
  */
-export function resolveBotPath(filePath, allowedRoot = config.submissionsDir) {
+export function resolveBotPath(filePath, allowedRoot = config.artifactCacheDir) {
   if (typeof filePath !== 'string' || filePath.length === 0) {
     throw new Error('Đường dẫn bot rỗng');
   }

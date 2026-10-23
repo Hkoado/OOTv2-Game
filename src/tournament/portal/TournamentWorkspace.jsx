@@ -191,7 +191,7 @@ export default function TournamentWorkspace({
 
         <footer className="tt-foot">
           <span>OOTv2 · Giải đấu bot Oẳn Tù Tì 9×9</span>
-          <span>Dữ liệu local SQLite · không có sandbox cấp hệ điều hành · chỉ dùng cho thành viên tin cậy</span>
+          <span>Dữ liệu Supabase (DB chung) · không có sandbox cấp hệ điều hành · chỉ dùng cho thành viên tin cậy</span>
         </footer>
       </div>
 

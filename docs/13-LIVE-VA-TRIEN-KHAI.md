@@ -6,7 +6,7 @@ Cập nhật 22/10/2026. Tài liệu này mô tả **phần đã chạy được
 - Log stdout/stderr của bot (L2) chỉ đội sở hữu bên của mình và admin đọc được.
 - API Express phục vụ luôn `dist/` → **một origin duy nhất** cho web + API, phù hợp
   chạy tại nhà và mở ra Internet bằng Cloudflare Tunnel.
-- DB vẫn là SQLite (`better-sqlite3`), thêm bảng mới theo kiểu additive.
+- DB là **Supabase** (Postgres + Storage); từ 23/10/2026 không còn SQLite.
 
 ## 1. Kiến trúc đang chạy
 
@@ -16,32 +16,33 @@ Trình duyệt khán giả
       ▼
 cloudflared  ──►  127.0.0.1:3001  (Express: /api + dist/ + SPA fallback)
                         │
-                        ├── SQLite data/ootv2.sqlite (WAL)
+                        ├── Supabase: mvp_match_events / mvp_match_bot_output / mvp_worker_state
                         │        ▲
-                        └── server/worker.js (poll 1 s, chạy tuần tự 1 ván)
+                        └── server/worker.js (claim qua RPC, chạy tuần tự 1 ván)
                                  │ spawn Python -I -S -B cho từng request bot
                                  ▼
-                              submissions/<uuid>.py
+                              cache tạm data/cache/<uuid>.py (xoá sau mỗi ván)
 ```
 
 - Không WebSocket, không Redis: khán giả **poll 2 giây** `/api/live/matches/:id/events`.
   Cloudflare cắt HTTP request ở 100 s nên polling an toàn hơn SSE ở giai đoạn này.
-- API và worker là hai tiến trình Node độc lập, cùng mở một file SQLite (WAL +
-  `busy_timeout = 5000`). Chỉ worker chạy code Python.
+- API và worker là hai tiến trình Node độc lập, cùng nói chuyện với Supabase bằng
+  service-role key. Chỉ worker chạy code Python.
 - `dist/index.html` được phục vụ cùng cổng API; mọi request `/api/*` luôn được xử lý
   trước static/SPA fallback.
 
-## 2. Bảng dữ liệu mới (additive)
+## 2. Bảng dữ liệu mới (migration `20261023120000_live_stream.sql`)
 
 | Bảng | Vai trò | Quyền đọc |
 | --- | --- | --- |
-| `match_events` | `seq 0 = initial` (thế trận sau xếp quân), `seq 1..n = move`, cuối là `terminal`. Không chứa đường dẫn file/ghi chú. | Công khai qua `/api/live` |
-| `match_bot_output` | Từng dòng stdout/stderr của bot, đã lọc ký tự điều khiển, tối đa 400 dòng/trận. | Chỉ đội sở hữu + admin |
+| `mvp_match_events` | `seq 0 = initial` (thế trận sau xếp quân), `seq 1..n = move`, cuối là `terminal`. Không chứa đường dẫn file/ghi chú. | Công khai qua `/api/live` |
+| `mvp_match_bot_output` | Từng dòng stdout/stderr của bot, đã lọc ký tự điều khiển, tối đa 400 dòng/trận. | Chỉ đội sở hữu + admin |
+| `mvp_worker_state` | Nhịp tim worker (`worker_id`, `heartbeat_at`) cho badge "đang chấm". | Công khai gián tiếp qua `/api/live/overview` |
 
-- `seq` của `move` = số thứ tự nước (1..200) nên ghi lại cùng nước là idempotent.
-- `recoverUnfinishedMatches()` khi worker khởi động trả ván `running` về `pending` và
-  **xoá event của các ván pending** để ván chạy lại không trộn bàn cờ cũ.
+- `seq` của `move` = số thứ tự nước (1..200); ghi lại cùng nước là upsert (idempotent).
+- Ván chạy lại: worker gọi `startLiveMatch()` xoá event/log cũ của đúng ván đó trước khi ghi `seq 0`.
 - Worker gọi `pruneLiveHistory()` khi boot: xoá event/log của giải đã kết thúc quá 2 ngày.
+- Khi chưa chạy migration, `/api/live/*` trả `503 live_not_ready` (không phải 500).
 
 ## 3. API công khai `/api/live`
 
@@ -87,8 +88,8 @@ npm start                                      # http://127.0.0.1:3001
 $env:OOTV2_WORKER_PAUSE_MS=8000
 npm run start:worker
 
-# Terminal 3 — tạo giải demo 8 đội, bot ngủ ~1,1 s mỗi nước
-npm run demo:live
+# Terminal 3 — dựng giải bằng portal admin (tạo 8 đội, upload bot, Start)
+# hoặc dùng script cũ đã xoá: xem docs/07 cho quy trình mới
 ```
 
 Mở:
@@ -96,9 +97,9 @@ Mở:
 - Vào thẳng một ván: `http://127.0.0.1:3001/#/live/<matchId>`.
 - Cổng giải đấu (đăng nhập): `http://127.0.0.1:3001/#/overview`.
 
-`npm run demo:live` từ chối tạo giải mới khi đang có giải chạy (worker chạy tuần tự);
-dùng `--force` nếu thật sự muốn tạo song song. Dữ liệu demo nằm trong `data/ootv2.sqlite`
-(private, đã gitignore) — xoá file này là reset sạch.
+`npm run demo:live` đã bị xoá cùng driver SQLite. Muốn dựng dữ liệu xem trực tiếp:
+đăng nhập admin, tạo 8 đội + upload bot, tạo giải, Start — worker tự chấm và ghi event.
+Dọn dữ liệu live cũ tự động khi worker boot (`pruneLiveHistory`, giữ 2 ngày).
 
 ## 6. Mở ra Internet bằng Cloudflare Tunnel (miễn phí)
 
@@ -108,7 +109,8 @@ Chỉ bot của thành viên tin cậy mới được nộp — xem mục 8.
 1. **Cấu hình `.env`** (copy từ `.env.example`):
 
 ```dotenv
-OOTV2_DB_DRIVER=sqlite
+SUPABASE_URL=https://<project>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<service-role key, backend-only>
 OOTV2_API_HOST=127.0.0.1
 OOTV2_API_PORT=3001
 OOTV2_DATA_DIR=./data
@@ -116,7 +118,6 @@ OOTV2_SERVE_DIST=1
 OOTV2_LIVE_BOT_OUTPUT=1
 OOTV2_PUBLIC_ORIGIN=https://live.example.com   # domain/subdomain của bạn
 OOTV2_TRUST_PROXY=loopback
-OOTV2_ADMIN_KEY=<chuỗi ngẫu nhiên dài>
 ```
 
 2. **Build + chạy API/worker** (2 tiến trình; không cần `vite` trong production):
@@ -186,13 +187,16 @@ khi nạp module → React không mount → `#root` rỗng, trang trắng dù AP
 
 | Lệnh | Kết quả |
 | --- | --- |
-| `npm run build` | Pass (Vite 6) |
-| `npm test` | 93/93 pass, gồm 11 test mới cho live/static |
-| `node --test tests/liveEvents.test.js` | Event seq, snapshot whitelist, log L2, prune, recovery |
-| `node --test tests/liveApi.test.js` | API công khai không lộ log; L2 chỉ đội sở hữu + admin |
+| `npm run build` | Pass (Vite 6, 1636 modules, ~4,3 s) |
+| `npm test` | **74/74 pass** (~3,2 s) sau khi bỏ SQLite; 9 bộ test cũ chạy trên SQLite đã xoá |
+| `node --test tests/liveStream.test.js` | Snapshot whitelist, seq/upsert/terminal, log L2, overview (PostgREST giả lập) |
 | `node --test tests/liveView.test.js` | Hash `#/live`, gộp event, nhãn trạng thái, rate limiter |
-| `node --test tests/staticServing.test.js` | `dist/` + SPA fallback, `/api` không bị nuốt, không lộ `data/` |
+| `GET /api/health` (smoke thật) | 200, `driver=supabase`, `workerLeases=true` |
+| `GET /api/live/overview` (smoke thật) | 200 với dữ liệu Supabase hiện có |
 | `npm run smoke:ui` | App build render thật trong Chrome/Edge headless (`#root` có nội dung, có `live-page`) |
+
+Chưa có test end-to-end tự động trên Supabase thật (cần project test riêng + bot mẫu);
+đây là nợ kỹ thuật đã ghi ở `docs/07-TRANG-THAI-TRIEN-KHAI.md`.
 
 ## 11. Việc chưa làm (milestone tiếp theo)
 

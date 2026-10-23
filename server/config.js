@@ -67,19 +67,17 @@ function parseLiveBotOutput(raw) {
 }
 
 const dataDir = resolveFromRoot(process.env.OOTV2_DATA_DIR, path.join(ROOT_DIR, 'data'));
+/** Thư mục cache tạm cho bot tải từ Supabase Storage (dọn ngay sau mỗi trận). */
+const artifactCacheDir = path.join(dataDir, 'cache');
 
 export const config = {
-  /** Thư mục dữ liệu private (DB + bot upload). Không nằm trong public/, src/, dist/. */
+  /** Thư mục dữ liệu private (cache bot + log tạm). Không nằm trong public/, src/, dist/. */
   dataDir,
-  submissionsDir: path.join(dataDir, 'submissions'),
-  dbPath: resolveFromRoot(process.env.OOTV2_DB_PATH, path.join(dataDir, 'ootv2.sqlite')),
+  artifactCacheDir,
 
   /** MVP chỉ bind loopback. Không mở public khi chưa có sandbox cấp OS. */
   host: process.env.OOTV2_API_HOST || '127.0.0.1',
   port: Number(process.env.OOTV2_API_PORT || 3001),
-
-  /** Khoá admin cho thao tác tạo/khởi động giải. Chỉ dùng cho demo local. */
-  adminKey: process.env.OOTV2_ADMIN_KEY || 'local-dev-admin-key',
 
   /**
    * Origin public được phép gọi API thay đổi state, ví dụ

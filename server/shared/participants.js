@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { rows, insert, uuid } from './client.js';
 import { temporaryBot, hashBuffer, uploadArtifact } from './artifacts.js';
-import { normalizeParticipantName } from '../services/participants.js';
+import { normalizeParticipantName } from '../lib/names.js';
 import { validateBotFile } from '../services/botValidation.js';
 import { HttpError } from '../lib/httpError.js';
 import config from '../config.js';

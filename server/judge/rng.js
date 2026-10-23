@@ -4,8 +4,8 @@ import { randomInt as cryptoRandomInt } from 'node:crypto';
  * PRNG có seed (mulberry32) dùng cho các quyết định của judge cần tính "ngẫu nhiên"
  * nhưng phải tái lập được: seed của từng match, chia bảng...
  *
- * KHÔNG dùng cho luật chơi của engine. Mọi giá trị seed đều được lưu trong SQLite
- * (`matches.seed`, `tournaments.seed`) nên replay luôn tái lập được.
+ * KHÔNG dùng cho luật chơi của engine. Mọi giá trị seed đều được lưu trong DB chung
+ * (`mvp_matches.seed`, `mvp_tournaments.seed`) nên replay luôn tái lập được.
  */
 export function createRng(seed) {
   let state = (Number(seed) >>> 0) || 1;

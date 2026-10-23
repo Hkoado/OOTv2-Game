@@ -19,12 +19,11 @@
     "replay:verify": "node tools/cli/verify-replay.js",
     "demo:campus": "node tools/cli/demo-campus.js",
     "smoke:ui": "node tools/cli/smoke-ui.js",
-    "demo:live": "node tools/cli/live-demo.js",
-    "demo:live:reset": "node tools/cli/reset-live-demo.js",
+    "db:verify": "node tools/cli/verify-shared-db.js",
+    "db:admin": "node tools/cli/create-admin.js",
     "test": "node --test tests/*.test.js"
   },
   "dependencies": {
-    "better-sqlite3": "^13.0.3",
     "express": "^5.3.0",
     "lucide-react": "^0.475.0",
     "multer": "^2.4.0",

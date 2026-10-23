@@ -8,10 +8,25 @@ Migration đã áp dụng: `20261022122359`, tên `campus_foundation`.
 Foundation Campus vẫn độc lập. Runtime MVP hiện dùng các bảng `mvp_*` trong cùng
 project, không chuyển dữ liệu lịch sử sang luật Campus. Không mở thực thi bot công khai.
 
-Lựa chọn Supabase theo yêu cầu mới thay cho quyết định SQLite-only **ở lớp schema
-online và runtime MVP**; SQLite chỉ giữ cho legacy/offline/test và backup.
+Lựa chọn Supabase theo yêu cầu mới thay cho quyết định SQLite-only **ở toàn bộ runtime**:
+từ 23/10/2026 SQLite đã bị bỏ hẳn (schema, driver, CLI import và test harness).
 Không thêm SDK, ORM hoặc dependency. Service-role key chỉ dùng backend, không in/commit.
 Migration DDL dùng kết nối quản trị đã xác thực.
+
+## Bỏ SQLite — Supabase là DB duy nhất (23/10/2026)
+
+- Migration mới **`20261023120000_live_stream.sql`** tạo `mvp_match_events`,
+  `mvp_match_bot_output`, `mvp_worker_state` (RLS + chỉ `service_role`), phục vụ `/api/live`.
+  **Phải chạy migration này trước khi chấm trận đầu tiên**; nếu chưa, API trả
+  `503 live_not_ready` kèm tên migration.
+- Đã xoá `better-sqlite3`, `server/db.js`, các service/route legacy, `OOTV2_DB_DRIVER`,
+  `OOTV2_DB_PATH`, `OOTV2_ADMIN_KEY`, `tools/cli/{live-demo,reset-live-demo,migrate-shared-db}.js`.
+  Runtime, worker và công cụ chỉ dùng `server/shared/*`.
+- `tools/cli/verify-shared-db.js` giờ là smoke Supabase thuần (health, đếm bảng, login/CSRF/logout),
+  không đọc file `.sqlite` nữa. Chạy `npm run db:verify`.
+- Thiếu `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` → `assertSharedConfig()` ném lỗi ngay khi boot
+  (`server/index.js`, `server/worker.js`); không có driver dự phòng.
+
 
 ## Runtime MVP dùng chung — 22/10/2026
 
@@ -34,14 +49,12 @@ Migration DDL dùng kết nối quản trị đã xác thực.
   DB clock, token-fenced finish và attempt history; lỗi hạ tầng retry sau 30 giây.
 - API vẫn loopback; mỗi máy tin cậy dùng cùng credential backend. Bot subprocess
   không phải sandbox; không cấp key cho đội/bot, không mở upload công khai.
-- Thiếu kết nối DB báo lỗi, không fallback SQLite. `OOTV2_DB_DRIVER=sqlite` chỉ
-  dành legacy/offline; Node test runner tự dùng SQLite, test client dùng mock fetch.
+- Thiếu kết nối DB báo lỗi, không fallback. Node test runner không còn mở DB cục bộ:
+  test dùng mock `fetch` (PostgREST giả lập), xem `tests/liveStream.test.js`.
 
-Từ `d:\OOTv2-Game`: chạy `node tools/cli/setup-shared-storage.js`,
-`node tools/cli/migrate-shared-db.js` (dry-run), rồi `--apply` sau khi dừng writer cũ.
-Không chạy setup/import cho mỗi máy mới; máy mới chỉ cần .env và API/worker.
-`node tools/cli/verify-shared-db.js` kiểm số lượng/hash và HTTP auth/CSRF/logout,
-tạo admin tạm và cleanup; chạy khi chưa có writer khác để đối chiếu số lượng import.
+Từ `d:\OOTv2-Game`: chạy `node tools/cli/setup-shared-storage.js` một lần cho bucket,
+sau đó mỗi máy mới chỉ cần `.env` + `npm run dev:api` + `npm run dev:worker`.
+`npm run db:verify` kiểm health, số lượng bảng và HTTP auth/CSRF/logout (tạo admin tạm rồi cleanup).
 Chưa nghiệm thu concurrency nhiều máy thực, browser hai máy, giải shared 30 ván
 end-to-end, hoặc sandbox OS; không coi smoke DB là các nghiệm thu này.
 

@@ -2,8 +2,7 @@
  * judgeView.js — Hàm THUẦN dựng "mặt quan sát chấm bài" từ dữ liệu đã đọc.
  *
  * - Không truy cập DB, không đọc file, không gọi mạng → test bằng `node --test`.
- * - Dùng chung cho driver SQLite (`services/judgeMonitor.js`) và Supabase
- *   (`shared/judgeMonitor.js`) để hai đường chạy trả cùng một shape cho UI.
+ * - Dùng chung cho `shared/judgeMonitor.js` để UI nhận một shape duy nhất.
  * - Chỉ trả nhãn đội, kết quả, lý do và ghi chú đã lọc; KHÔNG trả source code,
  *   hash, storage path hay đường dẫn tuyệt đối của máy chấm.
  */
@@ -149,7 +148,7 @@ function addCount(bucket, match) {
  * `matches` là mảng row thô, `logs` là Map(match_id → row `match_logs`).
  */
 export function buildJudgeOverview({
-  driver = 'sqlite',
+  driver = 'supabase',
   event = null,
   matches = [],
   logs = null,

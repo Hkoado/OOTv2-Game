@@ -1,21 +1,17 @@
 /**
  * live.js — API công khai cho khán giả xem trực tiếp (`/api/live`).
  *
- * Chỉ đọc dữ liệu L1 (thế trận + nước đi). Không có endpoint nào ở đây trả log bot,
- * ghi chú chấm, đường dẫn file hay thông tin tài khoản.
+ * Chỉ đọc dữ liệu L1 (thế trận + nước đi) từ Supabase. Không có endpoint nào ở
+ * đây trả log bot, ghi chú chấm, đường dẫn file hay thông tin tài khoản.
  */
 
 import { Router } from 'express';
 
 import config from '../config.js';
-import { HttpError } from '../lib/httpError.js';
+import { HttpError, notFound } from '../lib/httpError.js';
+import { asyncHandler } from '../lib/asyncHandler.js';
 import { createRateLimiter } from '../lib/rateLimit.js';
-import {
-  getLiveMatchSnapshot,
-  getLiveOverview,
-  listLiveEvents,
-  liveMatchExists,
-} from '../services/liveEvents.js';
+import { getLiveMatchSnapshot, getLiveOverview, listLiveEvents, liveMatchExists } from '../shared/live.js';
 import { normalizeAfterSeq } from '../services/liveView.js';
 
 export function liveRouter() {
@@ -37,27 +33,52 @@ export function liveRouter() {
     })
   );
 
-  router.get('/overview', (req, res) => {
-    res.json(getLiveOverview());
-  });
+  router.get(
+    '/overview',
+    asyncHandler(async (req, res) => {
+      res.json(await getLiveOverview());
+    })
+  );
 
-  router.get('/matches/:id', (req, res, next) => {
-    const snapshot = getLiveMatchSnapshot(req.params.id);
-    if (!snapshot) return next(new HttpError(404, 'match_not_found', 'Không tìm thấy ván đấu.'));
-    res.json(snapshot);
-  });
+  router.get(
+    '/matches/:id',
+    asyncHandler(async (req, res) => {
+      const snapshot = await getLiveMatchSnapshot(req.params.id);
+      if (!snapshot) throw notFound('match_not_found', 'Không tìm thấy ván đấu.');
+      res.json(snapshot);
+    })
+  );
 
-  router.get('/matches/:id/events', (req, res, next) => {
-    if (!liveMatchExists(req.params.id)) {
-      return next(new HttpError(404, 'match_not_found', 'Không tìm thấy ván đấu.'));
+  router.get(
+    '/matches/:id/events',
+    asyncHandler(async (req, res) => {
+      if (!(await liveMatchExists(req.params.id))) {
+        throw notFound('match_not_found', 'Không tìm thấy ván đấu.');
+      }
+      res.json({
+        match_id: req.params.id,
+        ...(await listLiveEvents(req.params.id, { afterSeq: normalizeAfterSeq(req.query.afterSeq) })),
+      });
+    })
+  );
+
+  // Bảng live chưa migrate → 503 kèm hướng dẫn, không để 500 mơ hồ.
+  router.use((error, req, res, next) => {
+    if (error?.code === 'shared_db_error') {
+      next(
+        new HttpError(
+          503,
+          'live_not_ready',
+          'Bảng dữ liệu trực tiếp chưa sẵn sàng. Chạy migration 20261023120000_live_stream.sql.'
+        )
+      );
+      return;
     }
-    res.json({
-      match_id: req.params.id,
-      ...listLiveEvents(req.params.id, { afterSeq: normalizeAfterSeq(req.query.afterSeq) }),
-    });
+    next(error);
   });
 
   return router;
 }
 
 export default liveRouter;
+

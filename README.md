@@ -1,20 +1,19 @@
 # OOTv2 · Cổng giải đấu bot
 
-## Runtime Supabase dùng chung (22/10/2026)
+## Runtime Supabase dùng chung — **DB duy nhất** (23/10/2026)
 
-API/worker mặc định dùng Supabase, không tự fallback SQLite. Đọc
-[hướng dẫn DB và migration](docs/12-SUPABASE-DATABASE.md) trước khi chạy.
+Từ 23/10/2026 driver SQLite đã bị **bỏ hoàn toàn**: API, worker và công cụ chỉ nói chuyện với
+Supabase (Postgres + Storage). Không còn `better-sqlite3`, `OOTV2_DB_DRIVER`, `OOTV2_DB_PATH`
+hay file `*.sqlite`; thiếu `SUPABASE_*` thì API/worker **dừng ngay** thay vì chạy DB khác.
+Đọc [hướng dẫn DB và migration](docs/12-SUPABASE-DATABASE.md) trước khi chạy.
 Sao chép `.env.example` thành `.env` và điền credential **backend-only** trên máy BTC
 tin cậy; tuyệt đối không đặt service-role key trong biến `VITE_*` hoặc gửi cho bot.
 
 Từ thư mục repository, chạy ba terminal: `npm run dev`, `npm run dev:api`,
 `npm run dev:worker`. Có thể chạy nhiều worker trên các máy tin cậy với cùng DB;
-API vẫn chỉ bind loopback vì chưa có sandbox OS. Không cần chép SQLite giữa máy.
-Tài khoản và password hash cũ được giữ, session cũ bị bỏ: đăng nhập lại.
-Test/legacy offline dùng `OOTV2_DB_DRIVER=sqlite`; không dùng chế độ đó làm writer
-song song sau cutover. Bucket bot private giữ profile MVP **256 KiB/200 plies** (nâng từ 64 KiB
-theo quyết định `bot.v1`, xem `docs/07-TRANG-THAI-TRIEN-KHAI.md`);
-không thay luật hoặc runner sang Campus trong đợt này.
+API vẫn chỉ bind loopback vì chưa có sandbox OS. Tài khoản và password hash cũ được giữ,
+session cũ bị bỏ: đăng nhập lại. Bucket bot private giữ profile MVP **256 KiB/200 plies**
+(xem `docs/07-TRANG-THAI-TRIEN-KHAI.md`); không thay luật hoặc runner sang Campus trong đợt này.
 
 ## Nền tảng DB Supabase (22/10/2026)
 
@@ -30,23 +29,24 @@ toàn bộ bằng SQL Editor và tự rollback dữ liệu thử. Không chạy 
   phù hợp mở Internet bằng **Cloudflare Tunnel** (miễn phí) từ máy tại nhà.
 - Khán giả ẩn danh xem mọi ván đang đấu tại `/#/live` (bàn cờ + nước đi, poll 2 giây).
   Log bot (stdout/stderr) chỉ đội sở hữu và admin đọc được qua `/api/local/live/...`.
-- Chạy thử nhanh:
+- Chạy thử nhanh (Supabase là DB duy nhất; cần `.env` có `SUPABASE_*`):
 
 ```powershell
 npm run build
 npm start                         # API + web: http://127.0.0.1:3001
 npm run start:worker              # terminal khác
-npm run demo:live                 # tạo giải demo 8 đội, bot chậm ~1,1 s/nước
+node tools/cli/create-admin.js    # lần đầu: tạo tài khoản admin
 ```
 
-Mở `http://127.0.0.1:3001/#/live`. Hướng dẫn tunnel, biến `.env`, Windows Service và
+Sau đó đăng nhập ở `http://127.0.0.1:3001/#/login`, tạo 8 đội + upload bot, tạo giải và Start;
+worker tự nhặt ván. Xem trực tiếp tại `/#/live`.
+Hướng dẫn tunnel, biến `.env`, Windows Service và
 giới hạn bảo mật: [docs/13-LIVE-VA-TRIEN-KHAI.md](docs/13-LIVE-VA-TRIEN-KHAI.md).
 
 ## Chơi thử và chuẩn bị giải
 
 - Trang đăng nhập có **Chơi offline**: hai người cùng máy, không tài khoản/API, ba map mẫu.
-- Admin tạo giải bằng tên, thêm đội/map sau. Runtime shared lưu DB Supabase;
-  `data/events/<id>/` chỉ là snapshot chuẩn bị của chế độ SQLite legacy.
+- Admin tạo giải bằng tên, thêm đội/map sau. Runtime lưu **Supabase**; không còn snapshot SQLite cục bộ.
 - Thư mục snapshot chưa phải bundle backup. Worker MVP chỉ chạy map không ô cản.
 - [Bàn giao và chia việc tiếp theo](docs/10-BAN-GIAO-OFFLINE-VA-THU-MUC-GIAI.md).
 
@@ -235,10 +235,10 @@ Song song với chế độ chơi tay 2 người ở trên, repo có thêm **ch�
 ### 7.2 Chạy 3 tiến trình dev (3 terminal)
 
 ```bash
-# Terminal 1 — API (Express + SQLite), mặc định http://127.0.0.1:3001
+# Terminal 1 — API (Express + Supabase), mặc định http://127.0.0.1:3001
 npm run dev:api
 
-# Terminal 2 — Judge worker: chạy tuần tự từng game, poll SQLite
+# Terminal 2 — Judge worker: chạy tuần tự từng game, claim qua Supabase
 npm run dev:worker
 
 # Terminal 3 — UI (Vite)
@@ -251,9 +251,9 @@ Mở UI, bấm tab **“Giải đấu bot”** (hoặc thêm `?view=tournament` 
 
 ### 7.3 Thao tác demo end-to-end
 
-1. Tab **Đội & Bot** → tạo **8 đội**, mỗi đội upload **một file `.py`** (dùng `examples/sample_bot.py` để thử). Cột trạng thái phải hiện “Đủ điều kiện thi đấu”.
-2. Nhập **Khóa admin local** (`x-admin-key`) và **API base** (để trống nếu dùng Vite proxy) trong khối “Cấu hình local”.
-3. Tab **Giải đấu** → chọn đúng **8 đội**, đặt tên giải → **Tạo giải (draft)** → **Start**.
+1. Đăng nhập bằng tài khoản BTC (`#/login`; tạo lần đầu bằng `node tools/cli/create-admin.js`).
+2. Tab **Đội & Bot** → tạo **8 đội**, mỗi đội upload **một file `.py`** (dùng `examples/sample_bot.py` để thử). Cột trạng thái phải hiện “Đủ điều kiện thi đấu”.
+3. Tab **Giải đấu** → chọn đúng **8 đội**, đặt tên giải → **Tạo giải (draft)** → **Start**. Admin tạo tài khoản đội trong tab **Đội & Bot** (mỗi đội tự upload bot).
    - Chia bảng theo seed: **A = 1,4,5,8 · B = 2,3,6,7**; vòng bảng 24 game (mỗi cặp 2 lượt đổi màu) + bán kết 4 game (2 cặp × 2 lượt) + chung kết 2 game = **30 game**.
 4. Worker ở Terminal 2 tự nhặt game `pending` và chạy lần lượt. UI tự làm mới mỗi **3 giây**.
 5. Trang chi tiết giải hiển thị **bracket bán kết → chung kết**, **bảng xếp hạng A/B**, **danh sách 30 game**; game đã xong có nút **Replay** (board 9x9 read-only, tua từng nước / tự chạy).
@@ -263,7 +263,8 @@ Mở UI, bấm tab **“Giải đấu bot”** (hoặc thêm `?view=tournament` 
 ```bash
 npm run worker:once    # chạy đúng 1 game rồi thoát (tiện debug)
 npm run worker:drain   # chạy tới khi hết game pending
-npm run test:server    # node --test tests/*.test.js (rule, protocol, worker, standings, knockout)
+npm test               # node --test tests/*.test.js (engine, protocol, runner, live stream)
+npm run db:verify      # smoke DB chung: health + login/CSRF/logout
 npm run build          # kiểm tra UI build được (Vite)
 ```
 
@@ -275,9 +276,9 @@ Server tự nạp file `.env` ở thư mục gốc nếu có (`process.loadEnvFi
 | --- | --- | --- |
 | `OOTV2_API_HOST` | `127.0.0.1` | Host API — **chỉ loopback** cho tới khi có sandbox cấp OS. |
 | `OOTV2_API_PORT` | `3001` | Cổng API. |
-| `OOTV2_ADMIN_KEY` | `local-dev-admin-key` | Giá trị hợp lệ của header `x-admin-key` cho route tạo/start giải. |
-| `OOTV2_DATA_DIR` | `<repo>/data` | Thư mục dữ liệu private (SQLite + bot upload), nằm ngoài `public/`, `src/`, `dist/`. |
-| `OOTV2_DB_PATH` | `<data>/ootv2.sqlite` | Đường dẫn file SQLite. |
+| `SUPABASE_URL` | (bắt buộc) | Project URL của Supabase (HTTPS). Thiếu → API/worker dừng ngay. |
+| `SUPABASE_SERVICE_ROLE_KEY` | (bắt buộc) | Service-role key, **chỉ** ở backend. Thiếu → API/worker dừng ngay. |
+| `OOTV2_DATA_DIR` | `<repo>/data` | Thư mục cache tạm cho bot tải từ Storage + file log; ngoài `public/`, `src/`, `dist/`. |
 | `OOTV2_PYTHON_BIN` | (trống) | Lệnh Python; để trống thì tự dò `python` / `py -3` / `python3`. |
 | `OOTV2_PUBLIC_ORIGIN` | (trống) | Origin HTTPS của web khi chạy sau reverse proxy, phân tách bằng dấu phẩy (guard same-origin). Same-origin qua proxy vẫn được chấp nhận nếu không khai báo. |
 | `OOTV2_TRUST_PROXY` | `loopback` | Tin `X-Forwarded-For`/`X-Forwarded-Proto` từ proxy cùng máy; `0` để tắt, số hop nếu proxy ở máy khác. |
@@ -288,20 +289,21 @@ Giới hạn cứng (trong `config.limits`, đổi bằng code): file bot ≤ **
 
 ```text
 server/
-├── index.js            # Khởi động API (bind 127.0.0.1)
-├── app.js              # Express app, mount routes, middleware lỗi
-├── db.js               # SQLite (better-sqlite3) + schema/migration
+├── index.js            # Khởi động API (bind 127.0.0.1, fail-fast nếu thiếu SUPABASE_*)
+├── app.js              # Express app: /api/health, /api/live, /api/local, web tĩnh
 ├── config.js           # Đọc env + giới hạn (không dùng dependency)
-├── routes/             # participants, tournaments, matches, health, sample-bot
-├── services/           # nghiệp vụ: participants/tournaments/matches/submissions
-├── middleware/         # upload (multer), admin key, xử lý lỗi
-├── judge/              # gameAdapter (dùng lại engine src/game), matchRunner, pythonRunner
-└── worker.js           # worker poll match pending → chạy bot → ghi kết quả/replay
-src/tournament/         # UI giải đấu (api.js, labels.js, replay.js, *View.jsx, ReplayBoard.jsx, tournament.css)
-tests/                  # node --test: gameAdapter, pythonRunner, tournamentFlow, workerE2E, api
+├── shared/             # Toàn bộ truy cập Supabase: client, accounts, tournaments, live, worker
+├── routes/live.js      # API công khai xem trực tiếp (L1), rate limit, no-store
+├── services/           # hàm thuần: judgeView, liveView, botValidation
+├── lib/                # httpError, origin, rateLimit, names, tournamentFormat
+├── middleware/upload.js# multer memoryStorage, 256 KiB
+├── judge/              # gameAdapter (dùng lại engine src/game), matchRunner, botRunner
+└── worker.js           # entry worker → shared/worker.js (claim + lease + heartbeat)
+src/tournament/         # UI giải đấu (api.js, labels.js, replay.js, *View.jsx, ReplayBoard.jsx, live/*)
+tests/                  # node --test: engine/protocol/runner + live stream (PostgREST giả lập)
+supabase/migrations/    # schema mvp_*, RPC, judge monitor, live stream
 examples/sample_bot.py  # bot mẫu đúng giao thức
-docs/                   # 01..05: scope, protocol, API/DB/UI, checklist, prompt triển khai
-data/                   # (tạo khi chạy) SQLite + bot đã upload — không commit
+data/                   # (tạo khi chạy) cache bot + log local — không commit
 ```
 
 
