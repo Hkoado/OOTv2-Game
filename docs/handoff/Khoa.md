@@ -16,7 +16,8 @@
   memory 64 MiB (137), CPU/timeout (124), CPU accounting ~262 ms, stdout flood cắt 64 KiB,
   wall timeout, cgroup cleanup, process cleanup. Log `data/khoa-next/sandbox-*.txt`.
 - `docs/SANDBOX-WSL.md` + `sandbox/README.md`; `.gitattributes` khóa LF cho `*.sh`.
-  Toàn bộ **299/299 test pass**, Vite build exit 0 (1650 modules), `git diff --check` sạch.
+- Đã merge thêm `origin/dev` (`4477be5`, sửa SubmissionsPage/githubSyncState) không conflict.
+  Sau merge: **299/299 test pass**, Vite build exit 0 (1650 modules), `git diff --check` sạch.
 - **Chưa production:** chưa seccomp/syscall allowlist/attestation, chưa nối worker Node, WSL chia sẻ
   kernel/tài nguyên Windows, chưa thử escape nâng cao. Không dùng cho code sinh viên; mọi gate
   Start/consumer vẫn giữ nguyên. Bước tiếp: adapter Node gọi runner + budget theo request, seccomp,
