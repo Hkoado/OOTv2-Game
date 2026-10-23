@@ -310,7 +310,20 @@ Xem [bàn giao UI](11-TICH-HOP-UI-KIT.md); đây không phải hoàn tất M2–
   API chỉ resolve repo ID + commit SHA qua `api.github.com`, không clone/tải source/chạy Python.
 - Receipt/job view là whitelist (không token/storage path/lease), trạng thái khớp fixtures
   `githubSyncState.js`; ghi `frozen` khi giải đã bắt đầu. Xem [bàn giao Huy](handoff/Huy.md).
-- Test: `githubRepo` 5/5, `githubIntakeApi` 6/6, schema guardrail; tổng 120/120, build pass.
-- Chưa làm: worker tải blob/validate (H2, Khoa), tắt upload HTTP, publication/privacy (H3),
-  Postgres integration trên project thật.
+- Test: `githubRepo` 5/5, `githubIntakeApi` 6/6, `githubJobs` 5/5, `publication` 9/9, schema guardrail;
+  tổng **136/136**, build pass.
+- Chưa làm: worker tải blob/validate (H2, Khoa), tắt upload HTTP; Postgres integration trên project thật.
 
+### H3 lịch phát + privacy, H1 worker contract (24/10/2026)
+
+- `mvp_match_broadcasts` + `server/shared/publication.js`: admin đặt/hủy lịch, viewer nhận
+  `phase/visible_plies/next_poll_ms` theo giờ server; `release_mode=full` mới mở result/replay.
+- `/api/live` **bắt buộc đăng nhập** và chỉ trả ván đã công bố; đội chỉ thấy ván đã mở trong
+  `GET /events/:id` (standings/bracket tính lại), replay và log bot bị chặn tới khi mở.
+  Ẩn danh nhận `401 login_required`; đội giải khác `403 scope_denied`.
+- H1: sửa `previous_valid_submission_id` (dùng `submission_id` của receipt valid) và thêm
+  `generation` + `mvp_github_claim/heartbeat/progress/finish/release` với lease token, chống stale worker.
+  Client cho Khoa: `server/shared/githubJobs.js`.
+- Migration mới: `20261024150000_broadcast_schedule.sql`, `20261024160000_github_jobs_worker.sql`
+  (đều **chưa apply remote**). Test: 136/136 pass, build pass; Postgres integration NOT RUN.
+- UI Live của Bảo cần xử lý 401 khi chưa đăng nhập và dùng gói phát thay vì đọc trực tiếp event.

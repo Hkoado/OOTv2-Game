@@ -109,6 +109,11 @@ Tận dụng bằng cách giữ live/log đã có và dùng ý tưởng form/CTA
   `github_timeout`, `github_unavailable`.
 - Job nội bộ cần source kind/path/SHA, lease token/until, attempt/retry/availableAt; status tách
   lỗi code khỏi hạ tầng. Snapshot tham chiếu receipt/source hash/map hash/rules/protocol/budget.
+- Contract worker đã chốt (H1, migration `20261024160000`): `mvp_github_claim/heartbeat/progress/
+  finish/release` + cột `generation`; client `server/shared/githubJobs.js`. `finish` ghi submission +
+  receipt + job trong một transaction; worker cũ (sai lease/generation) nhận `false` và không ghi gì.
+  `previous_valid_submission_id` đã sửa để trỏ `mvp_submissions(id)`.
+
 - API viewer dùng chính sách docs/14: cùng **giải** xem mọi ván **đã công bố**, không theo vòng cũ;
   khách không được xem nước/kết quả, offline mặc định BTC. Chặn cả standings/bracket/replay/log side channels.
 - Không mở public execute trước sandbox Linux kiểm chứng. Gate này độc lập với deploy Vercel.

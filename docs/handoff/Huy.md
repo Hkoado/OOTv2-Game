@@ -2,8 +2,8 @@
 
 ## Trạng thái mới nhất
 
-- Trạng thái: **H1 DONE (mock-verified)** — API + migration intake đã có, **chưa chạy Postgres thật**;
-  H2–H4 chưa làm.
+- Trạng thái: **H1 (+ fix review) và H3 DONE (mock-verified)** — intake, contract worker, lịch phát/privacy
+  đã có; **chưa chạy Postgres thật**; H2/H4 chưa làm.
 - Phạm vi: H1 trong [phân công Huy](../assignments/Huy.md).
 - Checkpoint nguồn: `3de220e`; **commit kết quả H1: `be22c09`** trên nhánh `dev` (đã push `origin/dev`).
 - Migration `20261024130000_github_intake.sql`: **CHƯA apply remote** (quy ước repo: cần operator duyệt).
@@ -56,6 +56,30 @@
 `status ∈ queued|leased|running|completed|bot_fault|infra_fault|canceled`; DB có thêm
 `lease_token/lease_until` nhưng view loại bỏ.
 
+### Ví dụ luồng gọi API cho B2
+
+```text
+# 1) Đội đăng ký repo (team session + header x-csrf-token)
+PUT /api/local/events/<eventId>/repository   {"repository":"https://github.com/team-delta/ootv2-bot","branch":"main"}
+→ 200 {"connection":{...,"approved":false,"status":"pending_approval"}}
+
+# 2) Admin duyệt (admin session)
+PUT /api/local/events/<eventId>/repository   {"team":"<participantId>","repository":"...","branch":"main"}
+→ 200 {"connection":{...,"approved":true,"status":"approved"}}
+
+# 3) Đội yêu cầu đồng bộ (gọi lại cùng SHA an toàn: created=false)
+POST /api/local/events/<eventId>/submissions/from-github   {}
+→ 202 {"created":true,"job":{"id":"...","status":"queued"},"receipt":{"status":"resolving","commit_sha":"<40 hex>",...}}
+
+# 4) Poll trạng thái
+GET /api/local/repo-sync-jobs/<job.id>                    → {"job":{...},"receipt":{...}}
+GET /api/local/events/<eventId>/submissions/from-github   → {"event":{...},"connection":{...},"receipt":{...}}
+```
+
+Lưu ý UI: `status` chỉ sang `fetching/checking/valid/invalid` sau khi worker H2 xử lý job; hiện dừng ở
+`resolving` cho tới khi H2 xong.
+
+
 ### Mã lỗi API (map từ envelope RPC, không lộ SQL)
 
 `repo_not_approved` (403), `repo_taken` (409), `repository_changed` (409), `repository_not_found` (404),
@@ -63,7 +87,55 @@
 `github_rate_limited` (503), `github_timeout` (504), `github_unavailable` (503),
 `github_auth_failed` / `github_forbidden` / `github_bad_response` (502).
 
+## H3 — lịch phát và privacy (`20261024150000_broadcast_schedule.sql`)
+
+Bảng `mvp_match_broadcasts` (1 row/ván, RLS private) tách khỏi trạng thái chấm:
+`scheduled → canceled`, còn `ended` suy ra từ giờ server. **Ván `finished` không tự động được công bố.**
+
+| Route | Quyền | Ghi chú |
+| --- | --- | --- |
+| `POST /api/local/admin/broadcasts` | admin | body `{match_id, starts_at (ISO có múi giờ), ply_interval_ms 250..60000, release_mode window|full}` → `201 {broadcast}`; chỉ ván `finished` (nếu chưa: `match_not_graded`) |
+| `POST /api/local/admin/broadcasts/:matchId/cancel` | admin | hủy trước giờ phát; đã phát → `409 broadcast_started` |
+| `GET /api/local/events/:id/broadcasts` | owner/admin | danh sách lịch; đội chỉ thấy ván đã công bố |
+| `GET /api/local/broadcasts/:matchId?afterSeq=` | owner/admin | gói phát `{phase, server_time, starts_at, ply_interval_ms, release_mode, visible_plies, total_plies, reveal_result, next_poll_ms, events[], result?}` |
+| `GET /api/live/*` | **bắt buộc đăng nhập** + đội thuộc giải | overview/snapshot/events lọc theo lịch phát |
+
+- `visible_plies = clamp(floor((server_now - starts_at)/ply_interval_ms) + 1, 0, total_plies)`;
+  `events` chỉ tới `seq <= visible_plies` (kèm `initial` seq 0); không có `result`/terminal trước khi mở.
+- `reveal_result = phase === 'ended' && release_mode === 'full'` — chỉ khi đó mới trả `result` và mở
+  `GET /api/local/matches/:id/replay` cùng log bot cho đội.
+- Ẩn với đội: ván chưa công bố trong `GET /events/:id` (matches/standings/bracket tính lại từ đúng tập
+  đã mở), `/api/live`, replay, bot-output; đội giải khác → 403 `scope_denied`.
+- Ẩn danh: mọi route `/api/live` trả `401 login_required` (thay chính sách L1 công khai trước đây).
+- UI Bảo: trang Live cần hiện nhắc đăng nhập; dùng `phase`/`visible_plies`/`next_poll_ms` của gói phát.
+
+
+## H1 — contract RPC worker (`20261024160000_github_jobs_worker.sql`)
+
+Worker BTC (Khoa/H2) dùng `server/shared/githubJobs.js`; mọi kiểm quyền nằm ở RPC:
+
+| RPC | Input | Ghi chú |
+| --- | --- | --- |
+| `mvp_github_claim(worker, lease_seconds=120)` | worker 1..120, lease 10..900 | claim `queued` tới hạn hoặc lease hết hạn (`SKIP LOCKED`), tăng `attempt` + `generation`, trả `{job, receipt, lease}` |
+| `mvp_github_heartbeat(job, token, generation, lease_seconds)` | lease token + generation | gia hạn lease; `false` = mất lease |
+| `mvp_github_progress(job, token, generation, status, note)` | `fetching|checking` | cập nhật receipt cho UI; `false` = mất lease |
+| `mvp_github_finish(job, token, generation, outcome)` | `{status, source_hash, submission?...}` | ghi submission + receipt + job trong **một transaction**; `false` = stale worker, không ghi gì |
+| `mvp_github_release(job, token, generation, error, max_attempts=3)` | backoff 15s×attempt (tối đa 300s) | retry; vượt attempts → `infra_fault`; trả `{ok:false, reason:'lease_lost'}` khi mất lease |
+
+- Chống stale worker: mọi UPDATE dùng
+  `WHERE lease_token=p_token AND generation=p_generation AND status IN ('leased','running') AND lease_until>clock_timestamp()`.
+- `finish` valid tạo `mvp_submissions` với `participant_id` lấy từ **job.team_id** (không tin payload),
+  kiểm `storage_path` dạng `<uuid>.py` và `sha256 = source_hash`; invalid/infrastructure **không** tạo
+  submission và giữ bản valid cũ.
+- **Sửa bug review**: `previous_valid_submission_id` lấy `submission_id` (FK trỏ `mvp_submissions(id)`),
+  bỏ qua receipt `valid` chưa có submission; sửa tại chỗ ở `20261024130000` và `CREATE OR REPLACE` trong
+  migration mới (ai đã apply bản nháp thì apply lại file cũ hoặc chạy migration mới).
+
+
 ## Schema / RPC (migration `20261024130000_github_intake.sql`, additive, CHƯA apply)
+
+- **Thứ tự áp dụng**: `20261024130000` (bảng + intake) → `20261024160000` (generation + worker RPC). Cả hai
+  phải sau `20261022125205` (bảng `mvp_*`) và `20261023160000` (RPC đọc cutoff).
 
 - `mvp_repo_connections`: unique `(event_id, team_id)` + unique `(event_id, repo_id)` (một repo/đội trong
   giải), `approved boolean`, `approved_by`, check `repository` là https://github.com/..., `file_path='bot.py'`.
@@ -90,8 +162,11 @@
 | --- | --- |
 | `node --test tests/githubRepo.test.js` | **5/5 pass** — URL/branch, chỉ metadata, token ở header, map lỗi GitHub |
 | `node --test tests/githubIntakeApi.test.js` | **6/6 pass** — duyệt repo, 202 + receipt whitelist, idempotent SHA, cross-team 403, quota 429, CSRF/frozen/admin-only |
-| `node --test tests/supabaseSchema.test.js` | **6/6 pass** — guardrail SQL tĩnh cho migration mới |
-| `node --test tests/*.test.js` | **120/120 pass**, exit 0 |
+| `node --test tests/supabaseSchema.test.js` | **8/8 pass** — guardrail SQL tĩnh cho migration mới |
+| `node --test tests/githubJobs.test.js` | **5/5 pass** — claim/lease/generation, heartbeat/progress, finish chuẩn hoá + chặn payload sai, release retry |
+| `node --test tests/publication.test.js` | **9/9 pass** — mốc phát, window vs full, ẩn ván chưa công bố, replay/log/live gate, cancel |
+
+| `node --test tests/*.test.js` | **136/136 pass**, exit 0 |
 | `npm run build` | **pass** (4.96 s, exit 0) |
 
 Môi trường: Windows, Node 24.18.0; không có test bị skip.
@@ -103,9 +178,15 @@ Môi trường: Windows, Node 24.18.0; không có test bị skip.
 - **Worker claim job + tải blob `bot.py` tại SHA + validate**: thuộc H2/Khoa. Hiện job ở `queued`,
   receipt ở `resolving`; chưa có gì chuyển sang `fetching/checking/valid/invalid`.
 - **GitHub thật** (repo private, GitHub App, rate limit thực): NOT RUN — mọi test inject `fetchImpl`.
-- **Tắt upload HTTP cho đội online** (H2) và publication/privacy (H3) chưa làm; route
+- **Tắt upload HTTP cho đội online** (H2) chưa làm; route
   `POST /api/local/submissions/:team` vẫn hoạt động như trước.
 - **UI/B2, browser QA**: thuộc Bảo; chưa có màn duyệt repo/poll job.
+
+- **H3 mức UI live**: `/api/live` giờ bắt buộc đăng nhập; trang Live của Bảo cần hiện nhắc đăng nhập thay
+  vì bảng trống (chưa sửa React — thuộc Bảo).
+- **Chưa đo tải 50–200 viewer** và chưa chạy trên Supabase thật; mốc `visible_plies` mới kiểm bằng test.
+- `state` trong `mvp_match_broadcasts` không tự chuyển sang `ended`: giai đoạn `ended` suy ra từ giờ server +
+  `ply_interval_ms`; DB chỉ đổi khi admin đặt lại lịch hoặc hủy.
 
 ## Blocker / rủi ro cần biết
 
@@ -123,13 +204,19 @@ Môi trường: Windows, Node 24.18.0; không có test bị skip.
    verify regular file), kiểm size/UTF-8/hash + validate trên worker, tạo `mvp_submissions` valid và
    cập nhật receipt (`fetching → checking → valid|invalid|infrastructure`), giữ bản valid cũ khi lỗi.
 2. **H2**: tắt upload HTTP mặc định cho đội online (opt-in admin/trusted-dev), giữ import offline.
-3. **H3**: publication/privacy. **H4**: integration/ops trên project DB test, hai worker claim/retry.
+3. **H4**: integration/ops trên project DB test, hai worker claim/retry (H3 đã xong ở mức mock).
 
 ## Lịch sử checkpoint
+
+- 24/10/2026: **H1 fix + worker contract** — sửa `previous_valid_submission_id` (dùng `submission_id`, bỏ
+  receipt chưa có submission) và thêm `generation` + `mvp_github_claim/heartbeat/progress/finish/release`
+  (lease token + generation, finish nguyên tử submission+receipt, release retry backoff);
+  `tests/githubJobs.test.js` 5/5, tổng 136/136 pass.
+
+- 24/10/2026: **H3 done (mock-verified)** — `mvp_match_broadcasts` + 4 route (list/viewer/admin
+  schedule/cancel), chặn xem ẩn danh và ẩn result/standings/bracket/replay/log của ván chưa công bố;
+  `tests/publication.test.js` 9/9, tổng 129/129 pass, build pass; Postgres integration NOT RUN.
 
 - 24/10/2026: **H1 done (mock-verified)** — commit `be22c09`: migration approval/job/receipt + 6 route +
   DTO cho B2; test 120/120 pass, build pass; migration chưa apply remote, Postgres integration NOT RUN.
 - 23/10/2026: tạo khung bàn giao, chưa thực hiện thay người được giao.
-
-
-

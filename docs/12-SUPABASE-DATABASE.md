@@ -61,6 +61,33 @@ Migration DDL dùng kết nối quản trị đã xác thực.
 - API danh sách trận trả thêm `map_hash` để đối soát; trường này vẫn không lộ source bot hay hash bài.
 
 
+## Worker contract GitHub + sửa FK (24/10/2026)
+
+- Migration **`20261024160000_github_jobs_worker.sql`** thêm `mvp_repo_sync_jobs.generation` và 5 RPC:
+  `mvp_github_claim` (queued/lease hết hạn, `SKIP LOCKED`, tăng attempt + generation),
+  `mvp_github_heartbeat`, `mvp_github_progress` (`fetching|checking`), `mvp_github_finish`
+  (submission + receipt + job trong một transaction), `mvp_github_release` (retry backoff 15s×attempt,
+  tối đa 300s; vượt attempts → `infra_fault`). Mọi UPDATE so `lease_token` + `generation` +
+  `lease_until > clock_timestamp()` nên worker cũ không ghi đè kết quả mới.
+- **Bugfix**: `previous_valid_submission_id` phải là `submission_id` của receipt `valid`
+  (FK trỏ `mvp_submissions(id)`) và bỏ qua receipt chưa có submission. Sửa tại chỗ ở
+  `20261024130000_github_intake.sql` + `CREATE OR REPLACE` trong migration mới cho DB đã lỡ apply.
+- `finish` valid tạo `mvp_submissions` với `participant_id` lấy từ job (không tin payload), kiểm
+  `storage_path` `<uuid>.py` và `sha256 = source_hash`; invalid/infrastructure không tạo submission.
+- Client contract: `server/shared/githubJobs.js`; test `tests/githubJobs.test.js` 5/5 (mock fetch).
+
+## Broadcast schedule H3 (24/10/2026)
+
+- Migration **`20261024150000_broadcast_schedule.sql`** tạo `mvp_match_broadcasts`
+  (`match_id` PK, `starts_at`, `ply_interval_ms` 250–60000, `release_mode window|full`,
+  `state scheduled|canceled|ended`), RLS + chỉ `service_role`.
+- `server/shared/publication.js` tính `visible_plies` bằng giờ server và là nguồn duy nhất cho
+  `GET /events/:id/broadcasts`, `GET /broadcasts/:matchId`, admin schedule/cancel, đồng thời lọc
+  `/api/live`, replay, log bot và standings/bracket của đội.
+- `/api/live` **yêu cầu đăng nhập** (401 khi ẩn danh) và chỉ trả ván đã công bố; `Cache-Control:
+  private, no-store`.
+
+
 ## Runtime MVP dùng chung — 22/10/2026
 
 - Migration `20261022125205_shared_mvp_runtime_tables` và
