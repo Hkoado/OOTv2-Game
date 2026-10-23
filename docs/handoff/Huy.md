@@ -2,11 +2,12 @@
 
 ## Trạng thái mới nhất
 
-- Trạng thái: **H1 (+ fix review), H2 (contract hardening) và H3 DONE (mock-verified)** — intake,
-  lease/idempotent finish/revoke, ACL/cổng upload, lịch phát; **chưa chạy Postgres thật**; H4 chưa làm.
+- Trạng thái: **H1/H2/H3 DONE — đã VERIFIED trên Postgres thật** (10/10 migration + smoke PASS,
+  `db:check-github` 200/domain errors); **H4 mức DB DONE** (`npm run db:h4` 30/30 check, rồi dọn sạch).
+  Chưa chạy consumer Khoa thật (polling + Python), chưa Start/deploy.
 - Phạm vi: H1 trong [phân công Huy](../assignments/Huy.md).
-- Checkpoint nguồn: `3de220e`; **commit kết quả H1: `be22c09`** trên nhánh `dev` (đã push `origin/dev`).
-- Migration `20261024130000_github_intake.sql`: **CHƯA apply remote** (quy ước repo: cần operator duyệt).
+- Commit: H1 `be22c09`; nối DB thật `cfc7a77` trên nhánh `dev` (đã push `origin/dev`).
+- Migration `20261024130000_github_intake.sql`: **đã apply 24/10/2026** (cùng 9 file khác).
 - B2 (Bảo) **có thể nối API thật ngay**: route + DTO dưới đây đã chốt, có test mock phủ quyền/lỗi.
 - **24/10/2026 (ngoài H1–H3):** thêm "nhớ tài khoản" ở màn đăng nhập — client chỉ lưu username
   (`src/tournament/portal/rememberAccount.js`), phiên 30 ngày khi bật (`REMEMBER_MS`) thay vì 8 giờ;
@@ -269,6 +270,29 @@ REST qua service role (không in key/token):
 - Vẫn **không** mở Start/deploy; consumer Khoa giữ `enabled=false` cho tới khi chạy thật 2 worker + Python.
 
 
+## H4 — drill 2 worker thật trên Supabase (24/10/2026)
+
+Công cụ: `npm run db:h4` (`tools/cli/h4-drill.js` + `tools/cli/h4-worker.js`). Kết quả **PASS 30/30**
+trên project thật; baseline sau drill không đổi (`db:verify`: 11 participants, 6 accounts, 1 event,
+8 entries, 4 submissions, 0 matches).
+
+- **Hai worker = hai OS process** (`spawn(process.execPath, …, shell:false)`), claim song song 4 job:
+  không job nào bị claim 2 lần, mỗi lần claim một lease token riêng, cả hai worker đều nhận việc;
+  finish lần thứ hai trả `already_finished=true, applied=false`.
+- **Crash/retry**: worker `H4_MODE=crash` claim rồi thoát ngay; hết lease 10 s, claim với
+  `max_attempts=1` **không phát lại** job → `infra_fault` + receipt `infrastructure`, lease đã nhả.
+- **Stale**: finish sai token và sai `generation` đều trả `lease_lost`; `progress` sai token → `false`;
+  `release` sai token → `lease_lost`; `release` đúng → `queued` + backoff, reclaim `attempt=2,
+  generation=2`; finish `valid` tạo submission và finish lặp **không** tạo submission thứ hai.
+- **Revoke**: `mvp_repo_connection_revoke` hủy đúng 2 job chờ (`canceled`), receipt `frozen`.
+- **Cutoff**: `mvp_official_setups.config.cutoff` trong quá khứ → intake trả `past_cutoff`.
+- An toàn: drill **từ chối chạy** nếu `mvp_repo_sync_jobs` đang có job lạ (không tranh job thật);
+  UUID ngẫu nhiên cho event/team; cleanup trong `finally` (receipts → jobs → connections → setups →
+  entries → submissions → tournaments → participants) và assert `leftover=0`.
+- Phụ trợ: `npm run db:sql -- "select …"` (mặc định chỉ SELECT; `--write` mới cho câu ghi) để đối soát.
+- **Còn lại (chưa làm)**: chạy consumer Khoa thật (polling + Python) trên drill này, đo tải
+  Preview/50–200 viewer, review security cuối. Chưa bật Start/deploy.
+
 ## NOT RUN / giới hạn
 
 - **DB thật**: đã apply 10 migration + smoke PASS (mục trên). **Chưa** chạy consumer Python/polling thật,
@@ -311,11 +335,17 @@ REST qua service role (không in key/token):
 1. **H2 worker (Khoa)**: claim job (`queued → leased`) qua `githubJobs.js`, tải blob `bot.py` tại SHA (bounded,
    verify regular file), kiểm size/UTF-8/hash + validate trên worker, tạo `mvp_submissions` valid và
    cập nhật receipt (`fetching → checking → valid|invalid|infrastructure`), giữ bản valid cũ khi lỗi.
-2. **H4**: hai tiến trình worker thật claim/retry trên project (smoke đã phủ contract DB), stale write/crash;
-   rồi mới bật consumer Khoa.
+2. **H4 phần còn lại**: chạy consumer Khoa thật (polling + Python) trên drill; đo tải 50–200 viewer,
+   rà UI Live/B2. Contract DB (2 worker, crash, stale, duplicate finish, revoke, cutoff) đã PASS `db:h4`.
 3. Đo tải 50–200 viewer, chốt chu kỳ poll; rà UI Live/B2 sau khi API ổn định.
 
 ## Lịch sử checkpoint
+
+- 24/10/2026: **H4 drill DB thật** — `npm run db:h4` PASS **30/30**: 2 worker OS process (pid khác nhau)
+  claim 4 job không trùng, crash/retry (`max_attempts=1` chặn phát lại → `infra_fault`), stale token/generation
+  → `lease_lost`, release → queued + reclaim `attempt=2`, duplicate finish không tạo submission thứ 2,
+  revoke hủy job + frozen receipt, cutoff → `past_cutoff`; cleanup `leftover=0`, baseline `db:verify` không đổi.
+  Thêm `tools/cli/db-sql.js` (`npm run db:sql`, mặc định chỉ SELECT) và test guardrail `tests/h4Drill.test.js`.
 
 - 24/10/2026: **NỐI DB THẬT** — có `SUPABASE_ACCESS_TOKEN`; apply **10/10** migration qua Management API;
   smoke PostgreSQL **PASS**; `db:check-github` mọi bảng 200 + RPC trả domain error; `db:verify` OK

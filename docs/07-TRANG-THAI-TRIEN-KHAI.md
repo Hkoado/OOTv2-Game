@@ -13,6 +13,9 @@
   `42702` alias `j` trùng biến PL/pgSQL trong `mvp_github_claim`, fixture smoke thiếu `name_key`.
 - Runner vá thêm: NOTIFY `pgrst, 'reload schema'` + poll sau mỗi file (schema cache gây FAIL oan) và đưa
   3 migration mới vào kế hoạch (10 file thay vì 7).
+- **H4 drill trên DB thật**: `npm run db:h4` — 2 worker là 2 OS process claim song song (không trùng job/token),
+  crash/retry qua reclaim cap, stale token/generation, duplicate finish, revoke, cutoff → **PASS 30/30**;
+  dữ liệu drill được dọn trong `finally`, `db:verify` sau drill không đổi.
 - Vẫn **không** mở Start/deploy; consumer Khoa `enabled=false`; H4 (2 tiến trình worker thật) chưa chạy.
 
 ## Nhớ tài khoản ở màn đăng nhập — 24/10/2026
