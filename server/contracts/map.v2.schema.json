@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MapV2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "revision", "width", "height", "bases", "setupZoneRule", "blocked", "terrains", "cornerRule", "rulesVersion"],
+  "properties": {
+    "schemaVersion": { "const": "map.v2" },
+    "rulesVersion": { "const": "ott-campus.v2" },
+    "id": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$" },
+    "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "width": { "const": 9 }, "height": { "const": 9 },
+    "bases": { "const": { "red": "a1", "blue": "i9" } },
+    "setupZoneRule": { "const": "diagonal-28-v1" },
+    "cornerRule": { "const": "block-if-both-orthogonals-blocked" },
+    "blocked": { "type": "array", "maxItems": 0 },
+    "terrains": {
+      "type": "object", "maxProperties": 79,
+      "propertyNames": { "pattern": "^[a-i][1-9]$" },
+      "additionalProperties": { "enum": ["fire", "water", "bush", "chasm"] }
+    }
+  }
+}

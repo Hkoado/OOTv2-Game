@@ -1,5 +1,6 @@
 /** Official setup contract. Planning only: never enqueue matches on the MVP runner. */
-import { EMPTY_MAP, normalizeMap } from './maps.js';
+import { EMPTY_MAP, EMPTY_TERRAIN_MAP, normalizeMap } from './maps.js';
+import { TERRAIN_RULES_VERSION } from './terrain.js';
 
 export const OFFICIAL_PROFILE = 'campus-setup.v1';
 export const MAX_OFFICIAL_TEAMS = 56;
@@ -23,8 +24,9 @@ export function normalizeCompetition(input = {}) {
   return {
     schemaVersion: OFFICIAL_PROFILE, level, cutoff, mapPackVersion: mapPackVersion.trim(),
     weeksPerMonth, monthsPerSemester,
-    primaryMap: normalizeMap(input.primaryMap ?? EMPTY_MAP),
-    reserveMap: normalizeMap(input.reserveMap ?? EMPTY_MAP),
+    mapsPublished: input.mapsPublished === true,
+    primaryMap: normalizeMap(input.primaryMap ?? (input.schemaVersion ? EMPTY_MAP : EMPTY_TERRAIN_MAP)),
+    reserveMap: normalizeMap(input.reserveMap ?? (input.schemaVersion ? EMPTY_MAP : EMPTY_TERRAIN_MAP)),
   };
 }
 
@@ -75,9 +77,12 @@ export function competitionPreview(ids, seed, config) {
   }
   if (!normalized.cutoff) blockers.push('Chưa đặt cutoff.');
   if (!normalized.mapPackVersion) blockers.push('Chưa ghi phiên bản map pack để công bố.');
+  if (normalized.primaryMap.rulesVersion !== normalized.reserveMap.rulesVersion) blockers.push('Map chính/dự phòng phải cùng phiên bản luật.');
   return { ...plan, blockers, setupReady: blockers.length === 0, executionReady: false,
     executionBlocker: 'Chưa nối scheduler chính thức, snapshot GitHub và runner; không chạy bằng lịch MVP.',
     scoring: { gameWin: 1, gameDraw: 0.5, seriesWin: 3, seriesDraw: 1 },
     knockout: { mainGamesPerSeries: 4, finalGames: 6, extraGamesIfTied: 2, thirdPlace: true, earlyStop: false },
-    rulesVersion: 'ott-campus.v1', maxPlies: 400, sourceKind: 'github', filePath: 'bot.py' };
+    rulesVersion: normalized.primaryMap.rulesVersion,
+    setupVisibility: normalized.primaryMap.rulesVersion === TERRAIN_RULES_VERSION ? 'sealed' : 'legacy',
+    maxPlies: 400, sourceKind: 'github', filePath: 'bot.py' };
 }

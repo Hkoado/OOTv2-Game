@@ -1,6 +1,13 @@
 /** K1 pure planning/aggregation only. No DB, queue, bot execution or publication. */
 import { drawCompetition } from '../../src/game/competition.js';
 import { deriveSeed } from '../judge/rng.js';
+import { assignNextOfficialGameColor } from './officialColors.js';
+
+/** V2 color planning, separate from legacy standings/schedule interpretation. */
+export function nextOfficialGroupGame({ results = [], ...config }) {
+  const schedule = createOfficialGroupSchedule(config);
+  return assignNextOfficialGameColor({ games: schedule.games, results, roundId: 'group', seed: config.seed });
+}
 
 export const OFFICIAL_GROUPS_VERSION = 'campus-groups.v1';
 export const OFFICIAL_GROUP_TIE_BREAKERS = Object.freeze([
@@ -47,9 +54,22 @@ export function createOfficialGroupSchedule({ participantIds, seed, mapHash, map
  * remain pending; invalid/duplicate/foreign records throw, never become forfeits.
  * This internal DTO is NOT an API response or permission to publish hidden scores.
  */
-export function computeOfficialGroupStandings({ results = [], ...config }) {
+export function computeOfficialGroupStandings({ results = [], colorPolicy = null, ...config }) {
   const schedule = createOfficialGroupSchedule(config);
   if (!Array.isArray(results)) throw new Error('Invalid results');
+  if (colorPolicy === 'alternate-loss-priority.v1') {
+    // Validate pinned colors chronologically; never reinterpret a result by old colors.
+    const prefix = [];
+    for (const game of schedule.games) {
+      const record = results.find((r) => r.gameId === game.id);
+      if (!record) break;
+      const assigned = assignNextOfficialGameColor({ games: schedule.games, results: prefix, roundId: 'group', seed: config.seed });
+      if (record.redParticipantId !== assigned.redParticipantId || record.blueParticipantId !== assigned.blueParticipantId) throw new Error('Invalid pinned colors');
+      Object.assign(game, { redParticipantId: assigned.redParticipantId, blueParticipantId: assigned.blueParticipantId });
+      prefix.push(record);
+    }
+    if (prefix.length !== results.length) throw new Error('Results must be a completed prefix');
+  } else if (colorPolicy !== null) throw new Error('Unsupported color policy');
   const byGame = new Map(schedule.games.map((game) => [game.id, game]));
   const accepted = new Map();
   for (const record of results) {

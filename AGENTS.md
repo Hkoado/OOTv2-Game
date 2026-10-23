@@ -4,6 +4,11 @@
 
 ### Quyết định hiện hành ngày 23/10/2026
 
+- **24/10/2026 — luật mới của người dùng:** đọc `docs/17-LUAT-DIA-HINH-VA-XEP-KIN.md`.
+  Campus v2: Lửa cản Bao, Nước cản Kéo, Bụi cây cản Búa, Vực cản tất cả;
+  setup bot kín, phân màu so le/ưu tiên số thua trong cùng vòng. Dùng asset hiện có.
+  Luật xếp trước sau bên dưới chỉ còn áp dụng v1/phòng cũ; không đổi replay lịch sử.
+
 - **Yêu cầu tiếp theo ngày 23/10:** chuyển thiết lập giải mới sang điều lệ chính thức, không tạo giải MVP 8 đội. Đọc `docs/16-THIET-LAP-CHINH-THUC-VA-CHIA-VIEC.md` và `docs/assignments/{Huy,Bao,Khoa}.md`. Người dùng đã cho phép chia việc 3 thành viên; thay quyết định làm tuần tự bên dưới đối với kế hoạch mới. Không tự tạo worktree hay deploy.
 - `campus-setup.v1` chỉ là cấu hình/dự kiến (400 plies là profile đích); chưa được chấm bằng worker MVP. Giữ nguyên profile/replay cũ 256 KiB / 200 plies. Không tuyên bố scheduler chính thức, GitHub intake hoặc sandbox đã xong.
 - Supabase là DB duy nhất; các mục SQLite bên dưới là lịch sử, không phục hồi driver cũ.

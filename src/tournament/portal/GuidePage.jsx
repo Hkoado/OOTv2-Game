@@ -6,7 +6,9 @@ import { FORMAT, GROUP_SEEDS, POINTS } from './tournamentView.js';
 const RULES = [
   ['Bàn cờ', '9×9, hai nhà chính ở a1 (Đỏ) và i9 (Xanh). Quân di chuyển 8 hướng như vua cờ vua.'],
   ['Quân', 'Mỗi bên 9 quân: 3 rock, 3 paper, 3 scissors.'],
-  ['Xếp quân', 'Đỏ xếp trước vào vùng nhà; Xanh xếp sau và được biết toàn bộ vị trí Đỏ đã đặt.'],
+  ['Xếp quân v2', 'Hai bot xếp kín trong vùng nhà, không nhận đội hình đối phương khi setup. Luật v1/phòng cũ giữ hành vi lịch sử.'],
+  ['Địa hình v2', 'Lửa cản Bao; Nước cản Kéo; Bụi cây cản Búa; Vực cản tất cả. Không đặt quân hoặc đi vào địa hình cản loại quân đó. BTC công bố map trước khi đội viết bot.'],
+  ['Màu đội v2', 'Công bố trước ván. Ưu tiên so le Đỏ/Xanh trong cùng vòng; khi xung đột ưu tiên Đỏ cho đội thua nhiều hơn, rồi thắng ít hơn, rồi seed lưu.'],
   ['Lượt đi', 'Đỏ đi trước. Một nước = chọn quân rồi chọn ô đích hợp lệ.'],
   ['Bắt quân', 'Rock thắng scissors, scissors thắng paper, paper thắng rock. Gặp quân hòa hoặc thua thì không được đi.'],
   ['Thắng', 'Chiếm nhà chính đối phương hoặc diệt sạch một loại quân của đối phương. Chạm 200 nước thì xử theo luật giải.'],

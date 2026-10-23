@@ -13,6 +13,7 @@ import { rows, uuid } from './client.js';
 import { isAllowedOrigin } from '../lib/origin.js';
 import config from '../config.js';
 import { onlineUploadDecision } from './uploadPolicy.js';
+import { EMPTY_MAP } from '../../src/game/maps.js';
 
 const forbidden=()=>new HttpError(403,'scope_denied','Không có quyền truy cập dữ liệu này.');
 /** Cookie session: HttpOnly + SameSite=strict, thêm `Secure` khi request đi qua HTTPS. */
@@ -120,7 +121,7 @@ export function sharedRouter() {
   router.get('/events',async(req,res)=>{
     let events=await tournaments.listTournaments();
     if (req.account.role!=='admin') {const entries=await rows('tournament_entries',`participant_id=eq.${uuid(req.account.participant_id)}`);events=events.filter((t)=>entries.some((e)=>e.tournament_id===t.id));}
-    res.json({events});
+    res.json({events: req.account.role === 'admin' ? events : events.map(({ map_json, ...event }) => event)});
   });
   router.post('/events',requireLocalAdmin,async(req,res)=>res.status(201).json(await tournaments.createTournament(req.body||{})));
   router.put('/events/:id',requireLocalAdmin,async(req,res)=>res.json(await tournaments.updateTournamentDraft(req.params.id,req.body||{})));
@@ -128,7 +129,14 @@ export function sharedRouter() {
   router.get('/events/:id',async(req,res)=>{
     const id=req.params.id;await checkStage(req.account,id);
     const event = await tournaments.getTournament(id);
-    if (event.competition) { res.json({event,standings:{groups:{}},matches:[],bracket:null}); return; }
+    if (event.competition) {
+      if (req.account.role !== 'admin' && !event.competition.mapsPublished) {
+        event.map = EMPTY_MAP;
+        event.map_json = null;
+        event.competition = { ...event.competition, primaryMap: EMPTY_MAP, reserveMap: EMPTY_MAP };
+      }
+      res.json({event,standings:{groups:{}},matches:[],bracket:null}); return;
+    }
     const matches = await tournaments.listMatches(id);
     if (req.account.role==='admin') {
       const [standings,bracket]=await Promise.all([tournaments.computeStandings(id),tournaments.computeBracket(id)]);

@@ -1,5 +1,6 @@
 import { RED_HOME_SQUARES, BLUE_HOME_SQUARES, coordsToSquare, squareToCoords } from './constants.js';
 import { adjacentSquares, isSquare } from './geometry.js';
+import { TERRAIN_RULES_VERSION, TERRAIN_BLOCKS, blockedForPiece } from './terrain.js';
 
 export const RULES_VERSION = 'ott-campus.v1';
 const fixed = {
@@ -9,6 +10,9 @@ const fixed = {
 };
 export const EMPTY_MAP = {
   ...fixed, id: 'open-arena', revision: 1, bases: { red: 'a1', blue: 'i9' }, blocked: [],
+};
+export const EMPTY_TERRAIN_MAP = {
+  ...EMPTY_MAP, schemaVersion: 'map.v2', rulesVersion: TERRAIN_RULES_VERSION, terrains: {},
 };
 
 export function sortSquares(squares) {
@@ -65,13 +69,15 @@ export function countDisjointPaths(graph, red, blue) {
   return flow;
 }
 
-/** Strict MapV1 validation, including geometry. Never silently repair invalid input. */
+/** Strict versioned map validation, including geometry. Never silently repair input. */
 export function validateMap(map) {
   const errors = [];
   if (!map || typeof map !== 'object' || Array.isArray(map)) return { ok: false, errors: ['map must be an object'] };
-  const fields = [...Object.keys(fixed), 'id', 'revision', 'bases', 'blocked'];
+  const terrainMap = map.schemaVersion === 'map.v2';
+  const expected = terrainMap ? { ...fixed, schemaVersion: 'map.v2', rulesVersion: TERRAIN_RULES_VERSION } : fixed;
+  const fields = [...Object.keys(fixed), 'id', 'revision', 'bases', 'blocked', ...(terrainMap ? ['terrains'] : [])];
   if (Object.keys(map).some((key) => !fields.includes(key))) errors.push('unknown map field');
-  for (const [key, value] of Object.entries(fixed)) {
+  for (const [key, value] of Object.entries(expected)) {
     if (map[key] !== value) errors.push(`invalid ${key}`);
   }
   if (typeof map.id !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(map.id) || /\s/.test(map.id)) errors.push('invalid id');
@@ -79,7 +85,32 @@ export function validateMap(map) {
   if (!map.bases || Object.keys(map.bases).sort().join(',') !== 'blue,red'
     || map.bases.red !== 'a1' || map.bases.blue !== 'i9') errors.push('invalid bases');
   if (!Array.isArray(map.blocked) || map.blocked.length > 79 || !Array.from(map.blocked).every(isSquare)) errors.push('invalid blocked squares');
+  if (terrainMap) {
+    if (!map.terrains || typeof map.terrains !== 'object' || Array.isArray(map.terrains)
+      || Object.entries(map.terrains).some(([square, type]) => !isSquare(square) || !Object.hasOwn(TERRAIN_BLOCKS, type))) {
+      errors.push('invalid terrains');
+    }
+    if (map.blocked?.length) errors.push('map.v2 uses terrains, not blocked');
+  }
   if (errors.length) return { ok: false, errors };
+
+  if (terrainMap) {
+    for (const [square, type] of Object.entries(map.terrains)) {
+      const { col, row } = squareToCoords(square);
+      if (square === 'a1' || square === 'i9') errors.push('terrain on base');
+      if (map.terrains[coordsToSquare(10 - col, 10 - row)] !== type) errors.push('terrains must be 180-degree symmetric');
+    }
+    if (errors.length) return { ok: false, errors };
+    // Each type needs playable setup cells and connected routes under ITS blockers.
+    const reports = {};
+    for (const type of ['rock', 'paper', 'scissors']) {
+      const blocked = [...blockedForPiece(map, type)];
+      const checked = validateMap({ ...EMPTY_MAP, id: map.id, revision: map.revision, blocked });
+      reports[type] = checked.report;
+      errors.push(...checked.errors.map((error) => `${type}: ${error}`));
+    }
+    return { ok: errors.length === 0, errors, report: { byPieceType: reports } };
+  }
 
   const blocked = new Set(map.blocked);
   if (blocked.size !== map.blocked.length) errors.push('duplicate blocked squares');
@@ -109,5 +140,6 @@ export function validateMap(map) {
 export function normalizeMap(map) {
   const validation = validateMap(map);
   if (!validation.ok) throw new Error(`Invalid map: ${validation.errors.join('; ')}`);
-  return { ...map, bases: { ...map.bases }, blocked: sortSquares(map.blocked) };
+  return { ...map, bases: { ...map.bases }, blocked: sortSquares(map.blocked),
+    ...(map.schemaVersion === 'map.v2' ? { terrains: Object.fromEntries(sortSquares(Object.keys(map.terrains)).map((s) => [s, map.terrains[s]])) } : {}) };
 }

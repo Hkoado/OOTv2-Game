@@ -1,6 +1,23 @@
 /** K2 pure knockout/ticket contracts. Not wired to the MVP queue or public API. */
 import { drawCompetition } from '../../src/game/competition.js';
 import { deriveSeed } from '../judge/rng.js';
+import { assignNextOfficialGameColor } from './officialColors.js';
+
+/** Call for one pinned series/round. Extra games still require the existing tie gate. */
+export function nextOfficialKnockoutGame({ series, results = [], includeExtra = false }) {
+  if (includeExtra) {
+    const pinned = (games) => games.map((game) => {
+      const record = results.find((r) => r.gameId === game.id);
+      return record ? { ...game, redParticipantId: record.redParticipantId, blueParticipantId: record.blueParticipantId } : game;
+    });
+    const outcome = resolveOfficialKnockoutSeries({ series: { ...series, mainGames: pinned(series.mainGames), extraGames: pinned(series.extraGames) }, results });
+    if (outcome.reason !== 'extra_pending' && !series.extraGames.every((game) => results.some((r) => r.gameId === game.id))) {
+      throw new Error('Extra games require tied completed main');
+    }
+  }
+  return assignNextOfficialGameColor({ games: [...series.mainGames, ...(includeExtra ? series.extraGames : [])],
+    results, roundId: series.stage, seed: series.seed });
+}
 
 export const OFFICIAL_BRACKET_VERSION = 'campus-bracket.v1';
 const text = (value) => typeof value === 'string' && value.trim().length > 0;
@@ -175,7 +192,21 @@ export function createOfficialKnockoutSeries({ id, stage, entrants, seed, primar
 }
 
 /** No early stop. extraGames is a conditional plan, never enqueue it before tied main. */
-export function resolveOfficialKnockoutSeries({ series, results = [], withdrawnIds = [], disqualifiedIds = [] }) {
+export function resolveOfficialKnockoutSeries({ series, results = [], withdrawnIds = [], disqualifiedIds = [], colorPolicy = null }) {
+  if (colorPolicy === 'alternate-loss-priority.v1') {
+    const games = [...series.mainGames, ...series.extraGames], prefix = [];
+    const pinned = new Map();
+    for (const game of games) {
+      const record = results.find((r) => r.gameId === game.id);
+      if (!record) break;
+      const assigned = assignNextOfficialGameColor({ games, results: prefix, roundId: series.stage, seed: series.seed });
+      if (record.redParticipantId !== assigned.redParticipantId || record.blueParticipantId !== assigned.blueParticipantId) throw new Error('Invalid pinned colors');
+      pinned.set(game.id, { ...game, redParticipantId: assigned.redParticipantId, blueParticipantId: assigned.blueParticipantId });
+      prefix.push(record);
+    }
+    if (prefix.length !== results.length) throw new Error('Results must be a completed prefix');
+    series = { ...series, mainGames: series.mainGames.map((g) => pinned.get(g.id) || g), extraGames: series.extraGames.map((g) => pinned.get(g.id) || g) };
+  } else if (colorPolicy !== null) throw new Error('Unsupported color policy');
   requireIds(withdrawnIds); requireIds(disqualifiedIds);
   if (!Array.isArray(results)) throw new Error('Invalid results');
   const sides = series.entrants.filter(Boolean), ids = sides.map((row) => row.participantId);

@@ -84,7 +84,7 @@ export async function startTournament(id) {
   if (await setupFor(id)) throw fail(409,'official_scheduler_not_ready','Thiết lập chính thức đã lưu; chưa nối scheduler/snapshot/runner chính thức. Không chạy bằng MVP.');
   if (event.status!=='draft') throw fail(409,'already_started','Giải đã bắt đầu.');
   const map = event.map_json?JSON.parse(event.map_json):EMPTY_MAP;
-  if (map.blocked.length) throw fail(409,'map_runner_unavailable','Worker MVP chưa hỗ trợ ô cản.');
+  if (map.schemaVersion === 'map.v2' || map.blocked.length) throw fail(409,'map_runner_unavailable','Worker MVP chưa hỗ trợ map v2 hoặc ô cản.');
   if (entries.length!==8) throw fail(400,'need_eight_entries','Giải phải có đúng 8 đội.');
   const submissions = await rows('submissions','status=eq.valid&order=created_at.desc,id.desc');
   const snapshots = entries.map((e)=>{

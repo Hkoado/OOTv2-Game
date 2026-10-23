@@ -9,9 +9,27 @@ import sys
 
 
 def setup(obs):
-    """Replace this strategy; availableSquares already excludes blocked cells."""
-    return [{"pieceId": p["id"], "square": square}
-            for p, square in zip(obs["unplaced"], obs["availableSquares"])]
+    """Find nine distinct legal cells, including type-specific v2 terrain."""
+    allowed = obs.get("availableSquaresByType", {})
+    pieces = obs["unplaced"]
+    assigned = {}
+
+    def place(piece, visited):
+        for square in allowed.get(piece["type"], obs["availableSquares"]):
+            if square in visited:
+                continue
+            visited.add(square)
+            previous = assigned.get(square)
+            if previous is None or place(previous, visited):
+                assigned[square] = piece
+                return True
+        return False
+
+    for piece in pieces:
+        if not place(piece, set()):
+            raise ValueError("No legal setup")
+    positions = {piece["id"]: square for square, piece in assigned.items()}
+    return [{"pieceId": p["id"], "square": positions[p["id"]]} for p in pieces]
 
 
 def move(obs):

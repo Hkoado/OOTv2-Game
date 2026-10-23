@@ -1,5 +1,6 @@
 import { contentHash, mapHash } from './canonical.js';
 import { normalizeMap, RULES_VERSION } from '../../src/game/maps.js';
+import { TERRAIN_RULES_VERSION } from '../../src/game/terrain.js';
 
 export const OFFICIAL_SNAPSHOT_VERSION = 'campus-round-snapshot.v1';
 const hash = (value) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
@@ -14,7 +15,7 @@ export function createOfficialRoundSnapshot({ eventId, roundId, seed, cutoff, ma
   if (![eventId, roundId, mapPackVersion].every(label) || !Number.isInteger(seed) || seed < 0 || seed > 0xffffffff
     || typeof cutoff !== 'string' || !/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(cutoff)
     || !Number.isFinite(Date.parse(cutoff))) throw new Error('Invalid snapshot identity/cutoff');
-  if (!runtime || runtime.rulesVersion !== RULES_VERSION || runtime.protocolVersion !== 'bot.v1'
+  if (!runtime || ![RULES_VERSION, TERRAIN_RULES_VERSION].includes(runtime.rulesVersion) || runtime.protocolVersion !== 'bot.v1'
     || !label(runtime.runtimeVersion) || !hash(runtime.runtimeHash) || !hash(runtime.budgetHash)) throw new Error('Unpinned runtime');
   if (!Array.isArray(bots) || bots.length < 1 || bots.length > 56
     || new Set(bots.map((bot) => bot.participantId)).size !== bots.length) throw new Error('Invalid snapshot bots');
@@ -33,6 +34,7 @@ export function createOfficialRoundSnapshot({ eventId, roundId, seed, cutoff, ma
         resolvedAt: new Date(bot.resolvedAt).toISOString() } : {}) };
   }).sort((a, b) => a.participantId < b.participantId ? -1 : a.participantId > b.participantId ? 1 : 0);
   const primary = normalizeMap(primaryMap), reserve = normalizeMap(reserveMap);
+  if ([primary, reserve].some((map) => map.rulesVersion !== runtime.rulesVersion)) throw new Error('Map/runtime rules mismatch');
   const snapshot = {
     schemaVersion: OFFICIAL_SNAPSHOT_VERSION, eventId, roundId, seed, cutoff: new Date(cutoff).toISOString(),
     mapPackVersion, maps: { primary: { map: primary, hash: mapHash(primary) }, reserve: { map: reserve, hash: mapHash(reserve) } },

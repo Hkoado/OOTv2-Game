@@ -1,5 +1,8 @@
 # OTTv2 — Bộ tài liệu giải đấu và giao diện
 
+**Luật mới 24/10/2026:** [Địa hình, setup kín và phân màu Campus v2](17-LUAT-DIA-HINH-VA-XEP-KIN.md).
+Thay phần v1 chỉ ô cản và Xanh thấy setup Đỏ cho giải mới; giữ replay/phòng cũ.
+
 Cập nhật 23/10/2026. Dành để bổ sung vào repository [Hkoado/OOTv2-Game](https://github.com/Hkoado/OOTv2-Game), phát triển tiếp nhánh `tournament/initial`. Đây là thiết kế/handoff, không phải tuyên bố các tính năng đã được triển khai.
 
 **Code hiện tại:** xem [trạng thái triển khai và migration](07-TRANG-THAI-TRIEN-KHAI.md).

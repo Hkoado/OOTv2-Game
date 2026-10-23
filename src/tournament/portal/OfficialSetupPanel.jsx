@@ -3,6 +3,8 @@ import { LEVEL_LABELS, MAX_OFFICIAL_TEAMS, competitionPreview, normalizeCompetit
 import { SAMPLE_MAPS } from '../../game/sampleMaps.js';
 import { Alert, Badge, DataTable, Field, Panel } from './TournamentUi.jsx';
 import MapPreview from './MapPreview.jsx';
+import TerrainMapEditor from './TerrainMapEditor.jsx';
+import { upgradeTerrainMap } from '../../game/terrain.js';
 import {
   detectVersionConflict,
   formatGroupSummary,
@@ -123,7 +125,7 @@ export default function OfficialSetupPanel({ event, teams, actions, busy, admin 
   return (
     <>
       <Alert tone="warning" title="Thiết lập giải chính thức · không phải giải MVP 8 đội">
-        {preview.executionBlocker} Đây là dự kiến cấu hình theo điều lệ, chưa khóa roster/bốc thăm, chưa công bố map pack hoặc nhận bài qua GitHub.
+        {preview.executionBlocker} Map có thể công bố trước để đội chuẩn bị bot; công bố map không mở worker giải chính thức.
       </Alert>
 
       {conflict.hasConflict && (
@@ -198,6 +200,7 @@ export default function OfficialSetupPanel({ event, teams, actions, busy, admin 
               >
                 <input
                   value={config.mapPackVersion}
+                  disabled={event.competition.mapsPublished === true}
                   maxLength={80}
                   placeholder="ví dụ: week-1-official"
                   onChange={(e) => change('mapPackVersion', e.target.value)}
@@ -270,10 +273,11 @@ export default function OfficialSetupPanel({ event, teams, actions, busy, admin 
                   <section key={key}>
                     <Field label={label}>
                       <select
+                        disabled={config.mapsPublished}
                         value={known?.map.id ?? 'custom'}
                         onChange={(e) => {
                           const found = SAMPLE_MAPS.find((item) => item.map.id === e.target.value);
-                          if (found) change(key, found.map);
+                            if (found) change(key, map.rulesVersion === 'ott-campus.v2' ? upgradeTerrainMap(found.map) : found.map);
                         }}
                       >
                         {!known && <option value="custom">{map.id} (bản đồ tùy chỉnh)</option>}
@@ -284,9 +288,17 @@ export default function OfficialSetupPanel({ event, teams, actions, busy, admin 
                         ))}
                       </select>
                     </Field>
-                    <MapPreview map={map} />
-                    {editable && (
-                      <Field label={`Nhập ${label.toLowerCase()} từ file JSON (map.v1)`}>
+                    {(admin || config.mapsPublished) && <MapPreview map={map} />}
+                    {!admin && !config.mapsPublished && <p>BTC chưa công bố map.</p>}
+                    {editable && !config.mapsPublished && <>
+                      <button type="button" className="tt-btn" onClick={() => {
+                        setConfig((old) => ({ ...old, primaryMap: upgradeTerrainMap(old.primaryMap), reserveMap: upgradeTerrainMap(old.reserveMap) }));
+                        setDirty(true);
+                      }}>Dùng luật v2 · địa hình & xếp kín</button>
+                      <TerrainMapEditor map={map} onChange={(value) => change(key, value)} />
+                    </>}
+                    {editable && !config.mapsPublished && (
+                      <Field label={`Nhập ${label.toLowerCase()} từ file JSON (map.v1 / map.v2)`}>
                         <input type="file" accept=".json,application/json" onChange={(e) => importMap(e, key)} />
                       </Field>
                     )}
@@ -294,7 +306,15 @@ export default function OfficialSetupPanel({ event, teams, actions, busy, admin 
                 );
               })}
             </div>
+            {editable && <Field label="Công bố map trước khi thiết kế bot">
+              <label><input type="checkbox" checked={config.mapsPublished === true} disabled={event.competition.mapsPublished === true}
+                onChange={(e) => change('mapsPublished', e.target.checked)} /> Công bố và khóa map chính/dự phòng khi lưu</label>
+              <p>Map đã công bố không được sửa. Đội xem được map và tải JSON ngay trong trang giải.</p>
+            </Field>}
           </fieldset>
+          {config.mapsPublished && <p>Map pack đã công bố: <strong>{config.mapPackVersion}</strong>. Xếp quân kín trong luật v2; màu được chốt trước mỗi ván.</p>}
+          {event.map_publication && <p className="tt-muted">SHA-256 map chính: <code>{event.map_publication.primaryHash}</code><br />
+            SHA-256 dự phòng: <code>{event.map_publication.reserveHash}</code></p>}
 
           {error && <Alert tone="danger">{error}</Alert>}
 

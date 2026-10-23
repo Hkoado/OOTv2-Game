@@ -65,6 +65,9 @@ function safeNotify(callback, payload) {
 export async function runMatch({ matchId, seed, red, blue, map, onProgress, onLive, onBotOutput }) {
   // Snapshot map do giải/worker chốt, không lấy từ bot.
   const mapFields = mapRequestFields(map ? normalizeMap(map) : null);
+  if (mapFields.map?.schemaVersion === 'map.v2') {
+    throw new Error('map_runner_unavailable: map.v2 requires the Campus runner');
+  }
   const outcome = await runMatchInternal({
     matchId,
     seed,

@@ -2,9 +2,10 @@
 import { createNewGame, createUnplacedPieces, executeMove, GAME_PHASES } from '../../src/game/gameState.js';
 import { PLAYERS, BASES, RED_HOME_SQUARES, BLUE_HOME_SQUARES } from '../../src/game/constants.js';
 import { getValidMoves } from '../../src/game/rules.js';
-import { normalizeMap, RULES_VERSION } from '../../src/game/maps.js';
+import { normalizeMap } from '../../src/game/maps.js';
 import { contentHash, mapHash } from '../contracts/canonical.js';
 import { validatePlacements, otherPlayer } from './gameAdapter.js';
+import { TERRAIN_RULES_VERSION, terrainBlocks } from '../../src/game/terrain.js';
 
 export const CAMPUS_MAX_PLIES = 400;
 export const BOT_FAULTS = Object.freeze([
@@ -26,10 +27,11 @@ export function createCampusGame({ map, seed, id = 'campus' }, { clock = fixedCl
   const normalized = normalizeMap(map);
   Object.freeze(normalized.bases);
   Object.freeze(normalized.blocked);
+  if (normalized.terrains) Object.freeze(normalized.terrains);
   Object.freeze(normalized);
   return {
     ...createNewGame(id, clock), phase: GAME_PHASES.SETUP_RED,
-    rulesVersion: RULES_VERSION, map: normalized, mapHash: mapHash(normalized), seed,
+    rulesVersion: normalized.rulesVersion, map: normalized, mapHash: mapHash(normalized), seed,
     ply: 0, repetitions: {}, result: null, terminationReason: null,
   };
 }
@@ -53,6 +55,10 @@ export function validateCampusSetup(state, player, placements) {
   if (!checked.ok) return checked;
   const blocked = new Set(state.map.blocked);
   if (placements.some((p) => blocked.has(p.square))) return { ok: false, error: 'blocked_square' };
+  const types = new Map(createUnplacedPieces(player).map((p) => [p.id, p.type]));
+  if (placements.some((p) => terrainBlocks(state.map, p.square, types.get(p.pieceId)))) {
+    return { ok: false, error: 'terrain_blocked' };
+  }
   return checked;
 }
 
@@ -123,12 +129,16 @@ export function adjudicateCampusBotFault(state, player, fault) {
 export function campusObservation(state, player) {
   requirePlayer(player);
   const home = player === PLAYERS.RED ? RED_HOME_SQUARES : BLUE_HOME_SQUARES;
+  const sealed = state.rulesVersion === TERRAIN_RULES_VERSION;
+  const setup = [GAME_PHASES.SETUP_RED, GAME_PHASES.SETUP_BLUE].includes(state.phase);
   return structuredClone({
     id: state.roomId, rulesVersion: state.rulesVersion, map: state.map, mapHash: state.mapHash,
     seed: state.seed, you: player, phase: state.phase, turn: state.turn, ply: state.ply,
-    pieces: Object.values(state.pieces).filter((p) => p.alive),
+    pieces: Object.values(state.pieces).filter((p) => p.alive && !(sealed && setup && p.player !== player)),
     unplaced: state.unplacedPieces[player],
-    availableSquares: home.filter((s) => !state.map.blocked.includes(s)),
+    availableSquares: home.filter((s) => !terrainBlocks(state.map, s, '*')),
+    ...(sealed ? { setupVisibility: 'sealed', availableSquaresByType: Object.fromEntries(
+      ['rock', 'paper', 'scissors'].map((type) => [type, home.filter((s) => !terrainBlocks(state.map, s, type))])) } : {}),
     legalMoves: campusLegalMoves(state, player),
   });
 }

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { normalizeCompetition, drawCompetition, competitionPreview } from '../src/game/competition.js';
-import { EMPTY_MAP } from '../src/game/maps.js';
+import { EMPTY_MAP, EMPTY_TERRAIN_MAP } from '../src/game/maps.js';
 
 const ids = (count) => Array.from({ length: count }, (_, i) => `10000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`);
 const configured = { cutoff: '2026-11-01T20:00:00+07:00', mapPackVersion: 'week-1' };
@@ -51,7 +51,7 @@ test('monthly/semester setup does not invent ticket seeds or fake bye games', ()
 test('official contract validates dates, maps, level and calendar', () => {
   const normalized = normalizeCompetition(configured);
   assert.equal(normalized.cutoff, '2026-11-01T13:00:00.000Z');
-  assert.deepEqual(normalized.primaryMap, EMPTY_MAP);
+  assert.deepEqual(normalized.primaryMap, EMPTY_TERRAIN_MAP);
   assert.throws(() => normalizeCompetition({ cutoff: '2026-11-01T20:00' }), /múi giờ/);
   assert.throws(() => normalizeCompetition({ level: 'mvp' }), /Cấp giải/);
   assert.throws(() => normalizeCompetition({ monthsPerSemester: 5 }), /3 hoặc 4/);

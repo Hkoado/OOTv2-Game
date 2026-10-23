@@ -1,5 +1,14 @@
 # Trạng thái triển khai Campus — 23/10/2026
 
+## Luật v2 — 24/10/2026
+
+- [Luật địa hình/xếp kín/phân màu](17-LUAT-DIA-HINH-VA-XEP-KIN.md): engine Campus,
+  map.v2/hash/replay, bot mẫu, bút địa hình và công bố/khóa pack đã có.
+- Phân màu là hàm thuần ván kế tiếp + aggregator theo màu chốt. **Chưa có persistence/API/UI
+  công bố màu trước ván** vì runtime chính thức chưa nối; không mở gate worker MVP.
+- Không sửa phòng P2P/gameState/điều kiện thắng; không thêm ảnh hoặc dependency.
+- Migration khóa pack chưa apply; mock publication không thay Postgres integration thật.
+
 ## Checkpoint mới — thiết lập giải chính thức và chia việc Huy/Bảo/Khoa
 
 Yêu cầu mới thay kế hoạch một agent: đọc [docs/16](16-THIET-LAP-CHINH-THUC-VA-CHIA-VIEC.md)
