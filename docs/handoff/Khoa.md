@@ -2,6 +2,38 @@
 
 ## Trạng thái mới nhất
 
+### 24/10/2026 — K3d consumer coordinator: READY FOR REVIEW (chưa bật)
+
+- Tiếp tục từ `dev @ ec7d2f4`, working tree sạch; không fetch/merge remote trong đợt này.
+- Thêm `server/shared/githubConsumer.js` export `processGithubJob`: opt-in disabled trước DB,
+  yêu cầu explicit validateSource/storeSource adapter, mặc định RPC client + pinned GitHub fetch.
+  Không import vào runSharedWorker, không CLI/env/schema/API/React mới, không gọi Python mặc định.
+- Claim kiểm job/receipt identity và fence token/generation; heartbeat 10s/lease 120s; deadline
+  sau claim tối đa 60s, signal abort khi lease mất/cancel/timeout. Callback nhận bytes copy/hash/signal,
+  không raw job hoặc token. Cache put/acquire và finally release; chưa GC inventory tự động.
+- Progress fetching/checking; invalid không upload; valid chỉ finish bằng submission payload mới,
+  không dùng existing submission_id thiếu kiểm status/hash trong SQL. Hạ tầng release retry với
+  fixed redacted message, heartbeat trước release; không coi đây là sửa server-side expiry bug.
+- Finish không rõ commit => không release/delete/retry finish; cần đối soát receipt và orphan inventory.
+  RPC đã in-flight không bị thu hồi transaction bởi AbortSignal của consumer; callback phải tự honor
+  signal/cleanup, Promise.race không sandbox/kill process/chặn JS synchronous. Đọc giới hạn đầy đủ
+  tại `docs/GITHUB-CONSUMER.md`; không tuyên bố H2/K3 production DONE.
+- Thêm `tests/githubConsumer.test.js`: 12 test fixtures/mocks, gồm actual RPC wrappers + bounded
+  pinned GitHub helper + filesystem cache qua fetch mock (4 GitHub calls), không DB/GitHub/Python thật.
+  Test disabled/config/no-job, valid/invalid, identity/hash/storage checks, errors/redaction,
+  heartbeat/progress loss, stalled fetch, cancel/deadline, uncertain finish.
+- Baseline install/test/build exit 0 (**222/222**); warnings dependency cũ không audit fix.
+  Sau code nhóm consumer/jobs/artifact/cache **44/44 pass**, toàn repo **234/234 pass**, 0 skip,
+  exit 0. Build pass (4.21s), diff check exit 0; `data/khoa-consumer/final.json` đã thu đủ exit codes.
+- Logs: `data/khoa-consumer/{git,baseline,targeted,final}.json`, `baseline-*.log`, `final-*.log`.
+  Shell integration báo completion không quan sát được; đọc exit codes spawnSync/log thay vì suy thành công.
+- NOT RUN: PostgreSQL concurrency/crash/lease, Storage thật, private GitHub, sandbox Linux,
+  browser/load/offline recovery. Không push/deploy/apply remote, Start giữ khóa.
+- Bước tiếp: Huy review/fix release expiry + existing submission check + reclaim max attempts,
+  H4 DB thật trên project disposable được phép; nối adapter validation có sandbox và bounded Storage
+  có signal/inventory rồi mới bật poll consumer. K2 persistence/H3 QA/K4 còn release gates riêng.
+  SHA checkpoint: tra `git log -- docs/handoff/Khoa.md`.
+
 ### 24/10/2026 — Tích hợp contract GitHub/H3 + K3c cache: READY FOR REVIEW
 
 - User yêu cầu pull Huy H2/H3 và làm tiếp. Checkout `dev @ bc0e0c6` sạch, không MERGE_HEAD.
