@@ -343,7 +343,7 @@ export default function LocalCore({ theme, onToggleTheme }) {
     const data = await apiRequest(`/events/${encodeURIComponent(eventId)}`);
     setDetail(data);
     await loadRoleData();
-  }, 'Đã lưu đội và map của giải.'), [loadRoleData, runAction]);
+  }, 'Đã lưu thiết lập của giải.'), [loadRoleData, runAction]);
 
   const startEvent = useCallback((eventId) => runAction('start', async () => {
     await apiRequest(`/events/${encodeURIComponent(eventId)}/start`, { method: 'POST' });

@@ -77,7 +77,9 @@ export function sharedRouter() {
   router.post('/events/:id/start',requireLocalAdmin,async(req,res)=>res.json(await tournaments.startTournament(req.params.id)));
   router.get('/events/:id',async(req,res)=>{
     const id=req.params.id;await checkStage(req.account,id);
-    const [event,standings,matches,bracket]=await Promise.all([tournaments.getTournament(id),tournaments.computeStandings(id),tournaments.listMatches(id),req.account.role==='admin'?tournaments.computeBracket(id):null]);
+    const event = await tournaments.getTournament(id);
+    if (event.competition) { res.json({event,standings:{groups:{}},matches:[],bracket:null}); return; }
+    const [standings,matches,bracket]=await Promise.all([tournaments.computeStandings(id),tournaments.listMatches(id),req.account.role==='admin'?tournaments.computeBracket(id):null]);
     const allowed=[];
     for (const stage of ['group','semifinal','final']) {try {await checkStage(req.account,id,stage);allowed.push(stage);} catch(error) {if (error.status!==403&&error.statusCode!==403) {if(error.code!=='scope_denied') throw error;}}}
     res.json({event,standings,matches:matches.filter((m)=>allowed.includes(m.stage)),bracket});

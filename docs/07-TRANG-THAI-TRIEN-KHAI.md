@@ -1,13 +1,63 @@
 # Trạng thái triển khai Campus — 23/10/2026
 
-## Bàn giao song song M1 — 23/10/2026
+## Checkpoint mới — thiết lập giải chính thức và chia việc Huy/Bảo/Khoa
 
-Xem [đối chiếu code, chia nhánh/worktree và prompt Codex/Cline](15-DIEU-PHOI-HAI-AGENT.md).
+Yêu cầu mới thay kế hoạch một agent: đọc [docs/16](16-THIET-LAP-CHINH-THUC-VA-CHIA-VIEC.md)
+và prompt trong `docs/assignments/`. Chưa đóng GitHub intake M1 hoặc runtime chính thức.
+
+- Tạo giải mới `campus-setup.v1` tuần/tháng/kỳ, roster đến 56 đội, cutoff UTC,
+  map chính/dự phòng và map pack version; dự kiến chia bảng xác định bằng seed.
+- Counts 35/40/48/50 đội: 120/160/240/264 ván qualifier. Điểm cặp/knockout hiển thị
+  theo điều lệ, **chưa thực thi scheduler/standings/vé**. API start/SQL trigger fail closed.
+- File chính mới: `src/game/competition.js`, `server/shared/officialSetup.js`,
+  `src/tournament/portal/OfficialSetupPanel.jsx`, `tests/officialSetup.test.js`.
+  Giữ nguyên dữ liệu/replay/runner MVP lịch sử; không tạo giải mới theo lịch 8 đội.
+- Migration additive `20261023160000_official_setup.sql` **chưa apply**. Cần schema trước
+  code rollout vì chi tiết giải đọc thêm bảng setup. Không tự deploy hoặc apply remote.
+- Đã fetch origin exit 0: live `7676a51` và logs `0112cc1` đã là ancestor;
+  Backend mới `8540d2f` không merge vì dependency SQLite và clone HTTP/cutoff sai hướng.
+- Baseline `npm.cmd install` / `npm.cmd test` / `npm.cmd run build`: exit 0, 82 tests.
+- Sau chỉnh: `npm.cmd test` **91/91 pass**, 0 fail/skip (2,72 s), exit 0;
+  `npm.cmd run build` exit 0 (1638 modules, 4,23 s); `git diff --check` exit 0.
+  Exit code được thu bằng child process và lưu log riêng do shell integration lỗi.
+- Install báo 2 high severity vulnerabilities và cảnh báo esbuild approval; chưa tự audit fix.
+- NOT RUN: apply/integration PostgreSQL thật, browser tương tác setup, Preview HTTPS,
+  GitHub intake, Linux sandbox, tải viewer, offline bot/restore. Test setup dùng mock PostgREST,
+  SQL test chỉ static; không gọi DB thật. UI/DB migration chưa được coi là E2E đã nghiệm thu.
+- Giữ nguyên thay đổi chưa commit có trước phiên, gồm test HTTP auth và xóa kế hoạch hai agent;
+  không commit/push thay người dùng. Không restore các file đã xóa.
+
+## Bàn giao tiếp tục M1 — 23/10/2026
+
+Xem [bàn giao code dang dở cho phiên mới](15-BAN-GIAO-TIEP-TUC.md).
+Người dùng đã hủy kế hoạch nhiều agent; tiếp tục tuần tự trong workspace hiện tại, không cần worktree/merge điều phối.
 M1 vẫn **một phần**: upload intake không chạy Python và có Vercel entrypoint, nhưng chưa có
 luồng GitHub SHA/job/receipt; validation upload chưa có lease; Preview HTTPS và integration
 Supabase chưa nghiệm thu. Live hiện anonymous/immediate, chưa giữ kín và phát lịch M3–M4.
 Các số test/build phía dưới là bằng chứng của từng đợt cũ, không cộng dồn hay coi là chạy lại.
 Các mục SQLite phía dưới là lịch sử trước Supabase-only, không phải hướng triển khai hiện tại.
+
+## M1 — Baseline và hồi quy HTTP auth/CSRF/phân quyền (23/10/2026)
+
+Phần việc nhỏ, **chưa đóng M1** (GitHub intake vẫn thiếu).
+
+- Nhánh `dev` @ `eabb907`; giữ nguyên thay đổi chưa commit về tài liệu/dọn kế hoạch nhiều agent.
+- Baseline trước khi sửa: `npm.cmd install` exit 0 (chỉ cảnh báo `allow-scripts` của esbuild; binary
+  `@esbuild/win32-x64` có mặt, `esbuild.transform` chạy được), `npm.cmd test` exit 0,
+  `npm.cmd run build` exit 0 (1636 modules, 9,39 s).
+- Thêm `tests/portalAuthApi.test.js` (5 test, Node built-in runner): dựng Express app thật trên
+  loopback + PostgREST giả lập ở lớp `fetch`; mọi URL khác `https://example.invalid` bị ném lỗi
+  nên test không thể chạm Supabase cấu hình trong `.env`.
+- Phạm vi bảo vệ: whitelist account, cookie `HttpOnly` + `SameSite=Strict`, session lưu hash;
+  401 khi thiếu/sai session và sau logout; 403 khi thiếu/sai CSRF hoặc origin lạ (và không ghi DB);
+  team bị chặn route admin, không nộp bài thay đội khác; chặn repository không phải GitHub HTTPS,
+  có token hoặc path lạ; branch chứa khoảng trắng.
+- Sau thay đổi: `npm.cmd test` **82/82 pass** (77 cũ + 5 mới, 0 fail), `npm.cmd run build` exit 0
+  (1636 modules, 6,18 s).
+- **Chưa kiểm (NOT RUN):** Supabase thật, Preview/Vercel HTTPS/cookie `Secure`, upload thành công
+  lên Storage, và bản thân luồng GitHub SHA/job/receipt.
+- Bước tiếp: đọc `docs/06-GITHUB-NOP-BOT-VA-LUU-TRU.md` + `docs/14`, chốt contract nhỏ cho API
+  nhận repo/branch (resolve SHA một lần, cutoff, idempotency, receipt) trước khi viết code.
 
 ## M0 — Baseline và chốt hướng chấm trước / phát trận (23/10/2026)
 

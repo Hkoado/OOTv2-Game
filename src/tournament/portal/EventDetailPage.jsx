@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Award, Eye, RefreshCw, Swords } from 'lucide-react';
 import DraftEventEditor from './DraftEventEditor.jsx';
 import MapPreview from './MapPreview.jsx';
+import OfficialSetupPanel from './OfficialSetupPanel.jsx';
 import {
   Alert, Badge, ConfirmAction, DataTable, Empty, Panel, Progress, Spinner,
 } from './TournamentUi.jsx';
@@ -172,6 +173,12 @@ export default function EventDetailPage({
       </>
     );
   }
+
+  if (event.competition) return <>
+    {backButton}
+    <header className="tt-page-head"><div><h1 className="tt-page-title">{event.name}</h1><p>Thiết lập chính thức · seed {event.seed} · phiên bản {event.version}</p></div></header>
+    <OfficialSetupPanel key={`${event.id}:${account.role}`} event={event} teams={teams} actions={actions} busy={busy} admin={isAdmin} />
+  </>;
 
   return (
     <>

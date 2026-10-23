@@ -3,8 +3,11 @@
 Cập nhật 23/10/2026. Dành để bổ sung vào repository [Hkoado/OOTv2-Game](https://github.com/Hkoado/OOTv2-Game), phát triển tiếp nhánh `tournament/initial`. Đây là thiết kế/handoff, không phải tuyên bố các tính năng đã được triển khai.
 
 **Code hiện tại:** xem [trạng thái triển khai và migration](07-TRANG-THAI-TRIEN-KHAI.md).
+**Yêu cầu tiếp theo 23/10:** [thiết lập giải chính thức và kế hoạch 3 thành viên](16-THIET-LAP-CHINH-THUC-VA-CHIA-VIEC.md),
+prompt riêng cho [Huy](assignments/Huy.md), [Bảo](assignments/Bao.md), [Khoa](assignments/Khoa.md).
+Setup mới không còn giới hạn 8 đội; chưa phải runtime giải chính thức đã nghiệm thu.
 Hướng đang triển khai (chấm trước → công bố → phát từng nước): [kiến trúc chấm trước và phát trận](14-KIEN-TRUC-CHAM-TRUOC-VA-PHAT-TRAN.md).
-Chạy Codex + Cline song song: [chia việc, nhánh/worktree, prompt và gate tích hợp](15-DIEU-PHOI-HAI-AGENT.md).
+Tiếp tục ở phiên mới: [bàn giao code dang dở và bước tiếp theo](15-BAN-GIAO-TIEP-TUC.md) — làm tuần tự trong workspace hiện tại.
 Xem trực tiếp + triển khai công khai (đã chạy được): [live và Cloudflare Tunnel](13-LIVE-VA-TRIEN-KHAI.md).
 Đợt offline/thư mục giải: [bàn giao và chia việc còn thiếu](10-BAN-GIAO-OFFLINE-VA-THU-MUC-GIAI.md).
 Nền tảng engine Campus M1 có CLI riêng; API/worker/UI hiện tại vẫn dùng profile MVP.

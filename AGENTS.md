@@ -4,10 +4,12 @@
 
 ### Quyết định hiện hành ngày 23/10/2026
 
+- **Yêu cầu tiếp theo ngày 23/10:** chuyển thiết lập giải mới sang điều lệ chính thức, không tạo giải MVP 8 đội. Đọc `docs/16-THIET-LAP-CHINH-THUC-VA-CHIA-VIEC.md` và `docs/assignments/{Huy,Bao,Khoa}.md`. Người dùng đã cho phép chia việc 3 thành viên; thay quyết định làm tuần tự bên dưới đối với kế hoạch mới. Không tự tạo worktree hay deploy.
+- `campus-setup.v1` chỉ là cấu hình/dự kiến (400 plies là profile đích); chưa được chấm bằng worker MVP. Giữ nguyên profile/replay cũ 256 KiB / 200 plies. Không tuyên bố scheduler chính thức, GitHub intake hoặc sandbox đã xong.
 - Supabase là DB duy nhất; các mục SQLite bên dưới là lịch sử, không phục hồi driver cũ.
 - Đợt chấm trước/phát trận theo `docs/14-KIEN-TRUC-CHAM-TRUOC-VA-PHAT-TRAN.md` giữ profile MVP 256 KiB / 200 plies; không tự đổi sang Campus 400 plies/persistent protocol.
 - GitHub repo + SHA/job/receipt là luồng online mục tiêu; một file `bot.py`, không clone/execute trên API. Upload hiện tại chỉ là đường tương thích trusted-dev, không phải M1 đã hoàn tất.
-- Làm song song phải đọc `docs/15-DIEU-PHOI-HAI-AGENT.md` và prompt được giao trong `docs/agents/`; dùng worktree/nhánh riêng và tuân thủ ownership. Không sửa file của agent kia, không tự merge/deploy/apply migration remote.
+- Làm tuần tự bằng một agent trong workspace hiện tại. Đọc `docs/15-BAN-GIAO-TIEP-TUC.md` để tiếp tục M1; kế hoạch nhiều agent đã hủy theo yêu cầu người dùng. Không tự tạo worktree/nhánh điều phối, deploy hoặc apply migration remote.
 - Chưa có sandbox cấp OS: chỉ chạy bot tin cậy. Serverless entrypoint không đồng nghĩa đủ điều kiện mở nhận bài công khai.
 
 Đọc [mục lục docs mới](docs/README.md) và [trạng thái code](docs/07-TRANG-THAI-TRIEN-KHAI.md)

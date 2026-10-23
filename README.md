@@ -1,5 +1,14 @@
 # OOTv2 · Cổng giải đấu bot
 
+## Thiết lập giải chính thức — checkpoint 23/10/2026
+
+Tạo giải mới theo tuần/tháng/kỳ, roster tối đa 56 đội, cutoff, map chính/dự phòng và dự kiến
+chia bảng có seed; không tạo mới giải MVP 8 đội. Đây là **setup foundation**, chưa bật chấm
+chính thức bằng worker MVP. Cần operator áp migration `20261023160000_official_setup.sql`
+trên project test trước khi rollout API (chưa apply remote trong đợt này).
+Đọc [trạng thái, kế hoạch GitHub và chia việc Huy/Bảo/Khoa](docs/16-THIET-LAP-CHINH-THUC-VA-CHIA-VIEC.md).
+Hướng dẫn 8 đội/Start bên dưới chỉ còn áp dụng giải MVP lịch sử, không phải luồng tạo mới.
+
 ## Runtime Supabase dùng chung — **DB duy nhất** (23/10/2026)
 
 Từ 23/10/2026 driver SQLite đã bị **bỏ hoàn toàn**: API, worker và công cụ chỉ nói chuyện với
