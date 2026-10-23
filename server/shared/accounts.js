@@ -11,7 +11,7 @@ const hash = (value) => createHash('sha256').update(value).digest('hex');
 const fail = (status, code, message) => new HttpError(status, code, message);
 export const view = (row, name) => ({ id: row.id, username: row.username, role: row.role, participant_id: row.participant_id, name: name || row.username, members: row.members, contact: row.contact, repository: row.repository, branch: row.branch });
 async function encode(password) {
-  if (typeof password !== 'string' || password.length < 12 || password.length > 128) throw fail(400,'bad_password','Mật khẩu phải từ 12 đến 128 ký tự.');
+  if (typeof password !== 'string' || password.length < 10 || password.length > 128) throw fail(400,'bad_password','Mật khẩu phải từ 10 đến 128 ký tự.');
   const salt = randomBytes(16).toString('hex');
   return `${salt}:${(await derive(password,salt,64)).toString('hex')}`;
 }

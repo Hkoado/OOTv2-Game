@@ -40,8 +40,8 @@ export function initAccounts() {
 }
 
 function checkPassword(password) {
-  if (typeof password !== 'string' || password.length < 12 || password.length > 128) {
-    throw badRequest('bad_password', 'Mật khẩu phải từ 12 đến 128 ký tự.');
+  if (typeof password !== 'string' || password.length < 10 || password.length > 128) {
+    throw badRequest('bad_password', 'Mật khẩu phải từ 10 đến 128 ký tự.');
   }
 }
 

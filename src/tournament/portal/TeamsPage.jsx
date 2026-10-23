@@ -29,8 +29,8 @@ export default function TeamsPage({ teams, accounts, actions, busy }) {
 
   async function createTeam(event) {
     event.preventDefault();
-    if (form.password.length < 12) {
-      setFormError('Mật khẩu ban đầu phải từ 12 đến 128 ký tự.');
+    if (form.password.length < 10) {
+      setFormError('Mật khẩu ban đầu phải từ 10 đến 128 ký tự.');
       return;
     }
     if (form.password !== form.confirm) {
@@ -50,8 +50,8 @@ export default function TeamsPage({ teams, accounts, actions, busy }) {
 
   async function resetPassword(event) {
     event.preventDefault();
-    if (password.length < 12) {
-      setPasswordError('Mật khẩu mới phải từ 12 đến 128 ký tự.');
+    if (password.length < 10) {
+      setPasswordError('Mật khẩu mới phải từ 10 đến 128 ký tự.');
       return;
     }
     const ok = await actions.resetPassword(selected.id, password);
