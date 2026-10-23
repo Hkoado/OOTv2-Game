@@ -18,6 +18,7 @@ Xem trực tiếp + triển khai công khai (đã chạy được): [live và Cl
 Nền tảng engine Campus M1 có CLI riêng; API/worker/UI hiện tại vẫn dùng profile MVP.
 Sandbox code lạ: [kế hoạch production, chọn công cụ và ngân sách phần cứng](SANDBOX-PRODUCTION.md);
 dev acceptance WSL: [bằng chứng và giới hạn](SANDBOX-WSL.md).
+Runtime fingerprint cho snapshot: [cần chốt gì](OFFICIAL-RUNTIME.md).
 
 ## Đọc gì trước?
 

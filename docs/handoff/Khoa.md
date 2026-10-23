@@ -12,13 +12,16 @@
   append** (một thắng, một `stale_prefix`); chain seq 1; record lặp idempotent; record khác
   `result_conflict`; freeze thiếu ván `incomplete_schedule`; append/record đủ **12 ván**; load
   xác minh toàn chain; freeze `frozen=true`; freeze lặp idempotent. Leftover sau drill = 0.
+- Thêm `server/judge/officialRuntime.js` + `tests/officialRuntime.test.js` (**3/3**): hash file
+  engine/rules/protocol/replay + budget; CRLF chuẩn hoá; verify trước chấm. Drill K2 đã dùng hash thật.
+  Budget/đóng băng engine **chờ BTC chốt**: [OFFICIAL-RUNTIME](../OFFICIAL-RUNTIME.md).
 - Lưu ý: chưa kiểm RLS bằng JWT anon/authenticated (`.env` chỉ có service role), crash giữa
   transaction, nhiều process/region, tải 35–56 đội.
 - **Còn thiếu K2:** API admin + UI công bố màu (Huy/Bảo), snapshot builder từ giải thật
   (runtime identity/hash + pin submission theo vòng), persist knockout, nối result accepted.
   Trigger `official_scheduler_not_ready` và Start vẫn khóa.
 - Cập nhật `docs/OFFICIAL-SCHEDULE.md`, `docs/07`; migration không sửa lại.
-- Full suite **319/319 pass**, 0 skip; Vite build exit 0 (1650 modules); `git diff --check` sạch.
+- Full suite **322/322 pass**, 0 skip; Vite build exit 0 (1650 modules); `git diff --check` sạch.
 
 
 ### 24/10/2026 — K4 seccomp + CPU budget + attestation (dev 14/14, production chưa mở)

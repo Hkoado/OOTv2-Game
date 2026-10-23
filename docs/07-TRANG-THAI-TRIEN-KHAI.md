@@ -96,6 +96,9 @@
 - Test mock **8/8** + guardrail drill **2/2**. Full suite/build xem handoff.
   **Còn thiếu:** API admin/UI công bố màu, snapshot builder từ giải thật, series knockout,
   nối result accepted. Trigger Start giữ khóa. Chi tiết: [K2 schedule persistence](OFFICIAL-SCHEDULE.md).
+- **Runtime identity (đề xuất):** `server/judge/officialRuntime.js` hash file engine/rules/protocol/replay
+  + budget mặc định (5 s setup, 1 s/nước, 45 s/bot, 400 nước, 256 MiB); test **3/3**. Cần BTC chốt
+  đóng băng engine + budget: [Runtime identity](OFFICIAL-RUNTIME.md).
 
 ## Gói offline tự chứa — 24/10/2026
 

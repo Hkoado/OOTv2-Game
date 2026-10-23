@@ -10,9 +10,9 @@
  */
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { EMPTY_TERRAIN_MAP } from '../../src/game/maps.js';
-import { TERRAIN_RULES_VERSION } from '../../src/game/terrain.js';
 import { createOfficialRoundSnapshot } from '../../server/contracts/officialSnapshot.js';
 import { createOfficialGroupSchedule } from '../../server/lib/officialGroups.js';
+import { createOfficialRuntimeIdentity } from '../../server/judge/officialRuntime.js';
 import { genesisHash, openOfficialRound, appendOfficialGame, recordOfficialResult,
   freezeOfficialRound, loadOfficialRound, nextPinnedGroupGame } from '../../server/shared/officialSchedule.js';
 
@@ -71,8 +71,7 @@ try {
   const snapshot = createOfficialRoundSnapshot({ eventId, roundId: 'group', seed: 4321,
     cutoff: new Date(Date.now() + 24 * 3600_000).toISOString(), mapPackVersion: `k2-${runId}`,
     primaryMap: EMPTY_TERRAIN_MAP, reserveMap: EMPTY_TERRAIN_MAP,
-    runtime: { rulesVersion: TERRAIN_RULES_VERSION, protocolVersion: 'bot.v1',
-      runtimeVersion: 'campus-runtime.v1', runtimeHash: sha256('runtime'), budgetHash: sha256('budget') },
+    runtime: createOfficialRuntimeIdentity(),
     bots: teams.map((participantId, index) => ({ participantId, submissionId: `sub-${runId}-${index}`,
       artifactKey: `${participantId}.py`, sourceSha256: sha256(`bot-${index}`), sourceKind: 'offline_file' })) });
   const genesis = genesisHash({ eventId, roundId: 'group', snapshotHash: snapshot.contentHash });
