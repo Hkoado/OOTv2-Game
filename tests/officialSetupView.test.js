@@ -92,3 +92,4 @@ test('formatGroupSummary formats single and multiple dynamic groups A–H with b
   assert.equal(eightGroups.label, 'Bảng A – Bảng H (8 bảng)');
   assert.equal(eightGroups.balanced, true);
 });
+

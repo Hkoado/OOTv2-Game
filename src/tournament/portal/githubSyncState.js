@@ -238,3 +238,4 @@ export default {
   formatReceipt,
   GITHUB_SYNC_FIXTURES,
 };
+
