@@ -180,8 +180,10 @@ Worker BTC (Khoa/H2) dùng `server/shared/githubJobs.js`; mọi kiểm quyền n
 - **Cutoff/candidate**: kiểm trong transaction bằng `clock_timestamp()` (`past_cutoff`); job nhận trước hạn
   vẫn được chấm sau hạn; start chọn **latest `valid`** theo `(created_at desc, id desc)`; lỗi
   hạ tầng/bot không thay bản valid cũ.
-- **Phía Khoa**: consumer `14ff30b` **chưa có trong repo này**, nên contract đã chốt nhưng chưa tích hợp;
-  khi rebase phải dùng envelope `finishGithubJob`/`releaseGithubJob` (không tự ghi DB).
+- **Phía Khoa**: consumer `14ff30b` đã có trên `dev` (mặc định `enabled=false`, chưa chạy Python/polling).
+  Huy đã chỉnh `processGithubJob` dùng envelope: `recorded = applied || alreadyFinished`, `leaseLost` →
+  `lease_lost`, còn lại `completion_unknown`; `tests/githubConsumer.test.js` 12/12. Contract tham chiếu
+  `docs/GITHUB-CONSUMER.md` của Khoa.
 
 
 ## Schema / RPC (migration `20261024130000_github_intake.sql`, additive, CHƯA apply)
@@ -211,6 +213,8 @@ Worker BTC (Khoa/H2) dùng `server/shared/githubJobs.js`; mọi kiểm quyền n
   DROP TABLE mvp_github_receipts, mvp_repo_sync_jobs, mvp_repo_connections;`
 
 ## Tests (mock — không chạm DB/GitHub thật)
+| `node --test tests/githubConsumer.test.js` | **12/12 pass** — envelope finish (already_finished/lease_lost), fencing, cache/artifact (sau khi Huy nối envelope) |
+
 
 | Lệnh | Kết quả |
 | --- | --- |
@@ -223,8 +227,8 @@ Worker BTC (Khoa/H2) dùng `server/shared/githubJobs.js`; mọi kiểm quyền n
 | `node --test tests/uploadTrustedDev.test.js` | **1/1 pass** — admin opt-in 201, đội vẫn 403, sai đuôi 400, không lộ `storage_path` |
 
 
-| `node --test tests/*.test.js` | **235/235 pass**, exit 0 |
-| `npm run build` | **pass** (4.99 s, exit 0) |
+| `node --test tests/*.test.js` | **247/247 pass**, exit 0 |
+| `npm run build` | **pass** (4.79 s, exit 0) |
 
 Môi trường: Windows, Node 24.18.0; không có test bị skip.
 
@@ -272,14 +276,19 @@ Môi trường: Windows, Node 24.18.0; không có test bị skip.
 
 ## Lịch sử checkpoint
 
+- 24/10/2026: **Tích hợp consumer Khoa** — `processGithubJob` dùng envelope finish
+  (`recorded = applied || alreadyFinished`, `leaseLost` → `lease_lost`); bỏ comment cũ về release thiếu
+  lease vì `20261024170000` đã chặn; `githubConsumer` 12/12, tổng 247/247. Consumer vẫn `enabled=false`,
+  chưa chạy Python/polling.
+
 - 24/10/2026: **H2 hardening contract** — release bắt buộc lease còn hạn; finish trả envelope
   `already_finished`/`lease_lost` và kiểm submission cùng đội/valid/hash; claim chặn reclaim khi crash;
   thêm `DELETE /repository` (revoke → hủy job/frozen receipt) + guard `repo_sync_pending` khi start;
-  `githubJobs` 5/5, `githubIntakeApi` 7/7, schema 9/9, tổng 235/235; script PostgreSQL NOT RUN.
+  `githubJobs` 5/5, `githubIntakeApi` 7/7, schema 9/9, tổng 247/247; script PostgreSQL NOT RUN.
 
 - 24/10/2026: **H3 hardening live overview** — `/api/live/overview` lọc theo giải của đội
   (`getLiveOverview({eventIds})`); đội khác giải không thấy tên giải/đội/matches. `publication` 10/10,
-  tổng 235/235 pass.
+  tổng 247/247 pass.
 
 - 24/10/2026: **H2 audit + đóng cổng upload** — thêm `requireEventMember` cho connection/receipt/intake
   (403 `scope_denied`), chặn upload HTTP mặc định (`403 upload_disabled`; admin chỉ khi

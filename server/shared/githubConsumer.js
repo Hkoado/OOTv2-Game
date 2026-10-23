@@ -69,8 +69,15 @@ export async function processGithubJob({ enabled = false, workerId, validateSour
   const finish = async (outcome) => {
     await beat(); guard();
     finishing = true;
-    const recorded = await run(() => jobApi.finishGithubJob({ ...fence, outcome }));
-    return { processed: true, recorded: recorded === true, reason: recorded === true ? outcome.status : 'lease_lost' };
+    const result = await run(() => jobApi.finishGithubJob({ ...fence, outcome }));
+    // Contract H2 (20261024170000): envelope {applied, alreadyFinished, leaseLost, receipt}.
+    // `alreadyFinished` cũng là thành công (lần trước đã commit nhưng mất response).
+    const recorded = result?.applied === true || result?.alreadyFinished === true;
+    return {
+      processed: true,
+      recorded,
+      reason: recorded ? outcome.status : result?.leaseLost ? 'lease_lost' : 'completion_unknown',
+    };
   };
   signal?.addEventListener('abort', onAbort, { once: true });
   if (signal?.aborted) onAbort();
@@ -112,8 +119,8 @@ export async function processGithubJob({ enabled = false, workerId, validateSour
       } catch { return { processed: true, recorded: false, reason: stopped?.code || 'completion_unknown' }; }
     }
     try {
-      // Compensate for current release SQL lacking expiry check: confirm lease before release.
-      // This is NOT a substitute for fixing/verifying server-side fencing on PostgreSQL.
+      // Server (20261024170000) đã bắt buộc lease còn hạn khi release; worker vẫn xác nhận lease
+      // trước khi compensate để không đụng job đã bị worker khác chiếm.
       await beat(); guard();
       const released = await run(() => jobApi.releaseGithubJob({ ...fence,
         error: 'github_worker_infrastructure', maxAttempts: 3 }));
