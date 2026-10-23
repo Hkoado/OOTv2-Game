@@ -58,3 +58,24 @@ test('map snapshot migration freezes map per match and keeps RPC private', () =>
 });
 
 });
+
+test('GitHub intake migration keeps jobs/receipts private and idempotent', () => {
+  const sql = readFileSync(new URL('../supabase/migrations/20261024130000_github_intake.sql', import.meta.url), 'utf8');
+  for (const table of ['mvp_repo_connections', 'mvp_repo_sync_jobs', 'mvp_github_receipts']) {
+    assert.match(sql, new RegExp(`CREATE TABLE public\\.${table}`, 'u'));
+    assert.match(sql, new RegExp(`ALTER TABLE public\\.${table} ENABLE ROW LEVEL SECURITY`, 'u'));
+    assert.match(sql, new RegExp(`REVOKE ALL ON public\\.${table} FROM PUBLIC, anon, authenticated`, 'u'));
+    assert.match(sql, new RegExp(`GRANT SELECT, INSERT, UPDATE ON public\\.${table} TO service_role`, 'u'));
+  }
+  assert.match(sql, /commit_sha text NOT NULL CHECK\(commit_sha ~ '\^\[0-9a-f\]\{40\}\$'\)/u);
+  assert.match(sql, /UNIQUE\(event_id, team_id, repo_id, commit_sha, file_path\)/u);
+  assert.match(sql, /status IN \('resolving','fetching','checking','valid','invalid','infrastructure','frozen'\)/u);
+  assert.match(sql, /CREATE FUNCTION public\.mvp_repo_connection_upsert/u);
+  assert.match(sql, /CREATE FUNCTION public\.mvp_github_intake/u);
+  assert.match(sql, /'error','repo_not_approved'/u);
+  assert.match(sql, /'error','quota_exceeded'/u);
+  assert.match(sql, /clock_timestamp\(\)-interval '24 hours'/u);
+  assert.match(sql, /REVOKE ALL ON FUNCTION public\.mvp_github_intake/u);
+  assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.mvp_github_intake\(uuid,uuid,uuid,text,text,text,bigint,text,integer\) TO service_role/u);
+  assert.doesNotMatch(sql, /DROP TABLE|DROP COLUMN|SECURITY DEFINER/i);
+});

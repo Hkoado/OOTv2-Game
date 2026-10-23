@@ -2,129 +2,117 @@
 
 ## Trạng thái mới nhất
 
-- Trạng thái: **READY FOR REVIEW** — hoàn thành milestone B1 (Setup + trạng thái chuẩn theo điều lệ).
-- Phạm vi: B1 trong [phân công Bảo](../assignments/Bao.md).
-- Checkpoint: branch `dev` (trên nền commit `bb9cb4e`).
+- Trạng thái: **READY FOR REVIEW** — hoàn thành milestone B2 (GitHub UI thật: kết nối API intake H1, quản lý repo/branch, duyệt quyền, receipt và đồng bộ commit).
+- Phạm vi: B1 & B2 trong [phân công Bảo](../assignments/Bao.md).
+- Checkpoint: branch `dev` (trên nền commit `a25d024` của Huy).
 - Đã hoàn thành và xác minh:
-  1. Bảo vệ dirty draft trong `OfficialSetupPanel.jsx`: polling ngầm không ghi đè thay đổi khi người dùng đang chỉnh sửa.
-  2. Tự động đồng bộ draft với server khi chưa sửa (`!dirty`).
-  3. Cảnh báo và phát hiện xung đột phiên bản (`detectVersionConflict`) khi máy chủ có `event.version > baseVersion`.
-  4. Hiển thị múi giờ Cutoff hai chiều: Giờ địa phương máy người dùng (kèm tên múi giờ) và chuỗi ISO chuẩn UTC lưu trên server; cảnh báo thời điểm cutoff đã qua.
-  5. Trình bày dự kiến phân bảng động A–H và độ cân bằng bảng (độ lệch tối đa <= 1 đội) theo `competitionPreview`.
-  6. Thể thức tháng / kỳ (bracket 8, ngoại lệ 6 đội có 2 bye kỳ 3 tháng) và nhắc nhở xếp hạt giống theo thành tích cấp vé thay vì danh sách đăng ký.
-  7. Giữ nguyên `executionReady: false` và thông báo blocker (không có nút start giả mạo khi scheduler/sandbox chưa sẵn sàng).
-  8. Xây dựng bộ DTO adapter và 7 fixtures chuẩn theo contract nộp bài GitHub của Huy (`resolving`, `fetching`, `checking`, `valid`, `invalid`, `infrastructure`, `frozen`).
+  1. Thay thế CTA upload file online bằng luồng nộp bài qua GitHub chính thức trên `SubmissionsPage.jsx`.
+  2. Kết nối đầy đủ các API intake của Huy qua `githubApi.js`: đăng ký repository, lấy connection, danh sách repositories cho admin, gửi yêu cầu đồng bộ (202), tra cứu receipt mới nhất và poll tiến độ job qua `GET /api/local/repo-sync-jobs/:id`.
+  3. Quản lý trạng thái duyệt quyền repository: `pending_approval` vs `approved`. Admin có nút phê duyệt 1-click trực tiếp trên giao diện.
+  4. Hiển thị thẻ biên nhận đồng bộ (Receipt Card) chi tiết: Short SHA (7 ký tự hex), full commit SHA, nhánh, thời điểm resolved, trạng thái bot (`syncStatusInfo`), phân biệt rõ lỗi mã nguồn bot (`invalid`) và sự cố hạ tầng (`infrastructure` - bảo toàn bản valid cũ).
+  5. Tự động poll tiến độ khi job đang xử lý (`resolving`, `fetching`, `checking`) và dừng khi có kết quả.
+  6. Giữ lại panel nộp file `.py` trực tiếp dành riêng cho **Giám thị / Admin** khi thi đấu offline (USB import).
+  7. Cập nhật `TeamProfilePage.jsx` định hướng đội sang trang nộp bài để đồng bộ GitHub.
+  8. Viết bài kiểm thử đơn vị `tests/githubApi.test.js` kiểm tra gọi đúng endpoint `/api/local`, headers CSRF, body và dịch mã lỗi tiếng Việt.
 
 ---
 
-## Chi tiết checkpoint B1
+## Chi tiết checkpoint B2
 
 ```text
 Ngày / người / milestone / trạng thái:
-24/10/2026 | Bảo (Frontend UI / QA) | Milestone B1: Setup + trạng thái chuẩn | READY FOR REVIEW
+24/10/2026 | Bảo (Frontend UI / QA) | Milestone B2: GitHub UI thật | READY FOR REVIEW
 
 Branch / commit code / PR / đã merge vào đâu:
-dev | commit code hiện tại (tra bằng `git log -1`) | Chưa tạo PR remote | Làm việc trực tiếp trên branch dev theo quy ước bàn giao
+dev | commit code hiện tại (tra bằng `git log -1`) | Chưa tạo PR remote | Tích hợp trực tiếp trên branch dev theo quy ước chung
 
 Đã làm:
-- Nâng cấp OfficialSetupPanel:
-  + useEffect bảo vệ dirty draft: chỉ cập nhật form từ polling ngầm khi !dirty; nếu đang dirty và server có version mới hơn, hiển thị Alert tone="danger" cảnh báo xung đột kèm nút nạp lại bản server.
-  + Thêm chức năng nạp lại bản server (reloadFromServer) có hộp thoại xác nhận nếu có thay đổi chưa lưu.
-  + Bắt lỗi khi saveEvent thất bại (xung đột expectedVersion hoặc lỗi mạng) và hiển thị thông báo lỗi rõ ràng.
-- Xây dựng module src/tournament/portal/officialSetupView.js:
-  + toLocalDatetimeInput: chuyển đổi UTC ISO sang định dạng YYYY-MM-DDTHH:mm an toàn theo timezone máy local.
-  + parseCutoffDetails: phân tích datetime, xuất ra đồng thời localDisplay (Intl vi-VN), timeZone, utcIso và cờ isPast.
-  + detectVersionConflict: kiểm tra baseVersion vs serverVersion khi isDirty.
-  + formatGroupSummary: tóm tắt số bảng A–H, số đội mỗi bảng và xác minh tính cân bằng bảng (độ lệch tối đa 1 đội).
-- Xây dựng module src/tournament/portal/githubSyncState.js:
-  + Chuẩn hóa 7 trạng thái intake GitHub theo contract Huy: resolving, fetching, checking, valid, invalid, infrastructure, frozen.
-  + formatReceipt, syncStatusInfo, formatCommitSha.
-  + GITHUB_SYNC_FIXTURES: 7 fixtures mẫu chuẩn DTO không chứa secret, phục vụ mock test và B2 UI.
-- Viết 9 bài kiểm thử đơn vị mới:
-  + tests/officialSetupView.test.js: 4 bài test (datetime input, cutoff details, version conflict, group summary).
-  + tests/githubSyncState.test.js: 5 bài test (7 statuses coverage, syncStatusInfo, formatCommitSha, formatReceipt, fixtures validity).
+- Xây dựng module client API src/tournament/portal/githubApi.js:
+  + fetchRepositoryConnection: gọi GET /api/local/events/:id/repository(?team=)
+  + saveRepositoryConnection: gọi PUT /api/local/events/:id/repository kèm CSRF token
+  + fetchEventRepositories: gọi GET /api/local/events/:id/repositories (Admin)
+  + requestGithubSubmission: gọi POST /api/local/events/:id/submissions/from-github (nhận 202 {created, job, receipt})
+  + fetchLatestGithubSubmission: gọi GET /api/local/events/:id/submissions/from-github(?team=)
+  + fetchRepoSyncJob: gọi GET /api/local/repo-sync-jobs/:id
+- Cập nhật src/tournament/portal/githubSyncState.js:
+  + GITHUB_INTAKE_ERROR_MESSAGES & humanizeIntakeError: dịch toàn bộ mã lỗi RPC của Huy sang tiếng Việt dễ hiểu.
+- Viết lại src/tournament/portal/SubmissionsPage.jsx:
+  + Đổi CTA chính: form đăng ký HTTPS GitHub repo + branch (mặc định main), validate qua validateRepository.
+  + Hiển thị badge trạng thái duyệt: Đã duyệt (approved) vs Chờ BTC duyệt (pending_approval).
+  + Nút "Đồng bộ commit mới từ GitHub" gửi yêu cầu nộp bài, nhận 202 receipt và kích hoạt polling job.
+  + Polling tự động mỗi 2.5s qua fetchRepoSyncJob cho đến khi trạng thái chuyển sang valid, invalid, infrastructure hoặc completed.
+  + Thẻ Receipt hiển thị chi tiết commit SHA rút gọn 7 ký tự, full SHA, trạng thái, thời điểm và thông báo lỗi.
+  + Admin console: chọn đội, xem connection, duyệt repository, và đồng bộ hộ đội.
+  + Giữ nguyên Panel nộp file offline (USB) cho Giám thị / Admin (chỉ hiển thị khi isAdmin=true).
+- Cập nhật src/tournament/portal/TeamProfilePage.jsx:
+  + Cập nhật hướng dẫn về repository mặc định và điều hướng sang Bot & bài nộp.
+- Viết test tests/githubApi.test.js:
+  + Kiểm thử humanizeIntakeError cho tất cả mã lỗi tiêu chuẩn.
+  + Kiểm thử mock fetch cho 6 API methods, xác minh URL, method, headers và payload.
 
 File / export / route / RPC quan trọng:
-- src/tournament/portal/OfficialSetupPanel.jsx (default component)
-- src/tournament/portal/officialSetupView.js:
-  + toLocalDatetimeInput
-  + parseCutoffDetails
-  + detectVersionConflict
-  + formatGroupSummary
-- src/tournament/portal/githubSyncState.js:
-  + GITHUB_SYNC_STATUSES
-  + SYNC_STATUS_METADATA
-  + syncStatusInfo
-  + formatCommitSha
-  + formatReceipt
-  + GITHUB_SYNC_FIXTURES
-- tests/officialSetupView.test.js
-- tests/githubSyncState.test.js
+- src/tournament/portal/githubApi.js
+- src/tournament/portal/githubSyncState.js
+- src/tournament/portal/SubmissionsPage.jsx
+- src/tournament/portal/TeamProfilePage.jsx
+- tests/githubApi.test.js
 
 Contract thực hiện + ví dụ JSON không secret:
-- DTO Receipt GitHub (theo Huy contract):
+- Yêu cầu đồng bộ (POST /events/:id/submissions/from-github):
+  Request: {} hoặc { "team": "team-uuid" }
+  Response 202:
   {
-    "id": "rcpt_val_004",
-    "event_id": "ev_campus_week_01",
-    "team_id": "10000000-0000-4000-8000-000000000004",
-    "repo_id": 987654324,
-    "repository": "https://github.com/team-delta/ootv2-bot",
-    "branch": "main",
-    "commit_sha": "a1b2c3d4e5f60718293a4b5c6d7e8f901234567b",
-    "resolved_at": "2026-10-24T00:10:00.000Z",
-    "status": "valid",
-    "source_kind": "github",
-    "file_path": "bot.py",
-    "source_hash": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
-  }
-- Lỗi hạ tầng (status="infrastructure"):
-  {
-    "status": "infrastructure",
-    "error": "GitHub API rate limit exceeded. Retry later.",
-    "error_category": "infrastructure",
-    "previous_valid_submission_id": "sub_prev_valid_001"
+    "created": true,
+    "job": { "id": "job-uuid", "status": "queued", "attempt": 0 },
+    "receipt": {
+      "id": "rcpt-uuid",
+      "event_id": "ev-uuid",
+      "team_id": "team-uuid",
+      "repo_id": 987654321,
+      "repository": "https://github.com/team/bot",
+      "branch": "main",
+      "commit_sha": "a1b2c3d4e5f60718293a4b5c6d7e8f901234567b",
+      "status": "resolving"
+    }
   }
 
 Migration thứ tự / applied chưa / env mới:
-- Không có migration mới trong B1 (chỉ frontend UI/adapters/fixtures).
-- Giữ nguyên migration 20261023160000_official_setup.sql chưa apply remote của Huy. Không có env mới.
+- Phía UI không có migration mới. Phụ thuộc migration 20261024130000_github_intake.sql của Huy (chưa apply remote). Không có env mới.
 
 Tests: lệnh | môi trường | exit | pass/fail/skip | vị trí log:
-- npm test (node --test tests/*.test.js) | Windows local Node v22.13.0 | exit 0 | pass 100/100, fail 0, skip 0 | console stdout
-- npm run build (vite build) | Windows local Node v22.13.0 | exit 0 | pass (1639 modules, dist bundle sạch) | console stdout
+- npm test (node --test tests/*.test.js) | Windows local Node v22.13.0 | exit 0 | pass 122/122, fail 0, skip 0 | console stdout
+- npm run build (vite build) | Windows local Node v22.13.0 | exit 0 | pass (1641 modules transformed, dist bundle sạch) | console stdout
 
 NOT RUN + lý do:
-- Browser E2E automation bằng Playwright/Puppeteer: NOT RUN (chưa cài dependency headless browser, nằm trong B4 QA).
-- Test tải 50-200 concurrent viewers: NOT RUN (thuộc milestone B4 QA).
-- Kiểm thử tích hợp Supabase remote thật: NOT RUN (không có disposable Supabase credentials được cấp; dùng mock tests).
+- Test E2E tự động trình duyệt với GitHub thật: NOT RUN (không dùng credential thật / không gọi network ngoài sandbox).
+- Worker process job thực tế: NOT RUN (phụ thuộc worker runtime H2 của Huy/Khoa để chuyển status từ resolving sang checking/valid).
 
 Giới hạn / bug còn lại / gate đang tắt / rủi ro:
-- executionReady luôn là false (đây là gate có chủ ý; chưa nối scheduler/worker chính thức).
-- Nút Start cho giải chính thức tiếp tục bị chặn (fails closed) theo điều lệ.
-- Intake GitHub thực tế ở backend (H1/H2) chưa triển khai; B1 chuẩn bị sẵn fixtures và DTO formatters cho B2 nối khi H1 sẵn sàng.
+- Quá trình chuyển trạng thái từ `resolving` sang `valid`/`invalid` cần worker backend H2/Khoa tiêu thụ job; hiện tại API trả về biên nhận ban đầu ở trạng thái `resolving`.
+- Giao diện nộp file offline chỉ cấp quyền cho vai trò Admin/Giám thị.
 
 Dependency người khác + phần chưa tích hợp:
-- Phụ thuộc Huy (H1/H2): Sau khi Huy hoàn thành route nộp GitHub và lưu receipt vào Supabase, Bảo sẽ nối UI thật ở B2.
-- Phụ thuộc Khoa (K1/K2): DTO standings bảng và bracket knockout chính thức để render B3.
+- Phụ thuộc Huy/Khoa: Triển khai worker H2 xử lý job tải blob GitHub tại commit SHA và chạy smoke test để cập nhật receipt sang `valid`/`invalid`.
+- Phụ thuộc Khoa: Scheduler chính thức K1/K2 và DTO standings để phục vụ B3 (Viewer).
 
 Cách chạy demo và rollback:
-- Demo UI thiết lập:
+- Demo UI GitHub:
   + Chạy `npm run dev:api` và `npm run dev`.
-  + Đăng nhập tài khoản admin (admin / admin).
-  + Vào Quản lý giải -> Mở một giải chính thức (có `campus-setup.v1`).
-  + Thử chỉnh sửa trường Cutoff -> quan sát giờ địa phương + giờ UTC hiển thị ngay bên dưới.
-  + Thử tick thêm/bớt đội trong roster -> quan sát tóm tắt cân bằng bảng A–H cập nhật tức thì.
-  + Thử click "Nạp bản server" khi có thay đổi chưa lưu để thấy hộp thoại xác nhận.
+  + Đăng nhập tài khoản đội (hoặc admin chọn đội) -> vào mục "Bot & bài nộp".
+  + Nhập repository GitHub và bấm "Lưu & Đăng ký repository".
+  + Đăng nhập tài khoản admin để duyệt quyền hoặc quan sát trạng thái `pending_approval`.
+  + Bấm "Đồng bộ commit mới từ GitHub" và quan sát thẻ Receipt hiển thị SHA và trạng thái.
 - Rollback:
-  + `git checkout HEAD~1 -- src/tournament/portal/OfficialSetupPanel.jsx`
+  + `git checkout HEAD~1 -- src/tournament/portal/SubmissionsPage.jsx src/tournament/portal/TeamProfilePage.jsx`
 
 Bước tiếp theo nhỏ nhất:
-- Chờ Huy hoàn thiện H1 (Schema/route GitHub intake DTO) hoặc tiếp tục B2 (dựng khung giao diện GitHub UI cho đội thi đấu trên TeamProfilePage / SubmissionsPage dùng GITHUB_SYNC_FIXTURES).
+- Chờ Khoa/Huy hoàn thiện scheduler K1 hoặc tiến hành milestone B3 (Viewer lịch phát: đếm ngược, catch-up, server_time, afterSeq và bảng điểm theo điều lệ mới).
 ```
 
 ---
 
 ## Lịch sử checkpoint
 
-- 24/10/2026: Hoàn thành B1 (Setup UX, dirty draft guard, timezone clarity UTC/local, dynamic groups A–H preview, 7 GitHub intake fixtures & adapters). Tests: 100/100 pass.
+- 24/10/2026 (Checkpoint 2): Hoàn thành B2 (GitHub UI thật: kết nối API intake H1, duyệt quyền, receipt, đồng bộ commit và USB fallback cho Admin). Tests: 122/122 pass.
+- 24/10/2026 (Checkpoint 1): Hoàn thành B1 (Setup UX, dirty draft guard, timezone clarity UTC/local, dynamic groups A–H preview, 7 GitHub intake fixtures & adapters). Tests: 100/100 pass.
 - 23/10/2026: Tạo khung bàn giao ban đầu.

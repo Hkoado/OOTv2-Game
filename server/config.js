@@ -138,6 +138,22 @@ export const config = {
      */
     workerPauseMs: Number(process.env.OOTV2_WORKER_PAUSE_MS || 0),
   },
+
+  /**
+   * GitHub intake (H1). API chỉ resolve metadata + SHA, không clone/tải source.
+   * Token là credential của BTC (GitHub App/token đọc), chỉ dùng ở backend.
+   */
+  github: {
+    token: process.env.OOTV2_GITHUB_TOKEN || '',
+    /** Timeout mỗi request metadata tới GitHub API. */
+    timeoutMs: Number(process.env.OOTV2_GITHUB_TIMEOUT_MS || 8000),
+    /** Giới hạn phản hồi metadata (chống payload lớn bất thường). */
+    maxResponseBytes: 256 * 1024,
+    /** Số commit SHA mới tối đa mỗi đội/giải được yêu cầu kiểm tra trong 24 giờ. */
+    dailyQuota: Number(process.env.OOTV2_GITHUB_DAILY_QUOTA || 10),
+    /** Đường dẫn file bot cố định trong repo đội. */
+    filePath: 'bot.py',
+  },
 };
 
 export default config;

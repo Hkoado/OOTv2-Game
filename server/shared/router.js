@@ -7,6 +7,7 @@ import * as participants from './participants.js';
 import * as tournaments from './tournaments.js';
 import { getSharedJudgeMatch, getSharedJudgeOverview } from './judgeMonitor.js';
 import { listBotOutput } from './live.js';
+import * as githubIntake from '../services/githubIntake.js';
 import { rows, uuid } from './client.js';
 import { isAllowedOrigin } from '../lib/origin.js';
 
@@ -64,6 +65,26 @@ export function sharedRouter() {
     }
     next();
   },acceptBotUpload,async(req,res)=>res.status(201).json(await participants.createSubmission(req.params.team,req.file)));
+  // GitHub intake (H1): đội đăng ký repo/branch; chỉ admin duyệt (approved=true).
+  // API chỉ resolve metadata + SHA, không clone/tải source; receipt trả whitelist.
+  router.get('/events/:id/repositories',requireLocalAdmin,async(req,res)=>res.json(await githubIntake.listConnections({eventId:req.params.id})));
+  router.get('/events/:id/repository',async(req,res)=>{
+    const teamId=githubIntake.scopeTeam(req.account,typeof req.query.team==='string'?req.query.team:null);
+    res.json(await githubIntake.getConnection({eventId:req.params.id,teamId}));
+  });
+  router.put('/events/:id/repository',async(req,res)=>{
+    const teamId=githubIntake.scopeTeam(req.account,req.body?.team);
+    res.json(await githubIntake.putConnection({eventId:req.params.id,teamId,repository:req.body?.repository,branch:req.body?.branch,account:req.account}));
+  });
+  router.post('/events/:id/submissions/from-github',async(req,res)=>{
+    const teamId=githubIntake.scopeTeam(req.account,req.body?.team);
+    res.status(202).json(await githubIntake.requestSubmission({eventId:req.params.id,teamId,repository:req.body?.repository,branch:req.body?.branch,account:req.account}));
+  });
+  router.get('/events/:id/submissions/from-github',async(req,res)=>{
+    const teamId=githubIntake.scopeTeam(req.account,typeof req.query.team==='string'?req.query.team:null);
+    res.json(await githubIntake.getLatest({eventId:req.params.id,teamId}));
+  });
+  router.get('/repo-sync-jobs/:id',async(req,res)=>res.json(await githubIntake.getJob({jobId:req.params.id,account:req.account})));
   // Quan sát chấm bài (chỉ admin, chỉ đọc): shape cố định cho UI.
   router.get('/admin/judge',requireLocalAdmin,async(req,res)=>res.json(await getSharedJudgeOverview({eventId:typeof req.query.event==='string'&&req.query.event?req.query.event:null})));
   router.get('/admin/judge/matches/:id',requireLocalAdmin,async(req,res)=>res.json(await getSharedJudgeMatch(req.params.id)));
