@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { campusBotDownload } from './campusBotDownload.js';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -273,7 +274,7 @@ export default function SubmissionsPage({
             commit SHA và kiểm tra tự động. Không yêu cầu upload mã nguồn thủ công qua web.
           </p>
         </div>
-        <a className="tt-btn" href="/api/sample-bot" download="sample_bot.py">
+        <a className="tt-btn" href={campusBotDownload} download="bot.py">
           <Download size={16} aria-hidden="true" />
           Tải bot mẫu
         </a>

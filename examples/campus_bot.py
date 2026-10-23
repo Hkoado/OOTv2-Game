@@ -2,6 +2,9 @@
 
 One process lives for a whole game. Keep stdout exclusively for flushed JSONL.
 This file is an example strategy, NOT a sandbox or a tournament worker.
+Implement BOTH setup(obs) and move(obs) before submitting bot.py. Setup is
+computed by your code using your color/map; no player places pieces for a bot.
+The opponent's formation is hidden until both setups have been accepted.
 """
 import json
 import random

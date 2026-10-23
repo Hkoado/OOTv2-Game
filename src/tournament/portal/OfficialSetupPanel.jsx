@@ -277,7 +277,7 @@ export default function OfficialSetupPanel({ event, teams, actions, busy, admin 
                         value={known?.map.id ?? 'custom'}
                         onChange={(e) => {
                           const found = SAMPLE_MAPS.find((item) => item.map.id === e.target.value);
-                            if (found) change(key, map.rulesVersion === 'ott-campus.v2' ? upgradeTerrainMap(found.map) : found.map);
+                          if (found) change(key, found.map);
                         }}
                       >
                         {!known && <option value="custom">{map.id} (bản đồ tùy chỉnh)</option>}
@@ -344,7 +344,7 @@ export default function OfficialSetupPanel({ event, teams, actions, busy, admin 
       >
         <p>
           <strong>{preview.groupCount}</strong> bảng · <strong>{preview.qualifierPairs}</strong> cặp /{' '}
-          <strong>{preview.qualifierGames}</strong> ván vòng loại (2 ván đổi màu Đỏ/Xanh mỗi cặp) ·{' '}
+          <strong>{preview.qualifierGames}</strong> ván vòng loại (2 ván mỗi cặp; màu theo chính sách so le/ưu tiên số thua) ·{' '}
           <strong>{preview.finalists}</strong> đội vào chung kết · <strong>{preview.byes}</strong> suất bye.
         </p>
         <p className="tt-muted">
@@ -352,7 +352,7 @@ export default function OfficialSetupPanel({ event, teams, actions, busy, admin 
           chung kết 6 ván; hòa thêm đúng 2 ván phụ rồi mới xét ưu tiên hạt giống. Có ván tranh hạng ba, không kết thúc sớm.
         </p>
         <p className="tt-muted">
-          Profile thi đấu: <code>{preview.rulesVersion || 'ott-campus.v1'}</code>, tối đa 400 plies; worker MVP hiện tại chưa chạy profile này.
+          Profile thi đấu: <code>{preview.rulesVersion || 'ott-campus.v2'}</code>, tối đa 400 plies; worker MVP hiện tại chưa chạy profile này.
         </p>
 
         {preview.blockers.map((blocker) => (

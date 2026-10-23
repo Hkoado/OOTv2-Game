@@ -1,5 +1,35 @@
 # OOTv2 · Cổng giải đấu bot
 
+## Luật hiện hành và 5 map luyện tập — 24/10/2026
+
+- Ván Campus mới dùng `map.v2` / `ott-campus.v2`: **Lửa cản Bao, Nước cản Kéo,
+  Bụi cây cản Búa, Vực cản tất cả**. Áp dụng khi đặt, đổi chỗ, đi/bắt quân và cắt góc.
+- Trang đăng nhập → **Chơi offline**: vẫn tự xếp tay, nhấc/đổi quân, Xếp nhanh, xác nhận.
+  Hai người lần lượt thao tác cùng máy; bàn ẩn đội hình đối thủ đến khi cả hai xác nhận.
+  Đây là riêng tư hiển thị trên máy dùng chung, không phải sandbox hay bảo mật P2P.
+- 5 map trong menu offline và thiết lập map giải: `learn-fire`, `learn-water`, `learn-bush`,
+  `learn-chasm`, `campus-four-terrains`. Map cuối đủ cả 4 loại, gồm địa hình ở sân nhà.
+  Tải JSON ngay trên bàn offline hoặc lấy trong `examples/maps/`; tái sinh bằng
+  `node tools/cli/generate-sample-maps.js`. File map v1 cũ chỉ là fixture lịch sử.
+- **Bot phải tự xếp quân bằng code**: viết sẵn cả `setup(obs)` và `move(obs)` trong một
+  file Python. Không cần hardcode đội hình: dùng `you`, map và `availableSquaresByType`
+  để trả đủ 9 vị trí riêng biệt. Setup thiếu/sai bị xử lỗi, không có người/xếp nhanh điền hộ.
+  Nút tải bot mẫu trên cổng Campus lấy đúng `examples/campus_bot.py` (`bot.v1` persistent),
+  không lấy mẫu MVP stateless tại `/api/sample-bot`.
+- Giải mới chỉ lưu map v2; map/replay v1 và UI phòng cũ không được mount vẫn giữ khả năng
+  đọc/hồi quy lịch sử. Không mở worker MVP cho v2. Runtime giải chính thức/lưu-công bố màu
+  và nghiệm thu Supabase thật vẫn là các hạng mục riêng, chưa hoàn tất.
+
+Demo bot tin cậy với map đủ 4 địa hình (output phải chưa tồn tại):
+
+```powershell
+node tools/cli/demo-campus-bots.js --trusted-dev examples/maps/campus-four-terrains.json "$env:TEMP/campus-v2-replay-new.json"
+node tools/cli/verify-replay.js "$env:TEMP/campus-v2-replay-new.json"
+npm test
+npm run build
+node tools/cli/smoke-ui-kit.mjs
+```
+
 ## Campus persistent trusted-dev — checkpoint 24/10/2026
 
 Lõi `bot.v1` và demo hai bot mẫu chạy độc lập, **chưa nối worker/DB/Start** và không có sandbox OS.
@@ -68,7 +98,7 @@ giới hạn bảo mật: [docs/13-LIVE-VA-TRIEN-KHAI.md](docs/13-LIVE-VA-TRIEN-
 
 ## Chơi thử và chuẩn bị giải
 
-- Trang đăng nhập có **Chơi offline**: hai người cùng máy, không tài khoản/API, ba map mẫu.
+- Trang đăng nhập có **Chơi offline**: hai người cùng máy, không tài khoản/API, 5 map địa hình v2 mẫu.
 - Admin tạo giải bằng tên, thêm đội/map sau. Runtime lưu **Supabase**; không còn snapshot SQLite cục bộ.
 - Thư mục snapshot chưa phải bundle backup. Worker MVP chỉ chạy map không ô cản.
 - [Bàn giao và chia việc tiếp theo](docs/10-BAN-GIAO-OFFLINE-VA-THU-MUC-GIAI.md).

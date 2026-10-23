@@ -32,6 +32,13 @@ V2 vẫn dùng envelope `bot.v1`, thêm `setupVisibility: sealed` và
 `availableSquaresByType` trong observation. Hai request có thể chạy tuần tự nhưng
 không chứa quân đối phương khi setup. Chỉ mở đầy đủ sau cả hai setup thành công.
 Đỏ vẫn đi trước. Bot mẫu `examples/campus_bot.py` tìm 9 ô hợp lệ khác nhau.
+**Chốt bổ sung của người dùng:** offline vẫn xếp tay (đổi/nhấc quân, Xếp nhanh);
+bot bắt buộc được viết cả thuật toán xếp quân và đi quân trước khi nộp. Có thể tính đội
+hình từ màu/map được cấp, không bắt buộc hardcode vị trí. Không xếp tay hay auto-fill hộ bot.
+Offline cùng máy thao tác lần lượt nhưng bàn chỉ hiển thị quân của người đang xếp;
+sau cả hai xác nhận mới hiển thị 18 quân. Không coi việc ẩn UI là bảo mật trước DevTools.
+Map mẫu hiện hành: `learn-fire`, `learn-water`, `learn-bush`, `learn-chasm`,
+`campus-four-terrains`; dùng chung cho offline, menu thiết lập giải và JSON examples.
 Engine room/P2P, replay MVP, map v1 giữ luật lịch sử, không âm thầm đổi.
 
 ## Phân màu

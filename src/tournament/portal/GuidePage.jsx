@@ -1,17 +1,18 @@
 import React from 'react';
 import { Download, FileCode2, ShieldCheck, Swords } from 'lucide-react';
 import { Alert, Badge, Panel } from './TournamentUi.jsx';
-import { FORMAT, GROUP_SEEDS, POINTS } from './tournamentView.js';
+import { campusBotDownload } from './campusBotDownload.js';
 
 const RULES = [
   ['Bàn cờ', '9×9, hai nhà chính ở a1 (Đỏ) và i9 (Xanh). Quân di chuyển 8 hướng như vua cờ vua.'],
   ['Quân', 'Mỗi bên 9 quân: 3 rock, 3 paper, 3 scissors.'],
-  ['Xếp quân v2', 'Hai bot xếp kín trong vùng nhà, không nhận đội hình đối phương khi setup. Luật v1/phòng cũ giữ hành vi lịch sử.'],
+  ['Xếp quân bot', 'Phải viết sẵn cả setup() và move() trong file Python. Bot tự trả đủ 9 vị trí hợp lệ theo màu/map; không có bước người chơi xếp tay thay bot. Hai bot xếp kín, không nhận đội hình đối phương khi setup.'],
+  ['Xếp quân offline', 'Hai người cùng máy vẫn được xếp tay, đổi chỗ, nhấc quân hoặc Xếp nhanh. Bàn ẩn đội hình đối phương đến khi cả hai xác nhận. Đây là luyện tập, không phải kết quả giải bot.'],
   ['Địa hình v2', 'Lửa cản Bao; Nước cản Kéo; Bụi cây cản Búa; Vực cản tất cả. Không đặt quân hoặc đi vào địa hình cản loại quân đó. BTC công bố map trước khi đội viết bot.'],
-  ['Màu đội v2', 'Công bố trước ván. Ưu tiên so le Đỏ/Xanh trong cùng vòng; khi xung đột ưu tiên Đỏ cho đội thua nhiều hơn, rồi thắng ít hơn, rồi seed lưu.'],
+  ['Màu đội v2', 'Chính sách: ưu tiên so le Đỏ/Xanh trong cùng vòng; khi xung đột ưu tiên Đỏ cho đội thua nhiều hơn, rồi thắng ít hơn, rồi seed lưu. Luồng lưu/công bố màu trước ván chưa nối runtime chính thức.'],
   ['Lượt đi', 'Đỏ đi trước. Một nước = chọn quân rồi chọn ô đích hợp lệ.'],
   ['Bắt quân', 'Rock thắng scissors, scissors thắng paper, paper thắng rock. Gặp quân hòa hoặc thua thì không được đi.'],
-  ['Thắng', 'Chiếm nhà chính đối phương hoặc diệt sạch một loại quân của đối phương. Chạm 200 nước thì xử theo luật giải.'],
+  ['Thắng', 'Chiếm nhà chính đối phương hoặc diệt sạch một loại quân của đối phương. Campus giới hạn 400 plies; offline hòa khi lặp thế 3 lần hoặc đủ 400 plies. Replay MVP lịch sử giữ giới hạn 200 plies.'],
 ];
 
 export default function GuidePage({ account }) {
@@ -24,11 +25,11 @@ export default function GuidePage({ account }) {
           <p className="tt-eyebrow">{isAdmin ? 'Ban tổ chức · vận hành' : 'Đội thi · chuẩn bị'}</p>
           <h1 className="tt-page-title">{isAdmin ? 'Luật & vận hành giải' : 'Luật chơi & hướng dẫn'}</h1>
           <p className="tt-page-lead">
-            Tóm tắt luật OOTv2, thể thức {FORMAT.teams} đội / {FORMAT.totalGames} ván và các bước nộp bot.
+            Luật Campus v2, cách luyện offline và chuẩn bị bot tự xếp quân.
             Tài liệu đầy đủ nằm trong thư mục <code>docs/</code> của repository.
           </p>
         </div>
-        <a className="tt-btn" href="/api/sample-bot" download="sample_bot.py">
+        <a className="tt-btn" href={campusBotDownload} download="bot.py">
           <Download size={16} aria-hidden="true" />
           Tải bot mẫu (.py)
         </a>
@@ -44,28 +45,28 @@ export default function GuidePage({ account }) {
         </Panel>
 
         <div className="tt-stack">
-          <Panel title="Thể thức 8 đội" subtitle="Sinh tự động khi BTC bắt đầu giải.">
+          <Panel title="Thể thức Campus" subtitle="Thiết lập chính thức; scheduler/worker giải chính thức chưa được bật.">
             <ol className="tt-steps">
-              <li><strong>Chia bảng theo seed</strong><span>Bảng A: seed {GROUP_SEEDS.A.join(', ')} · Bảng B: seed {GROUP_SEEDS.B.join(', ')}</span></li>
-              <li><strong>Vòng bảng · {FORMAT.groupGames} ván</strong><span>Mỗi cặp trong bảng đấu 2 lượt đổi màu Đỏ/Xanh.</span></li>
-              <li><strong>Bán kết · {FORMAT.semifinalGames} ván</strong><span>A1 gặp B2 và B1 gặp A2; mỗi cặp 2 ván.</span></li>
-              <li><strong>Chung kết · {FORMAT.finalGames} ván</strong><span>Đội seed tốt hơn đi Đỏ ở lượt 1; hòa series thì seed tốt hơn vô địch.</span></li>
+              <li><strong>Giải tuần → tháng → kỳ</strong><span>Tối đa 56 đội; chia bảng xác định theo roster và seed lưu.</span></li>
+              <li><strong>Vòng bảng</strong><span>Mỗi cặp 2 ván; màu theo chính sách so le/ưu tiên số thua trong cùng vòng.</span></li>
+              <li><strong>Knockout</strong><span>Thông thường 4 ván/cặp, chung kết 6 ván, có tranh hạng ba; không kết thúc sớm.</span></li>
+              <li><strong>Hòa knockout</strong><span>Thêm đúng 2 ván phụ, sau đó mới xét ưu tiên hạt giống.</span></li>
             </ol>
             <div className="tt-inline-facts">
-              <Badge tone="success">Thắng {POINTS.win} điểm</Badge>
-              <Badge tone="neutral">Hòa {POINTS.draw} điểm</Badge>
-              <Badge tone="danger">Thua {POINTS.loss} điểm</Badge>
+              <Badge tone="success">Ván thắng 1 điểm</Badge>
+              <Badge tone="neutral">Ván hòa 0,5 điểm</Badge>
+              <Badge tone="danger">Ván thua 0 điểm</Badge>
             </div>
             <p className="tt-muted">
-              Xếp hạng vòng bảng: điểm → số trận thắng → hiệu số thắng/thua → seed. Mọi trận đều có seed và replay.
+              Điểm cặp vòng bảng: thắng 3 / hòa 1 / thua 0. Map chính/dự phòng được công bố và khóa trước giải.
             </p>
           </Panel>
 
           <Panel title="Vòng đời một ván" subtitle="Từ bài nộp đến replay.">
             <ul className="tt-timeline">
-              <li><span>1</span><div><strong>Nộp bot</strong><em>Server lưu file, băm SHA-256 và chạy smoke test.</em></div></li>
+              <li><span>1</span><div><strong>Viết bot</strong><em>Một file bot.py gồm logic xếp đủ 9 quân và chọn nước đi; thử trên 5 map mẫu.</em></div></li>
               <li><span>2</span><div><strong>Khóa bài</strong><em>Bắt đầu giải: đội tham gia không thể nộp bản mới.</em></div></li>
-              <li><span>3</span><div><strong>Chấm tuần tự</strong><em>Worker chạy từng ván, ghi kết quả và lỗi bot riêng.</em></div></li>
+              <li><span>3</span><div><strong>Setup kín</strong><em>Bot nhận màu/map, tự xếp quân; thiếu/sai đội hình là lỗi bot, không tự điền hộ.</em></div></li>
               <li><span>4</span><div><strong>Xem lại</strong><em>Replay dựng lại từ seed, trạng thái ban đầu và danh sách nước đi.</em></div></li>
             </ul>
           </Panel>
@@ -73,12 +74,13 @@ export default function GuidePage({ account }) {
       </div>
 
       <div className="tt-grid tt-grid--2">
-        <Panel title="Nộp bot đúng chuẩn" subtitle="MVP stateless, không phải Campus persistent.">
+        <Panel title="Bot Campus đúng chuẩn" subtitle="bot.v1 persistent; mẫu tải xuống có cả setup() và move().">
           <ul className="tt-bullets">
             <li>Đúng một file <code>.py</code>, tối đa 256 KiB, Python 3.12+.</li>
             <li>Chỉ thư viện chuẩn; không <code>pip install</code>, không đọc file ngoài.</li>
             <li>Nhận JSON qua stdin, trả JSON qua stdout; không in log lẫn vào kết quả.</li>
-            <li>Không giữ trạng thái giữa các nước; mỗi request là tiến trình mới.</li>
+            <li>Một tiến trình cho cả ván; đọc/ghi JSONL với envelope <code>bot.v1</code>. Không dùng mẫu protocol_version: 1 của replay MVP cũ.</li>
+            <li>Trong setup, dùng <code>availableSquaresByType</code> theo loại quân và màu <code>you</code>; trả đủ 9 ô khác nhau. Có thể tính đội hình theo map, không cần hardcode.</li>
             <li>Nộp lại không xóa lịch sử; bài hợp lệ mới nhất được dùng khi giải khóa.</li>
           </ul>
           <Alert tone="warning" title="Không phải sandbox">

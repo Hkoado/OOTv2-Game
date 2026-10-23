@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeCompetition } from '../src/game/competition.js';
+import { EMPTY_MAP } from '../src/game/maps.js';
 
 test('published terrain maps are saved with hashes, locked against changes and never call real Supabase', async (t) => {
   const previous = { fetch: globalThis.fetch, url: process.env.SUPABASE_URL, key: process.env.SUPABASE_SERVICE_ROLE_KEY };
@@ -22,6 +23,7 @@ test('published terrain maps are saved with hashes, locked against changes and n
   };
   const { saveOfficialSetup, officialView } = await import('../server/shared/officialSetup.js');
   const id = '10000000-0000-4000-8000-000000000001';
+  await assert.rejects(saveOfficialSetup({ name: 'Legacy denied', competition: { primaryMap: EMPTY_MAP, reserveMap: EMPTY_MAP } }), { code: 'legacy_map_read_only' });
   await saveOfficialSetup({ id, name: 'Week', competition: { ...current, mapsPublished: true }, expected: 0 });
   assert.equal(saved.p_config.mapsPublished, true);
   assert.equal(saved.p_config.primaryMap.rulesVersion, 'ott-campus.v2');

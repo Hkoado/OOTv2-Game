@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { SAMPLE_MAPS } from '../src/game/sampleMaps.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { EMPTY_MAP, EMPTY_TERRAIN_MAP, normalizeMap, validateMap } from '../src/game/maps.js';
@@ -100,7 +101,8 @@ test('UI uses existing art keys, editor can erase chasm; no image additions', ()
   assert.deepEqual(options.terrains, map.terrains);
   options.onSquareClick('e5'); assert.deepEqual(clicked, ['e5']);
   assert.equal(normalizeCompetition({}).primaryMap.rulesVersion, 'ott-campus.v2');
-  assert.equal(normalizeCompetition({ schemaVersion: 'campus-setup.v1' }).primaryMap.rulesVersion, 'ott-campus.v1');
+  assert.equal(normalizeCompetition({ schemaVersion: 'campus-setup.v1' }).primaryMap.rulesVersion, 'ott-campus.v2');
+  assert.equal(normalizeCompetition({ primaryMap: EMPTY_MAP }).primaryMap.rulesVersion, 'ott-campus.v1', 'explicit historical map stays readable');
   const schema = JSON.parse(readFileSync(new URL('../server/contracts/map.v2.schema.json', import.meta.url)));
   assert.deepEqual(schema.properties.terrains.additionalProperties.enum, ['fire', 'water', 'bush', 'chasm']);
 });
@@ -170,6 +172,24 @@ test('trusted Campus sample executes v2 terrain and verifies replay end-to-end',
   assert.equal(verifyCampusReplay(outcome.replay).ok, true);
   assert.equal(outcome.replay.rulesVersion, 'ott-campus.v2');
   assert.notEqual(outcome.reason, 'INVALID_SETUP');
+});
+
+test('Campus bot writes its own legal sealed setup and plays every sample map', { skip: !resolvePython() }, async () => {
+  const root = fileURLToPath(new URL('../examples/', import.meta.url));
+  const bot = { allowedRoot: root, filePath: fileURLToPath(new URL('../examples/campus_bot.py', import.meta.url)) };
+  for (const { map } of SAMPLE_MAPS) {
+    const outcome = await runCampusMatch({ id: `sample-${map.id}`, seed: 11, map, red: bot, blue: bot, trusted: true, moveWallMs: 3000 });
+    assert.equal(verifyCampusReplay(outcome.replay).ok, true, map.id);
+    assert.ok(!['INVALID_SETUP', 'ILLEGAL_MOVE', 'PROTOCOL_ERROR'].includes(outcome.reason), `${map.id}: ${outcome.reason}`);
+  }
+});
+
+test('Campus never auto-fills missing bot setup or accepts a manual/empty substitute', async () => {
+  const outcome = await runCampusMatch({ id: 'missing-bot-setup', seed: 1, map: SAMPLE_MAPS[4].map,
+    startSession: async () => ({ request: async () => ({ placements: [] }), close: async () => {}, metrics: () => ({}) }) });
+  assert.equal(outcome.reason, 'INVALID_SETUP');
+  assert.equal(outcome.plyCount, 0);
+  assert.equal(verifyCampusReplay(outcome.replay).ok, true);
 });
 
 test('MVP runner fails closed rather than executing v2 with legacy rules', async () => {

@@ -26,6 +26,9 @@ export async function saveOfficialSetup({ id, name, participantIds = [], competi
       throw new HttpError(409, 'map_pack_locked', 'Map đã công bố không được sửa hoặc thu hồi. Tạo giải/pack mới.');
     }
   }
+  if (config.primaryMap.rulesVersion !== 'ott-campus.v2' || config.reserveMap.rulesVersion !== 'ott-campus.v2') {
+    throw new HttpError(400, 'legacy_map_read_only', 'Giải mới chỉ dùng map.v2. Chuyển map nháp sang luật địa hình v2; map/replay v1 chỉ để đọc lịch sử.');
+  }
   if (config.mapsPublished && (!config.mapPackVersion || config.primaryMap.rulesVersion !== config.reserveMap.rulesVersion)) {
     throw new HttpError(400, 'bad_map_publication', 'Cần version pack và hai map cùng phiên bản luật.');
   }

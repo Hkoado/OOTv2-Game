@@ -1,5 +1,5 @@
 /** Official setup contract. Planning only: never enqueue matches on the MVP runner. */
-import { EMPTY_MAP, EMPTY_TERRAIN_MAP, normalizeMap } from './maps.js';
+import { EMPTY_TERRAIN_MAP, normalizeMap } from './maps.js';
 import { TERRAIN_RULES_VERSION } from './terrain.js';
 
 export const OFFICIAL_PROFILE = 'campus-setup.v1';
@@ -25,8 +25,8 @@ export function normalizeCompetition(input = {}) {
     schemaVersion: OFFICIAL_PROFILE, level, cutoff, mapPackVersion: mapPackVersion.trim(),
     weeksPerMonth, monthsPerSemester,
     mapsPublished: input.mapsPublished === true,
-    primaryMap: normalizeMap(input.primaryMap ?? (input.schemaVersion ? EMPTY_MAP : EMPTY_TERRAIN_MAP)),
-    reserveMap: normalizeMap(input.reserveMap ?? (input.schemaVersion ? EMPTY_MAP : EMPTY_TERRAIN_MAP)),
+    primaryMap: normalizeMap(input.primaryMap ?? EMPTY_TERRAIN_MAP),
+    reserveMap: normalizeMap(input.reserveMap ?? EMPTY_TERRAIN_MAP),
   };
 }
 
@@ -78,6 +78,7 @@ export function competitionPreview(ids, seed, config) {
   if (!normalized.cutoff) blockers.push('Chưa đặt cutoff.');
   if (!normalized.mapPackVersion) blockers.push('Chưa ghi phiên bản map pack để công bố.');
   if (normalized.primaryMap.rulesVersion !== normalized.reserveMap.rulesVersion) blockers.push('Map chính/dự phòng phải cùng phiên bản luật.');
+  if ([normalized.primaryMap, normalized.reserveMap].some((map) => map.rulesVersion !== TERRAIN_RULES_VERSION)) blockers.push('Giải mới chỉ dùng map.v2; map.v1 chỉ để đọc lịch sử.');
   return { ...plan, blockers, setupReady: blockers.length === 0, executionReady: false,
     executionBlocker: 'Chưa nối scheduler chính thức, snapshot GitHub và runner; không chạy bằng lịch MVP.',
     scoring: { gameWin: 1, gameDraw: 0.5, seriesWin: 3, seriesDraw: 1 },

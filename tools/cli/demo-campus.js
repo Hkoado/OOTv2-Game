@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { createCampusGame, applyCampusSetup, applyCampusMove, campusLegalMoves, campusObservation } from '../../server/judge/campusEngine.js';
 import { recordCampusReplay, verifyCampusReplay } from '../../server/replay/campusReplay.js';
+import { createOfflineGame, fillOfflineSetup, confirmOfflineSetup } from '../../src/game/offlineGame.js';
 
 // Engine smoke demo only: fixed first-legal decisions; never executes Python source.
 try {
@@ -11,7 +12,9 @@ try {
   const actions = [];
   for (const player of ['red', 'blue']) {
     const obs = campusObservation(state, player);
-    const placements = obs.unplaced.map((p, i) => ({ pieceId: p.id, square: obs.availableSquares[i] }));
+    let setup = fillOfflineSetup(createOfflineGame(map));
+    if (player === 'blue') setup = fillOfflineSetup(confirmOfflineSetup(setup));
+    const placements = obs.unplaced.map((p) => ({ pieceId: p.id, square: setup.pieces[p.id].square }));
     state = applyCampusSetup(state, player, placements);
     actions.push({ kind: 'setup', player, placements });
   }

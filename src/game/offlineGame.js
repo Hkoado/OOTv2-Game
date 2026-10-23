@@ -1,19 +1,38 @@
 import { createNewGame, createUnplacedPieces, executeMove, GAME_PHASES } from './gameState.js';
 import { RED_HOME_SQUARES, BLUE_HOME_SQUARES } from './constants.js';
-import { normalizeMap } from './maps.js';
+import { EMPTY_TERRAIN_MAP, normalizeMap } from './maps.js';
 import { getValidMoves } from './rules.js';
+import { terrainBlocks, upgradeTerrainMap } from './terrain.js';
 
-export function createOfflineGame(map) {
+export function createOfflineGame(map = EMPTY_TERRAIN_MAP) {
   return { ...createNewGame('offline', () => 0), phase: GAME_PHASES.SETUP_RED,
-    map: normalizeMap(map), repetitions: {}, ply: 0 };
+    map: normalizeMap(upgradeTerrainMap(normalizeMap(map))), repetitions: {}, ply: 0 };
 }
 
 export function offlinePlayer(state) {
   return state.phase === GAME_PHASES.SETUP_BLUE ? 'blue' : state.phase === GAME_PHASES.SETUP_RED ? 'red' : state.turn;
 }
 
-export function setupSquares(state, player = offlinePlayer(state)) {
-  return (player === 'red' ? RED_HOME_SQUARES : BLUE_HOME_SQUARES).filter((s) => !state.map.blocked.includes(s));
+export function setupSquares(state, player = offlinePlayer(state), type = '*') {
+  return (player === 'red' ? RED_HOME_SQUARES : BLUE_HOME_SQUARES).filter((s) => !terrainBlocks(state.map, s, type));
+}
+
+/** Validate against engine-owned IDs/types, not a caller-supplied piece catalogue. */
+function validateOfflinePlacements(state, player, requireComplete = false) {
+  const catalogue = createUnplacedPieces(player);
+  const pieces = Object.values(state.pieces).filter((p) => p.player === player);
+  const used = new Set();
+  for (const piece of pieces) {
+    const expected = catalogue.find((p) => p.id === piece.id);
+    if (!expected || expected.type !== piece.type || !piece.alive
+      || !setupSquares(state, player, piece.type).includes(piece.square) || used.has(piece.square)) {
+      throw new Error('Đội hình không hợp lệ theo sân nhà hoặc địa hình.');
+    }
+    used.add(piece.square);
+  }
+  if (requireComplete && (pieces.length !== 9 || catalogue.some((p) => !state.pieces[p.id]))) {
+    throw new Error('Cần xếp đủ 9 quân trước khi xác nhận.');
+  }
 }
 
 export function placeOfflinePiece(state, typeOrId, square) {
@@ -24,14 +43,28 @@ export function placeOfflinePiece(state, typeOrId, square) {
   const piece = catalogue.find((p) => p.id === typeOrId)
     || catalogue.find((p) => p.type === typeOrId && !state.pieces[p.id]);
   if (!piece) throw new Error('Đã xếp hết loại quân này.');
+  if (terrainBlocks(state.map, square, piece.type)) throw new Error('Địa hình cản loại quân này.');
   const occupant = Object.values(state.pieces).find((p) => p.square === square && p.alive);
   const pieces = { ...state.pieces };
   if (occupant && occupant.id !== piece.id) {
     const from = pieces[piece.id]?.square;
     if (!from) throw new Error('Ô đã có quân.');
+    if (occupant.player !== player || !setupSquares(state, player, occupant.type).includes(from)) {
+      throw new Error('Không thể đổi chỗ: địa hình cản quân tại ô ban đầu.');
+    }
     pieces[occupant.id] = { ...occupant, square: from };
   }
   pieces[piece.id] = { ...piece, square };
+  const next = { ...state, pieces };
+  validateOfflinePlacements(next, player);
+  return next;
+}
+
+export function removeOfflinePiece(state, pieceId) {
+  if (![GAME_PHASES.SETUP_RED, GAME_PHASES.SETUP_BLUE].includes(state.phase)
+    || state.pieces[pieceId]?.player !== offlinePlayer(state)) throw new Error('Không thể nhấc quân này.');
+  const pieces = { ...state.pieces };
+  delete pieces[pieceId];
   return { ...state, pieces };
 }
 
@@ -39,11 +72,23 @@ export function fillOfflineSetup(state) {
   let next = state;
   const player = offlinePlayer(state);
   if (![GAME_PHASES.SETUP_RED, GAME_PHASES.SETUP_BLUE].includes(state.phase)) throw new Error('Không ở lượt xếp quân.');
-  for (const piece of createUnplacedPieces(player)) {
-    if (next.pieces[piece.id]) continue;
-    const square = setupSquares(next).find((s) => !Object.values(next.pieces).some((p) => p.square === s));
-    next = placeOfflinePiece(next, piece.id, square);
+  validateOfflinePlacements(state, player);
+  const fixed = new Set(Object.values(state.pieces).map((p) => p.square));
+  const assigned = new Map();
+  // Bipartite matching avoids greedy dead ends on type-specific terrain.
+  function assign(piece, visited) {
+    for (const square of setupSquares(state, player, piece.type)) {
+      if (fixed.has(square) || visited.has(square)) continue;
+      visited.add(square);
+      const previous = assigned.get(square);
+      if (!previous || assign(previous, visited)) { assigned.set(square, piece); return true; }
+    }
+    return false;
   }
+  for (const piece of createUnplacedPieces(player).filter((p) => !state.pieces[p.id])) {
+    if (!assign(piece, new Set())) throw new Error('Không còn đủ ô hợp lệ; hãy nhấc hoặc đổi vị trí quân đã đặt.');
+  }
+  for (const [square, piece] of assigned) next = placeOfflinePiece(next, piece.id, square);
   return next;
 }
 
@@ -58,8 +103,8 @@ function checkTurn(state) {
 
 export function confirmOfflineSetup(state) {
   const player = offlinePlayer(state);
-  if (![GAME_PHASES.SETUP_RED, GAME_PHASES.SETUP_BLUE].includes(state.phase)
-    || createUnplacedPieces(player).some((p) => !state.pieces[p.id])) throw new Error('Cần xếp đủ 9 quân trước khi xác nhận.');
+  if (![GAME_PHASES.SETUP_RED, GAME_PHASES.SETUP_BLUE].includes(state.phase)) throw new Error('Không ở lượt xếp quân.');
+  validateOfflinePlacements(state, player, true);
   const next = { ...state, phase: player === 'red' ? GAME_PHASES.SETUP_BLUE : GAME_PHASES.PLAYING, turn: 'red' };
   return player === 'blue' ? checkTurn(next) : next;
 }

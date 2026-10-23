@@ -1,5 +1,25 @@
 # Trạng thái triển khai Campus — 23/10/2026
 
+## Hoàn thiện map v2/offline và yêu cầu bot tự setup — 24/10/2026
+
+- Luồng đang mount: offline và thiết lập giải mới dùng v2; API lưu thiết lập chặn map v1
+  (`legacy_map_read_only`), đọc map/replay lịch sử vẫn giữ version. Worker MVP tiếp tục từ chối v2.
+- 5 mẫu đối xứng: learn-fire, learn-water, learn-bush, learn-chasm, campus-four-terrains;
+  menu offline/giải và JSON examples dùng chung nguồn. Có địa hình trong vùng setup hai màu.
+- Offline giữ xếp tay/đổi/nhấc quân/Xếp nhanh, kiểm địa hình cả chiều ngược khi swap;
+  matching xác định cho quick setup, giữ lựa chọn thủ công. Xác nhận kiểm đủ 9 ID/type/ô hợp lệ.
+  Bàn hot-seat ẩn quân đối phương đến khi hai bên xác nhận; không phải bảo mật trước DevTools.
+- Bot bắt buộc tự code setup + move. Cổng tải đúng campus_bot.py persistent; test bot mẫu
+  tự setup/chơi đủ 5 map, test setup thiếu bị INVALID_SETUP, không có auto-fill/manual substitute.
+- Không đổi transport hoặc mở lại LegacyApp/P2P (không mount). Không tuyên bố sealed P2P;
+  không deploy/apply remote. Persistence/API/UI phân màu, nghiệm thu Supabase, sandbox và
+  scheduler chính thức vẫn chưa hoàn tất, không nằm trong phần map/offline này.
+- Validation: toàn bộ 275/275 tests pass, không skip; Vite build pass. Browser Edge headless:
+  hai theme, 5 map/download JSON, xếp tay/chặn Bao trên Lửa, ẩn setup Đỏ khi Xanh xếp,
+  18 quân khi bắt đầu, nước đi/history/keyboard và 4 kích thước màn hình không tràn ngang.
+  Logs cục bộ: data/v2-tests.log, data/v2-build.log, data/ui-smoke-report.json.
+  Baseline npm install vẫn báo 2 high vulnerabilities; không tự audit fix/đổi dependency.
+
 ## Luật v2 — 24/10/2026
 
 - [Luật địa hình/xếp kín/phân màu](17-LUAT-DIA-HINH-VA-XEP-KIN.md): engine Campus,

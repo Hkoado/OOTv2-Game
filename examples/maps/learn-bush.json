@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "map.v2",
+  "width": 9,
+  "height": 9,
+  "setupZoneRule": "diagonal-28-v1",
+  "cornerRule": "block-if-both-orthogonals-blocked",
+  "rulesVersion": "ott-campus.v2",
+  "id": "learn-bush",
+  "revision": 1,
+  "bases": {
+    "red": "a1",
+    "blue": "i9"
+  },
+  "blocked": [],
+  "terrains": {
+    "b3": "bush",
+    "d4": "bush",
+    "f6": "bush",
+    "h7": "bush"
+  }
+}

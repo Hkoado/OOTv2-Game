@@ -7,6 +7,9 @@
 - **24/10/2026 — luật mới của người dùng:** đọc `docs/17-LUAT-DIA-HINH-VA-XEP-KIN.md`.
   Campus v2: Lửa cản Bao, Nước cản Kéo, Bụi cây cản Búa, Vực cản tất cả;
   setup bot kín, phân màu so le/ưu tiên số thua trong cùng vòng. Dùng asset hiện có.
+  **Chốt bổ sung:** offline vẫn xếp tay; bot phải viết sẵn cả setup và move trong file Python,
+  tự trả đủ 9 vị trí theo màu/map, không xếp tay/auto-fill thay bot. Ván mới dùng v2;
+  không dùng thiếu schemaVersion để âm thầm quay lại luật v1. Năm map v2 ở sampleMaps.js.
   Luật xếp trước sau bên dưới chỉ còn áp dụng v1/phòng cũ; không đổi replay lịch sử.
 
 - **Yêu cầu tiếp theo ngày 23/10:** chuyển thiết lập giải mới sang điều lệ chính thức, không tạo giải MVP 8 đội. Đọc `docs/16-THIET-LAP-CHINH-THUC-VA-CHIA-VIEC.md` và `docs/assignments/{Huy,Bao,Khoa}.md`. Người dùng đã cho phép chia việc 3 thành viên; thay quyết định làm tuần tự bên dưới đối với kế hoạch mới. Không tự tạo worktree hay deploy.
