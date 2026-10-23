@@ -53,8 +53,10 @@
 - `sandbox/linux/selftest.sh` **11/11 PASS**: JSONL round-trip, FS/network/env isolation, fork bomb
   (124), memory 64 MiB (137), CPU/timeout (124), CPU accounting, stdout flood (cắt 64 KiB),
   wall timeout, cgroup + process cleanup.
-- **Chưa production:** chưa seccomp/attestation, chưa nối worker Node, WSL chia sẻ host kernel;
-  không dùng cho code sinh viên. Chi tiết: [Sandbox WSL](SANDBOX-WSL.md).
+- Adapter `server/judge/linuxSandboxSession.js` test **7/7** + E2E thật trong WSL (setup 9 quân/move);
+  Linux-only mặc định, Windows phải truyền bridge `launch`. Chưa đo CPU/RAM per request.
+- **Chưa production:** chưa seccomp/attestation, WSL chia sẻ host kernel; không dùng cho code sinh viên.
+  Chi tiết: [Sandbox WSL](SANDBOX-WSL.md).
 
 ## K2 schedule persistence — 24/10/2026
 

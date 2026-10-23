@@ -51,7 +51,38 @@ wsl.exe -d ootv2-sandbox -u root -- /bin/bash /mnt/d/OOTv2-Game/sandbox/linux/pr
 wsl.exe -d ootv2-sandbox -u root -- /bin/bash /mnt/d/OOTv2-Game/sandbox/linux/selftest.sh
 ```
 
-## Bằng chứng 24/10/2026 (trusted fixtures, không phải code sinh viên)
+## Adapter Node
+
+`server/judge/linuxSandboxSession.js` — `createLinuxSandboxSession({filePath, allowedRoot, runnerPath,
+launch?, memoryBytes, pids, cpuMax, timeoutMs, responseTotalMs, spawnProcess?, killProcess?, runnerEnv?})`.
+
+- Mặc định chỉ chạy khi `process.platform === 'linux'`; Windows phải truyền `launch` tường minh
+  (ví dụ bridge WSL) — không tự bật, không dùng `shell`.
+- Kiểm artifact qua `resolveBotPath` (chỉ `.py`, không symlink, trong `allowedRoot`), dựng argv runner
+  với limit cụ thể, `runnerEnv` mặc định `{PATH:'/usr/bin:/bin'}` (không mang secret).
+- Dùng lại `parseBotJson`/`validateBotResponse` của `bot.v1`; giới hạn request/response/stdout/stderr;
+  timeout theo request + tổng; lỗi runner `78` → `sandbox_unavailable`, `124` → `BOT_TIMEOUT`.
+- `metrics()` chỉ đếm bytes/thời gian chờ; **chưa đo CPU/RAM per request** (runner có metrics cuối
+  phiên nhưng adapter chưa đọc). `productionReady:false`.
+
+Ví dụ bridge dev (chạy Node trong distro WSL):
+
+```js
+const session = await createLinuxSandboxSession({
+  filePath: '/mnt/d/OOTv2-Game/sandbox/fixtures/protocol_bot.py',
+  allowedRoot: '/mnt/d/OOTv2-Game/sandbox/fixtures',
+  runnerPath: '/mnt/d/OOTv2-Game/sandbox/linux/run-bot.sh',
+  launch: (runner, args) => ({ command: '/bin/bash', args: [runner, ...args] }),
+});
+```
+
+Bằng chứng 24/10/2026: `node /mnt/d/.../sandbox-session-e2e.mjs` trong distro (Node 18.19.1) trả
+`{"ok":true,"profile":"linux-sandbox.v1","placements":9,"move":{"pieceId":"p1","to":"a1"}}`,
+`stdoutBytes=497`, không còn cgroup sau khi đóng. Unit test `tests/linuxSandboxSession.test.js` 7/7
+(fake child): argv/limit/env, round-trip setup+move, envelope sai, budget, timeout/exit 78/spawn fail,
+close hủy request.
+
+
 
 Preflight: `kernel=6.18.54.1-microsoft-standard-WSL2`, `python=3.12.3`, `bwrap=0.9.0`,
 `cgroup_controllers=cpuset cpu io memory hugetlb pids rdma`, `preflight=ok`.

@@ -16,12 +16,16 @@
   memory 64 MiB (137), CPU/timeout (124), CPU accounting ~262 ms, stdout flood cắt 64 KiB,
   wall timeout, cgroup cleanup, process cleanup. Log `data/khoa-next/sandbox-*.txt`.
 - `docs/SANDBOX-WSL.md` + `sandbox/README.md`; `.gitattributes` khóa LF cho `*.sh`.
+- Adapter Node `server/judge/linuxSandboxSession.js`: Linux-only mặc định (Windows phải truyền
+  `launch` tường minh), kiểm `resolveBotPath`, argv limit, `runnerEnv` tối thiểu, tái dùng validator
+  `bot.v1`, timeout/budget, map exit 78/124; test fake child **7/7**.
+- E2E thật trong WSL (Node 18.19.1 + runner + bwrap): setup 9 quân + move trả đúng, `stdoutBytes=497`,
+  đóng session không còn cgroup; `productionReady:false` vì chưa đo CPU/RAM per request.
+- **Chưa production:** chưa seccomp/syscall allowlist/attestation, WSL chia sẻ kernel/tài nguyên
+  Windows, chưa thử escape nâng cao. Không dùng cho code sinh viên; mọi gate Start/consumer giữ nguyên.
 - Đã merge thêm `origin/dev` (`4477be5`, sửa SubmissionsPage/githubSyncState) không conflict.
-  Sau merge: **299/299 test pass**, Vite build exit 0 (1650 modules), `git diff --check` sạch.
-- **Chưa production:** chưa seccomp/syscall allowlist/attestation, chưa nối worker Node, WSL chia sẻ
-  kernel/tài nguyên Windows, chưa thử escape nâng cao. Không dùng cho code sinh viên; mọi gate
-  Start/consumer vẫn giữ nguyên. Bước tiếp: adapter Node gọi runner + budget theo request, seccomp,
-  rồi nghiệm thu trên VM Linux sạch.
+  Sau merge: **306/306 test pass**, Vite build exit 0 (1650 modules), `git diff --check` sạch.
+- Bước tiếp: budget CPU/RAM per request từ adapter, seccomp profile, rồi nghiệm thu trên VM Linux sạch.
 
 ### 24/10/2026 — K2 schedule persistence + màu: READY FOR REVIEW (migration chưa apply)
 
