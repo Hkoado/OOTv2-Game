@@ -6,6 +6,7 @@ import * as accounts from './accounts.js';
 import * as participants from './participants.js';
 import * as tournaments from './tournaments.js';
 import { rows, uuid } from './client.js';
+import { syncBotFromGit, syncAllTournamentBots } from '../services/gitSync.js';
 
 const forbidden=()=>new HttpError(403,'scope_denied','Không có quyền truy cập dữ liệu này.');
 export async function checkStage(account,id,stage=null) {
@@ -58,6 +59,38 @@ export function sharedRouter() {
     }
     next();
   },acceptBotUpload,async(req,res)=>res.status(201).json(await participants.createSubmission(req.params.team,req.file)));
+
+  // Sync bot từ Git repository
+  router.post('/submissions/:team/sync-git', async (req, res, next) => {
+    if (req.account.role !== 'admin' && req.account.participant_id !== req.params.team) throw forbidden();
+    if (req.account.role !== 'admin') {
+      const [entries, events] = await Promise.all([
+        rows('tournament_entries', `participant_id=eq.${uuid(req.params.team)}`),
+        rows('tournaments', 'status=in.(group_running,semifinal_running,final_running)'),
+      ]);
+      if (entries.some((e) => events.some((t) => t.id === e.tournament_id))) {
+        throw new HttpError(409, 'round_frozen', 'Đội đang thi giải đã khóa bài.');
+      }
+    }
+    const [account] = await rows('accounts', `participant_id=eq.${uuid(req.params.team)}`);
+    if (!account || !account.repository) {
+      throw new HttpError(400, 'no_repository', 'Đội chưa khai báo link repository GitHub trong Hồ sơ đội.');
+    }
+    const result = await syncBotFromGit({
+      participantId: req.params.team,
+      repositoryUrl: account.repository,
+      branch: account.branch || 'main',
+      accountId: account.id,
+    });
+    res.status(201).json({
+      id: result.submission.id,
+      status: result.submission.status,
+      sha256: result.submission.sha256,
+      commit_sha: result.commitSha,
+      validation_error: result.submission.validation_error,
+    });
+  });
+
   router.get('/events',async(req,res)=>{
     let events=await tournaments.listTournaments();
     if (req.account.role!=='admin') {const entries=await rows('tournament_entries',`participant_id=eq.${uuid(req.account.participant_id)}`);events=events.filter((t)=>entries.some((e)=>e.tournament_id===t.id));}
@@ -66,6 +99,13 @@ export function sharedRouter() {
   router.post('/events',requireLocalAdmin,async(req,res)=>res.status(201).json(await tournaments.createTournament(req.body||{})));
   router.put('/events/:id',requireLocalAdmin,async(req,res)=>res.json(await tournaments.updateTournamentDraft(req.params.id,req.body||{})));
   router.post('/events/:id/start',requireLocalAdmin,async(req,res)=>res.json(await tournaments.startTournament(req.params.id)));
+
+  // Admin đồng bộ Git cho toàn bộ các đội trong giải draft
+  router.post('/events/:id/sync-all', requireLocalAdmin, async (req, res) => {
+    const results = await syncAllTournamentBots(req.params.id);
+    res.json({ results });
+  });
+
   router.get('/events/:id',async(req,res)=>{
     const id=req.params.id;await checkStage(req.account,id);
     const [event,standings,matches,bracket]=await Promise.all([tournaments.getTournament(id),tournaments.computeStandings(id),tournaments.listMatches(id),req.account.role==='admin'?tournaments.computeBracket(id):null]);

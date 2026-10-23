@@ -10,6 +10,7 @@ import { badRequest } from '../lib/httpError.js';
 import { createSubmission } from './participants.js';
 import { updateAccountSyncStatus } from './localAccounts.js';
 import { resolveGitRepoUrl } from './fakeGitRepos.js';
+import { sharedEnabled } from '../shared/client.js';
 
 function execGit(args, { cwd, timeout = 30000 } = {}) {
   return new Promise((resolve, reject) => {
@@ -73,7 +74,7 @@ export async function syncBotFromGit({
   const targetBranch = branch ? branch.trim() : 'main';
   const tempDir = path.join(os.tmpdir(), `ootv2-git-${randomUUID()}`);
 
-  if (accountId) {
+  if (accountId && !sharedEnabled) {
     updateAccountSyncStatus(accountId, { status: 'syncing', error: null });
   }
 
@@ -107,10 +108,11 @@ export async function syncBotFromGit({
     if (stat.size === 0) {
       throw badRequest('empty_bot_file', 'File `bot.py` trong repository bị rỗng');
     }
-    if (stat.size > config.limits.maxSourceBytes) {
+    const maxBytes = 256 * 1024;
+    if (stat.size > maxBytes) {
       throw badRequest(
         'file_too_large',
-        `File bot.py (${Math.ceil(stat.size / 1024)} KiB) vượt giới hạn ${config.limits.maxSourceBytes / 1024} KiB`
+        `File bot.py (${Math.ceil(stat.size / 1024)} KiB) vượt giới hạn ${maxBytes / 1024} KiB`
       );
     }
 
@@ -124,7 +126,11 @@ export async function syncBotFromGit({
     }
 
     // Tạo submission và chạy validation pipeline
-    const submission = await createSubmission(
+    const submissionCreator = sharedEnabled
+      ? (await import('../shared/participants.js')).createSubmission
+      : createSubmission;
+
+    const submission = await submissionCreator(
       participantId,
       { buffer, originalname: 'bot.py' },
       {
@@ -135,7 +141,7 @@ export async function syncBotFromGit({
       }
     );
 
-    if (accountId) {
+    if (accountId && !sharedEnabled) {
       updateAccountSyncStatus(accountId, {
         status: submission.status,
         error: submission.validation_error || null,
@@ -158,7 +164,7 @@ export async function syncBotFromGit({
     }
 
     const errorMsg = error.message.slice(0, 300);
-    if (accountId) {
+    if (accountId && !sharedEnabled) {
       updateAccountSyncStatus(accountId, {
         status: 'error',
         error: errorMsg,
@@ -173,17 +179,37 @@ export async function syncBotFromGit({
  * Đồng bộ toàn bộ các đội có repo Git trong một giải đấu draft.
  */
 export async function syncAllTournamentBots(tournamentId) {
-  const db = getDb();
-  const entries = db
-    .prepare(
-      `SELECT e.id AS entry_id, e.participant_id, p.name AS participant_name,
-              a.id AS account_id, a.repository, a.branch
-       FROM tournament_entries e
-       JOIN participants p ON p.id = e.participant_id
-       LEFT JOIN local_accounts a ON a.participant_id = e.participant_id
-       WHERE e.tournament_id = ?`
-    )
-    .all(tournamentId);
+  let entries;
+  if (sharedEnabled) {
+    const { rows, uuid } = await import('../shared/client.js');
+    const [tEntries, pList, aList] = await Promise.all([
+      rows('tournament_entries', `tournament_id=eq.${uuid(tournamentId)}`),
+      rows('participants'),
+      rows('accounts')
+    ]);
+    const pMap = new Map(pList.map(p => [p.id, p.name]));
+    const aMap = new Map(aList.map(a => [a.participant_id, a]));
+    entries = tEntries.map(e => ({
+      entry_id: e.id,
+      participant_id: e.participant_id,
+      participant_name: pMap.get(e.participant_id) || 'Unknown',
+      account_id: aMap.get(e.participant_id)?.id,
+      repository: aMap.get(e.participant_id)?.repository || '',
+      branch: aMap.get(e.participant_id)?.branch || 'main',
+    }));
+  } else {
+    const db = getDb();
+    entries = db
+      .prepare(
+        `SELECT e.id AS entry_id, e.participant_id, p.name AS participant_name,
+                a.id AS account_id, a.repository, a.branch
+         FROM tournament_entries e
+         JOIN participants p ON p.id = e.participant_id
+         LEFT JOIN local_accounts a ON a.participant_id = e.participant_id
+         WHERE e.tournament_id = ?`
+      )
+      .all(tournamentId);
+  }
 
   const results = [];
   for (const entry of entries) {
@@ -226,4 +252,3 @@ export async function syncAllTournamentBots(tournamentId) {
 }
 
 export default { syncBotFromGit, syncAllTournamentBots };
-
