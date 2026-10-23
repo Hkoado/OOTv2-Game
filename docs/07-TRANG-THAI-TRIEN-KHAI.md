@@ -311,7 +311,7 @@ Xem [bàn giao UI](11-TICH-HOP-UI-KIT.md); đây không phải hoàn tất M2–
 - Receipt/job view là whitelist (không token/storage path/lease), trạng thái khớp fixtures
   `githubSyncState.js`; ghi `frozen` khi giải đã bắt đầu. Xem [bàn giao Huy](handoff/Huy.md).
 - Test: `githubRepo` 5/5, `githubIntakeApi` 6/6, `githubJobs` 5/5, `publication` 9/9, schema guardrail;
-  tổng **212/212**, build pass.
+  tổng **233/233**, build pass.
 - Chưa làm: worker tải blob/validate (H2, Khoa), tắt upload HTTP; Postgres integration trên project thật.
 
 ### H3 lịch phát + privacy, H1 worker contract (24/10/2026)
@@ -325,5 +325,16 @@ Xem [bàn giao UI](11-TICH-HOP-UI-KIT.md); đây không phải hoàn tất M2–
   `generation` + `mvp_github_claim/heartbeat/progress/finish/release` với lease token, chống stale worker.
   Client cho Khoa: `server/shared/githubJobs.js`.
 - Migration mới: `20261024150000_broadcast_schedule.sql`, `20261024160000_github_jobs_worker.sql`
-  (đều **chưa apply remote**). Test: 212/212 pass, build pass; Postgres integration NOT RUN.
+  (đều **chưa apply remote**). Test: 233/233 pass, build pass; Postgres integration NOT RUN.
 - UI Live của Bảo cần xử lý 401 khi chưa đăng nhập và dùng gói phát thay vì đọc trực tiếp event.
+
+### H2 — ACL + đóng cổng upload file (24/10/2026)
+
+- `POST /api/local/submissions/:team` **mặc định trả `403 upload_disabled`** cho cả đội và admin; chỉ admin
+  upload được khi `OOTV2_ALLOW_ONLINE_UPLOAD=1` (trusted-dev/import offline). Đội nộp bằng GitHub.
+- Thêm `requireEventMember` cho connection/receipt/intake: đội khác giải nhận `403 scope_denied` trước khi
+  gọi GitHub/DB (không lộ giải có tồn tại).
+- Checklist H2 đạt ở mức mock: receipt whitelist, unique `(event,team,repo_id,sha,path)`, clock DB cho
+  cutoff/quota, pending-before-cutoff, giữ bản valid cũ, repo phải BTC duyệt.
+- Test: `uploadDisabled` 2/2, `uploadTrustedDev` 1/1; tổng 233/233 pass. Postgres integration NOT RUN.
+- UI Bảo: nút "Nộp file USB" chỉ dành admin và cần cờ trên; đội dùng luồng GitHub.

@@ -132,8 +132,8 @@ function seedStore() {
     sessions: [],
     submissions: [],
     tournaments: [
-      { id: EVENT, name: 'Giải H3', status: 'group_running', seed: 5, created_at: now, map_json: '{"id":"open-arena","revision":1,"blocked":[]}' },
-      { id: OTHER_EVENT, name: 'Giải khác', status: 'group_running', seed: 6, created_at: now, map_json: '{"id":"open-arena","revision":1,"blocked":[]}' },
+      { id: EVENT, name: 'Giải H3', status: 'group_running', seed: 5, created_at: now, started_at: '2026-10-24T10:00:00.000Z', map_json: '{"id":"open-arena","revision":1,"blocked":[]}' },
+      { id: OTHER_EVENT, name: 'Giải khác', status: 'group_running', seed: 6, created_at: now, started_at: '2026-10-24T09:00:00.000Z', map_json: '{"id":"open-arena","revision":1,"blocked":[]}' },
     ],
     tournament_entries: [
       { id: ENTRY_A, tournament_id: EVENT, participant_id: TEAM_A, seed_order: 1, group_name: 'A' },
@@ -448,3 +448,26 @@ test('không còn xem live ẩn danh; input đặt lịch sai bị 400; ván ch�
   assert.equal(notGraded.body.error, 'match_not_graded');
 });
 
+
+test('live overview: đội chỉ thấy giải mình tham gia, không lộ giải/đội khác', async (t) => {
+  const { base } = await startApp(t, seedStore());
+  const admin = await login(base, 'admin');
+  const alpha = await login(base, 'alpha');
+  const gamma = await login(base, 'gamma');
+
+  const mine = await call(base, '/api/live/overview', { session: alpha });
+  assert.equal(mine.status, 200);
+  assert.equal(mine.body.event.id, EVENT, 'Alpha thuộc giải H3');
+
+  const other = await call(base, '/api/live/overview', { session: gamma });
+  assert.equal(other.status, 200);
+  assert.equal(other.body.event.id, OTHER_EVENT, 'Gamma chỉ thấy giải của mình');
+  assert.ok(!JSON.stringify(other.body).includes('Đội Alpha'), 'không lộ tên đội giải khác');
+
+  const adminView = await call(base, '/api/live/overview', { session: admin });
+  assert.equal(adminView.body.event.id, EVENT, 'admin thấy giải đang chạy mới nhất');
+
+  const crossMatch = await call(base, `/api/live/matches/${MATCH_PUBLIC}`, { session: gamma });
+  assert.equal(crossMatch.status, 403);
+  assert.equal(crossMatch.body.error, 'scope_denied');
+});

@@ -119,9 +119,21 @@ async function loadEvent(eventId) {
   return event;
 }
 
+/** H2: đội chỉ đọc dữ liệu của giải mình tham gia (admin bỏ qua). */
+async function requireEventMember(eventId, account) {
+  if (account?.role === 'admin') return;
+  if (!account?.participant_id) throw fail(403, 'scope_denied', 'Cần tài khoản đội thuộc giải.');
+  const [entry] = await rows(
+    'tournament_entries',
+    `tournament_id=eq.${uuid(eventId)}&participant_id=eq.${uuid(account.participant_id)}&select=id`
+  );
+  if (!entry) throw fail(403, 'scope_denied', 'Đội không thuộc giải này.');
+}
+
 /** Đăng ký repository cho đội; chỉ admin mới set `approved = true`. */
 export async function putConnection({ eventId, teamId, repository, branch, account }) {
   const event = await loadEvent(eventId);
+  await requireEventMember(eventId, account);
   if (event.status !== 'draft') throw fail(409, 'event_frozen', 'Giải đã bắt đầu hoặc đã khóa; không đổi repository.');
   const target = await resolveIntakeTarget({ repository, branch: branch || 'main' });
   const result = await rpc('mvp_repo_connection_upsert', {
@@ -138,8 +150,9 @@ export async function putConnection({ eventId, teamId, repository, branch, accou
   return { connection: connectionView(result.connection) };
 }
 
-export async function getConnection({ eventId, teamId }) {
+export async function getConnection({ eventId, teamId, account }) {
   await loadEvent(eventId);
+  await requireEventMember(eventId, account);
   const [connection] = await rows('repo_connections', `event_id=eq.${uuid(eventId)}&team_id=eq.${uuid(teamId)}`);
   return { connection: connectionView(connection) };
 }
@@ -163,6 +176,7 @@ export async function listConnections({ eventId }) {
  */
 export async function requestSubmission({ eventId, teamId, repository, branch, account }) {
   const event = await loadEvent(eventId);
+  await requireEventMember(eventId, account);
   if (event.status !== 'draft') throw fail(409, 'event_frozen', 'Giải đã bắt đầu hoặc đã khóa; không nhận bài mới.');
   const [connection] = await rows('repo_connections', `event_id=eq.${uuid(eventId)}&team_id=eq.${uuid(teamId)}`);
   if (!connection) throw fail(409, 'repository_not_registered', 'Đội chưa đăng ký repository cho giải này.');
@@ -211,8 +225,9 @@ export async function getJob({ jobId, account }) {
 }
 
 /** Trạng thái mới nhất cho UI khi mở trang (connection + receipt gần nhất). */
-export async function getLatest({ eventId, teamId }) {
+export async function getLatest({ eventId, teamId, account }) {
   const event = await loadEvent(eventId);
+  await requireEventMember(eventId, account);
   const [connectionRows, receiptRows] = await Promise.all([
     rows('repo_connections', `event_id=eq.${uuid(eventId)}&team_id=eq.${uuid(teamId)}`),
     rows('github_receipts', `event_id=eq.${uuid(eventId)}&team_id=eq.${uuid(teamId)}&order=created_at.desc&limit=1`),

@@ -288,23 +288,16 @@ test('phân quyền: team bị chặn route admin và không nộp bài thay đ�
   assert.equal(listed.participants.length, 2);
   assert.ok(listed.accounts.every((account) => !('password_hash' in account)), 'admin cũng không thấy hash');
 
-  const crossTeam = await globalThis.fetch(`${base}/api/local/submissions/${OTHER_PARTICIPANT}`, {
-    method: 'POST',
-    headers: { cookie: team.cookie, 'x-csrf-token': team.body.csrf },
-  });
-  assert.equal(crossTeam.status, 403);
-  assert.equal((await crossTeam.json()).error, 'scope_denied');
-
-  // Sai đuôi file bị chặn ở multer, sau khi đã qua guard đội sở hữu.
-  const form = new FormData();
-  form.append('file', new Blob(['print(1)\n'], { type: 'text/plain' }), 'bot.txt');
-  const badExtension = await globalThis.fetch(`${base}/api/local/submissions/${TEAM_PARTICIPANT}`, {
-    method: 'POST',
-    headers: { cookie: team.cookie, 'x-csrf-token': team.body.csrf },
-    body: form,
-  });
-  assert.equal(badExtension.status, 400);
-  assert.equal((await badExtension.json()).error, 'bad_extension');
+  // H2: upload HTTP đã tắt mặc định → mọi request upload (kể cả đội khác) trả upload_disabled.
+  // Multer/quyền sở hữu khi BTC opt-in được kiểm ở tests/uploadTrustedDev.test.js.
+  for (const participant of [OTHER_PARTICIPANT, TEAM_PARTICIPANT]) {
+    const upload = await globalThis.fetch(`${base}/api/local/submissions/${participant}`, {
+      method: 'POST',
+      headers: { cookie: team.cookie, 'x-csrf-token': team.body.csrf },
+    });
+    assert.equal(upload.status, 403);
+    assert.equal((await upload.json()).error, 'upload_disabled');
+  }
 });
 
 test('profile: chỉ nhận repository GitHub HTTPS không token, không SSRF', async (t) => {

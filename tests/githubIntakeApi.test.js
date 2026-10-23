@@ -417,7 +417,17 @@ test('thiếu CSRF, giải đã chạy và route admin-only đều bị chặn',
   assert.equal(noCsrf.body.error, 'csrf_required');
   assert.equal(store.repo_sync_jobs.length, 0);
 
-  const frozen = await call(base, `/api/local/events/${RUNNING_EVENT_ID}/submissions/from-github`, { method: 'POST', session: team, body: {} });
+  // Đội không thuộc giải: 403 (không lộ giải có tồn tại hay không).
+  const notMember = await call(base, `/api/local/events/${RUNNING_EVENT_ID}/submissions/from-github`, { method: 'POST', session: team, body: {} });
+  assert.equal(notMember.status, 403);
+  assert.equal(notMember.body.error, 'scope_denied');
+
+  const notMemberRead = await call(base, `/api/local/events/${RUNNING_EVENT_ID}/submissions/from-github`, { session: team });
+  assert.equal(notMemberRead.status, 403, 'không đọc được receipt của giải khác');
+
+  // Thành viên nhưng giải đã chạy: 409 event_frozen.
+  store.tournaments[0].status = 'group_running';
+  const frozen = await call(base, `/api/local/events/${EVENT_ID}/submissions/from-github`, { method: 'POST', session: team, body: {} });
   assert.equal(frozen.status, 409);
   assert.equal(frozen.body.error, 'event_frozen');
 
