@@ -2,6 +2,49 @@
 
 ## Trạng thái mới nhất
 
+### 24/10/2026 — Tích hợp contract GitHub/H3 + K3c cache: READY FOR REVIEW
+
+- User yêu cầu pull Huy H2/H3 và làm tiếp. Checkout `dev @ bc0e0c6` sạch, không MERGE_HEAD.
+  Fetch origin exit 0, fast-forward tới **d0ad705**, không conflict. Đã nhận `cf34ef5` (H3),
+  `3b25a33` (fix previous submission + RPC worker), `43aff1b`/`d0ad705` (handoff).
+  **Không xác nhận H2 DONE:** handoff Huy hiện ghi H1 fix/H3 mock-verified; H2/H4 chưa làm,
+  consumer/validation và chặn upload online chưa hoàn tất. Không sửa báo cáo Huy/Bảo.
+- FK previous valid đã đổi sang `receipt.submission_id`; migration **20261024160000** còn
+  CREATE OR REPLACE intake để sửa DB đã nhận bản nháp. Không apply SQL remote trong phiên này.
+- Review code thật: `mvp_github_release` kiểm token/generation/status nhưng thiếu lease_until
+  còn hạn; `finish` với submission_id có sẵn chỉ kiểm participant, chưa kiểm status/hash.
+  Expired claim chưa giới hạn max attempts; maxAttempts hiện chỉ dùng trong release.
+  Cần Huy review corrective migration/tests PostgreSQL; không tự sửa migration ownership Huy.
+  Intake/API bounded metadata cũ và contract freeze/pending/idempotent finish vẫn cần nghiệm thu.
+- Milestone độc lập **K3c**: thêm `server/shared/sourceCache.js` export
+  `createSourceCache({root,now?}) -> {put,read,acquire,gc,close}`; thêm 10 tests trong
+  `tests/sourceCache.test.js`, hướng dẫn/giới hạn ở `docs/SOURCE-CACHE.md`.
+  Cache theo SHA256, 1..256 KiB, private file UUID staging -> hash filename, kiểm bytes mỗi hit,
+  từ chối traversal/symlink/junction/hardlink/non-file/oversize/corruption. Không execute source.
+- acquire/release refcount bảo vệ source đang dùng; GC bắt buộc `retainedHashes` đầy đủ từ
+  coordinator cho jobs/snapshots/valid/appeals/offline exports và maxAgeMs explicit, kiểm tất cả
+  retained source trước xóa. Không có DB inventory tự động; pin bền vững vẫn thuộc DB, không Map.
+  Một coordinator/root bằng exclusive `.owner`; không dùng shared root giữa hai worker.
+  Crash lock cần operator xác nhận process chết trước dọn; không auto-steal. Chưa fsync/quota/
+  crash rehearsal; Windows cần ACL operator, POSIX mode chưa nghiệm thu trên Linux.
+- **Chưa nối cache vào worker/consumer/GC scheduler**, không thay runner MVP, router, React,
+  dependency/config/schema; không mở Start. Không tự biến source hash thành submission valid.
+- Baseline `npm.cmd install`, `npm.cmd test`, `npm.cmd run build`: exit 0, **212/212** tests.
+  Install vẫn 2 high vulnerabilities + esbuild allow-scripts warning; không tự audit fix.
+- Sau code: `node --test tests/sourceCache.test.js tests/githubArtifact.test.js
+  tests/githubJobs.test.js tests/publication.test.js` **41/41 pass**, exit 0;
+  `npm.cmd test` **222/222 pass**, 0 fail/skip, exit 0. `npm.cmd run build` pass (4.58s),
+  `git diff --check` exit 0. Terminal integration báo không quan sát được completion nên
+  dùng spawnSync exit + log files để xác minh, không coi wrapper failure là test failure.
+- Bằng chứng gitignored: `data/khoa-h23/{inspection,merge,baseline,final}.json`,
+  `baseline-*.log`, `final-*.log`. Không source sinh viên/secret trong code/tests.
+- NOT RUN: PostgreSQL thật/migration concurrency, GitHub private thật, consumer E2E,
+  browser H3/B2, load, Linux sandbox, offline restore. H3 mới xác minh mock, chưa production-ready.
+- Bước tiếp: Huy review RPC issues + H4 disposable DB được operator cấp phép; sau đó consumer
+  pinned fetch -> cancel khi lease mất -> sandbox validation -> Storage -> fenced finish.
+  Cache integration chỉ GC sau inventory đầy đủ/nhất quán. K2 persistence và K4 sandbox còn gate.
+  Không push/deploy/apply remote. SHA checkpoint: tra `git log -- docs/handoff/Khoa.md`.
+
 ### 24/10/2026 — Fetch/tích hợp H1 + K3b pinned GitHub source: READY FOR REVIEW
 
 - Đã `git fetch --all --prune` exit 0, origin/dev từ a84c3c7 lên **1822e92**.
