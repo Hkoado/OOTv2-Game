@@ -2,6 +2,58 @@
 
 ## Trạng thái mới nhất
 
+- Checkpoint độc lập 24/10/2026: **bot.v1/Campus trusted runtime foundation — READY FOR REVIEW**.
+  Baseline `dev @ 0b4ca63`, checkout sạch. Không tuyên bố K3/K4 production hoàn tất.
+- Đã thêm wire parser/validator/request builder `server/contracts/botProtocol.js`,
+  `createTrustedCampusSession` trong `server/judge/campusTrustedSession.js`, `runCampusMatch`
+  trong `server/judge/campusMatchRunner.js`, bot mẫu một file `examples/campus_bot.py`,
+  CLI `tools/cli/demo-campus-bots.js`, 15 tests `tests/campusRuntime.test.js`, tài liệu
+  `docs/CAMPUS-TRUSTED-RUNTIME.md` và README hướng dẫn. Không dependency/schema/env mới.
+- `bot.v1` parser không mất duplicate key: scan trước JSON.parse, UTF-8 fatal, depth 16,
+  finite numbers, exact envelope/request ID/kind/fields, 64 KiB input/16 KiB response.
+  Persistent process tuần tự, total stdout 4 MiB/stderr 256 KiB, wall timer monotonic,
+  total response wall 45 s mặc định, timeout/output overflow kill, private temporary dir,
+  env allowlist không chuyển Supabase/server secret. Private output không chép vào result.
+- Runner setup Red rồi Blue, bot fault chỉ active side; Campus engine authoritative với map,
+  repetition/400 plies; replay engine verified trước return. Hạ tầng/cancel/cleanup failure throw,
+  không trả result thua bot; abort đóng session, watchdog 120 s. Session cleanup idempotent.
+- API adapter nội bộ: `startSession({filePath,allowedRoot,trusted,responseTotalMs})`
+  → `{request(botV1Request),metrics(),close()}`. Production supervisor phải cung cấp contract
+  tương thích và CPU remaining thực, không dùng adapter trusted như attestation.
+  Output `profile:campus-engine-trusted.v1`, `productionReady:false`, result/reason/plyCount,
+  replay engine/metrics/limitations; KHÔNG là DTO public hoặc replay production đầy provenance.
+- Tests Windows/Node v24.18.0/Python local: riêng 15/15 pass, không skip; full suite 138/138 pass,
+  build/diff check exit 0. Baseline install/test/build exit 0 (123 tests); install vẫn 2 high
+  vulnerabilities/cảnh báo esbuild chưa tự audit fix. Logs `data/khoa-k1/runtime-final.json`,
+  `runtime-final-{0..5}.log`. Test Python thực: persistent state/PID, secret absent,
+  partial newline/timeout, stdout/stderr flood, duplicate line/key, crash, sample-vs-sample,
+  deterministic replay. Injected adapter: fault đúng màu, invalid setup/move, cancel/cleanup infra.
+- Demo CLI thực trên `examples/maps/campus-arena.json`: `blue_win/BASE_REACHED/16 plies`,
+  replay verifier `ok:true,finished:true`, exit 0. Lượt đầu CLI sai argv count đã bắt và sửa;
+  lượt cuối chạy lại demo/verifier/full test/build. Output file tạm được dọn sau verify.
+- **Giới hạn thực:** subprocess không sandbox, không đo CPU/RAM, không cgroup freeze/ack,
+  không readiness channel/subreaper/verify-empty. Chỉ bot tin cậy, never public student code.
+  `cpuRemainingMs:30000` trong trusted request là dự kiến, KHÔNG phải measurement.
+  Không giả mạo Linux sandbox pass hoặc sửa worker MVP để chạy Campus.
+- NOT RUN: Linux sandbox/preflight/host pin/benchmark, DB concurrent workers/lease/stale event fencing,
+  GitHub consumer/fetch/cache/GC, Preview deployment, offline bundles/restore/load. Browser không chạy lại
+  checkpoint này vì không sửa frontend; bằng chứng browser K2 phía dưới chỉ áp dụng UI cũ.
+- **Cần Huy cung cấp trước tích hợp K3/K2 persistence:** schema/RPC/DTO thật và reviewed cho repository
+  numeric ID + pinned commit receipt + cutoff, validation job claim/heartbeat/retry/token,
+  immutable round snapshot, accepted-attempt writes (result/event/log/terminal), publication ACL.
+  Báo cáo Huy/Bảo vẫn NOT STARTED khi kiểm tra; không bịa RPC để gọi DB thật.
+- **Không phải blocker từ Huy/Bảo:** Linux sandbox production vẫn là công việc Khoa chưa thực hiện.
+  Cần host/VM sạch không secret, pin runtime/nsjail/seccomp/budget, thử fault suite và quyền vận hành
+  được duyệt trước khi code/exercise isolation. WSL trên máy cá nhân không mặc nhiên là VM thi an toàn.
+  GitHub bounded fetch/hash/cache helper độc lập cũng chưa làm trong milestone runtime này.
+- Điểm dừng theo quy tắc một milestone: runtime trusted foundation đã demo E2E local;
+  Start vẫn chặn, không apply SQL/deploy/push. Bước độc lập kế tiếp có thể làm: bounded GitHub
+  blob fetch/hash helper (mock API), cache pin/GC thuần; không cần đợi Huy để viết test helper,
+  nhưng consumer/RPC chỉ nối sau contract review. Không gọi mọi phần chưa làm là chờ người khác.
+- SHA checkpoint: tra `git log -- docs/handoff/Khoa.md`.
+
+### Checkpoint K2 trước đó
+
 - Checkpoint 24/10/2026 tiếp theo: **K2 pure foundation — READY FOR REVIEW**, chưa persistence/E2E.
   Baseline `dev @ ddc20f3`; người dùng cho phép deploy/browser, nhưng chưa deploy vì thiếu runtime/privacy
   và chưa xác định project Vercel. Không apply SQL remote. K3/K4 vẫn BLOCKED bởi contract/runtime gate.

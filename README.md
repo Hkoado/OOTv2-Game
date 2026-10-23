@@ -1,5 +1,19 @@
 # OOTv2 · Cổng giải đấu bot
 
+## Campus persistent trusted-dev — checkpoint 24/10/2026
+
+Lõi `bot.v1` và demo hai bot mẫu chạy độc lập, **chưa nối worker/DB/Start** và không có sandbox OS.
+Không thay profile/replay MVP hiện có. Chỉ dùng bot mẫu hoặc code nội bộ tin cậy:
+
+```powershell
+node --test tests/campusRuntime.test.js
+node tools/cli/demo-campus-bots.js --trusted-dev examples/maps/campus-arena.json "$env:TEMP/oot-campus-bots-new.json"
+node tools/cli/verify-replay.js "$env:TEMP/oot-campus-bots-new.json"
+```
+
+Output phải chưa tồn tại. Đọc [giới hạn và contract runtime](docs/CAMPUS-TRUSTED-RUNTIME.md)
+trước khi sử dụng; trusted-dev không chứng minh CPU/RAM accounting hoặc an toàn code sinh viên.
+
 ## Thiết lập giải chính thức — checkpoint 23/10/2026
 
 Tạo giải mới theo tuần/tháng/kỳ, roster tối đa 56 đội, cutoff, map chính/dự phòng và dự kiến
