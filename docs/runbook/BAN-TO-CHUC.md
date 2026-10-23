@@ -81,3 +81,4 @@ Trang `#/live` phục vụ các đội thi và khán giả có tài khoản tron
 
 ### C. Khôi phục ván đấu đấu tay / 2 máy (Spectator Recovery)
 - Chế độ phòng chơi đối kháng 2 người qua WebRTC/PeerJS (`usePlayRoom.js`) luôn sẵn sàng độc lập với tournament backend, cho phép trọng tài tổ chức đánh lại ván đấu trực tiếp giữa 2 máy thí sinh khi hệ thống tự động gặp sự cố bất khả kháng.
+

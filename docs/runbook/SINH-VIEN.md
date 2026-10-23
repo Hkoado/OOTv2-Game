@@ -84,3 +84,4 @@ Trong trường hợp mất kết nối Internet hoặc sự cố GitHub diện 
 2. Báo cáo với Giám thị / Ban tổ chức tại phòng thi.
 3. Ban tổ chức sử dụng quyền Quản trị viên để nạp trực tiếp file `bot.py` qua cổng USB Fallback trên Cổng giải đấu.
 4. Giám thị và đội thi cùng ký biên bản xác nhận mốc thời gian và mã băm SHA256 của file nộp.
+

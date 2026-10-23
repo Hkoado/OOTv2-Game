@@ -377,3 +377,4 @@ test('B4 QA: Kịch bản 6 — Bảng điểm chính thức chuẩn DTO Khoa: t
   assert.equal(row.gamePoints, 3.5, 'Điểm ván đúng 3.5');
   assert.equal(row.rank, 1, 'Hạng 1');
 });
+
