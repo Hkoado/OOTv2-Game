@@ -44,4 +44,17 @@ test('Postgres smoke tests are transactional and test actual client roles', () =
   assert.match(smoke, /SET LOCAL ROLE authenticated;/);
   assert.match(smoke, /rejected <> 11/);
   assert.doesNotMatch(smoke, /\bCOMMIT\s*;/);
+test('map snapshot migration freezes map per match and keeps RPC private', () => {
+  const sql = readFileSync(new URL('../supabase/migrations/20261024120000_mvp_match_map_snapshot.sql', import.meta.url), 'utf8');
+  assert.match(sql, /ALTER TABLE public\.mvp_matches ADD COLUMN IF NOT EXISTS map_json text/);
+  assert.match(sql, /ALTER TABLE public\.mvp_matches ADD COLUMN IF NOT EXISTS map_hash text/);
+  assert.match(sql, /CREATE OR REPLACE FUNCTION public\.mvp_stage_commit/);
+  assert.match(sql, /THEN RAISE EXCEPTION 'bad_game_map'/);
+  assert.match(sql, /\^\[0-9a-f\]\{64\}\$/);
+  assert.match(sql, /INSERT INTO public\.mvp_matches\([^)]*map_json,map_hash\)/s);
+  assert.match(sql, /REVOKE ALL ON FUNCTION public\.mvp_stage_commit\(uuid,text,text,jsonb,jsonb\) FROM PUBLIC,anon,authenticated/);
+  assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.mvp_stage_commit\(uuid,text,text,jsonb,jsonb\) TO service_role/);
+  assert.doesNotMatch(sql, /DROP TABLE|DROP COLUMN|SECURITY DEFINER/i);
+});
+
 });

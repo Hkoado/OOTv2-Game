@@ -4,6 +4,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { rpc, rows, update, health } from './client.js';
 import { materialize } from './artifacts.js';
 import { runMatch } from '../judge/matchRunner.js';
+import { resolveMatchMap } from '../contracts/mapSnapshot.js';
 import { advanceTournament } from './tournaments.js';
 import { recordSharedMatchLog } from './judgeMonitor.js';
 import { validateBotFile } from '../services/botValidation.js';
@@ -62,6 +63,18 @@ export async function validatePendingSubmissions({ limit = 4 } = {}) {
   return done;
 }
 
+/**
+ * Map dùng cho MỘT ván của runtime shared: ưu tiên snapshot ghi trên `mvp_matches`;
+ * ván tạo trước migration (`map_json` NULL) dùng map hiện tại của giải.
+ * Trả `{ map, hash, source, error }`; `error` khác null nghĩa là KHÔNG được chạy bot.
+ */
+export async function matchMapFor(match) {
+  const eventMapJson = match.map_json
+    ? null
+    : ((await rows('tournaments', `id=eq.${match.tournament_id}&select=map_json`))[0]?.map_json ?? null);
+  return resolveMatchMap({ map_json: match.map_json, map_hash: match.map_hash, eventMapJson });
+}
+
 export async function processSharedMatch({workerId,run=runMatch,verbose=true}) {
   const match=await rpc('mvp_claim',{p_worker:workerId});
   if (!match) {
@@ -77,6 +90,9 @@ export async function processSharedMatch({workerId,run=runMatch,verbose=true}) {
   };
   const interval=setInterval(beat,10000);interval.unref();
   try {
+    // Snapshot hỏng hoặc hash lệch => lỗi hạ tầng, KHÔNG chạy bot với map khác.
+    const mapInfo = await matchMapFor(match);
+    if (mapInfo.error) throw new Error(`map_snapshot: ${mapInfo.error}`);
     const entries=await rows('tournament_entries',`tournament_id=eq.${match.tournament_id}`);
     const red=entries.find((e)=>e.id===match.red_entry_id),blue=entries.find((e)=>e.id===match.blue_entry_id);
     if (!red?.submission_id||!blue?.submission_id) throw new Error('missing_snapshot');
@@ -90,7 +106,7 @@ export async function processSharedMatch({workerId,run=runMatch,verbose=true}) {
       else if (event?.kind==='move') live.push(()=>recordLiveMove(match.id,event));
     };
     const onBotOutput=(chunk)=>live.push(()=>recordBotOutput(match.id,chunk.side,chunk.stream,chunk.text));
-    const outcome=await run({matchId:match.id,seed:Number(match.seed),red:{name:teams.find((p)=>p.id===red.participant_id).name,filePath:locals[0].file},blue:{name:teams.find((p)=>p.id===blue.participant_id).name,filePath:locals[1].file},onLive,onBotOutput});
+    const outcome=await run({matchId:match.id,seed:Number(match.seed),map:mapInfo.map,red:{name:teams.find((p)=>p.id===red.participant_id).name,filePath:locals[0].file},blue:{name:teams.find((p)=>p.id===blue.participant_id).name,filePath:locals[1].file},onLive,onBotOutput});
     await live.flush();
     if (outcome.reason==='internal_error') throw new Error('judge_infrastructure');
     await recordLiveTerminal(match.id,{result:outcome.result,reason:outcome.reason,ply_count:outcome.ply_count}).catch(()=>{});
@@ -112,10 +128,10 @@ export async function processSharedMatch({workerId,run=runMatch,verbose=true}) {
     }
     if (verbose) console.log(`[shared-worker] ${match.id}: ${recorded?'accepted':'stale lease'}`);
     return {processed:true,recorded,matchId:match.id};
-  } catch {
+  } catch (error) {
     // Infrastructure/storage failures are retries, never bot forfeits or draws.
     await rpc('mvp_release',{p_id:match.id,p_token:token,p_error:'worker_infrastructure'}).catch(()=>{});
-    if (verbose) console.error(`[shared-worker] ${match.id}: infrastructure failure; lease released or expires`);
+    if (verbose) console.error(`[shared-worker] ${match.id}: infrastructure failure (${String(error?.message||error).slice(0,200)}); lease released or expires`);
     return {processed:true,recorded:false,reason:'infrastructure'};
   } finally {
     clearInterval(interval);if(heartbeatInFlight)await heartbeatInFlight;

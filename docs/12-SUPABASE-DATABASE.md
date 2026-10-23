@@ -28,6 +28,21 @@ Migration DDL dùng kết nối quản trị đã xác thực.
   (`server/index.js`, `server/worker.js`); không có driver dự phòng.
 
 
+## Map snapshot theo ván (24/10/2026)
+
+- Migration **`20261024120000_mvp_match_map_snapshot.sql`** thêm `mvp_matches.map_json` (MapV1 đã
+  chuẩn hoá) và `mvp_matches.map_hash` (hash canonical bỏ `id`/`revision`), rồi thay
+  `mvp_stage_commit` để mọi ván mới bắt buộc có snapshot hợp lệ (`bad_game_map` nếu thiếu/sai dạng).
+  **Phải chạy migration này trước khi bắt đầu giải mới**; chưa chạy thì API trả lỗi RPC vì cột chưa có.
+- `server/shared/tournaments.js` chốt snapshot ngay khi lên lịch (`seriesGames`) cho cả vòng bảng,
+  bán kết và chung kết; sửa map của giải sau đó không làm lệch ván đã tạo.
+- `server/shared/worker.js` đọc snapshot của ván, tính lại hash (`server/contracts/mapSnapshot.js`);
+  snapshot hỏng hoặc hash lệch ⇒ lỗi hạ tầng: release lease, **không chạy bot** với map khác.
+  Ván tạo trước migration (`NULL`) dùng map hiện tại của giải.
+- `runMatch({ map })` gửi cùng `map`/`map_hash` trong request `setup`, `move` và ghi vào `replay_json`.
+- API danh sách trận trả thêm `map_hash` để đối soát; trường này vẫn không lộ source bot hay hash bài.
+
+
 ## Runtime MVP dùng chung — 22/10/2026
 
 - Migration `20261022125205_shared_mvp_runtime_tables` và

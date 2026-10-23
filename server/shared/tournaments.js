@@ -5,6 +5,7 @@ import { normalizeMap, EMPTY_MAP } from '../../src/game/maps.js';
 import { randomSeed, deriveSeed } from '../judge/rng.js';
 import { GROUP_SEEDS, TIE_BREAKERS } from '../lib/tournamentFormat.js';
 import { setupFor, saveOfficialSetup, officialView } from './officialSetup.js';
+import { matchMapSnapshot } from '../contracts/mapSnapshot.js';
 
 const fail = (status,code,message) => new HttpError(status,code,message);
 const stageStatus = {group_running:'group',semifinal_running:'semifinal',final_running:'final'};
@@ -64,7 +65,19 @@ export async function updateTournamentDraft(id,{participantIds,map,competition,e
   return getTournament(id);
 }
 function seriesGames(event,stage,series,a,b) {
-  return [[a,b],[b,a]].map(([red,blue],i)=>({id:randomUUID(),stage,series_id:series,game_no:i+1,red_entry_id:red.id,blue_entry_id:blue.id,seed:deriveSeed(event.seed,stage,series,i+1)}));
+  // Snapshot map chốt ngay khi lên lịch: sửa map của giải sau đó không làm lệch ván đã tạo.
+  const snapshot = eventSnapshot(event);
+  return [[a,b],[b,a]].map(([red,blue],i)=>({id:randomUUID(),stage,series_id:series,game_no:i+1,red_entry_id:red.id,blue_entry_id:blue.id,seed:deriveSeed(event.seed,stage,series,i+1),map_json:snapshot.json,map_hash:snapshot.hash}));
+}
+/** Map đã lưu của giải; giải cũ không có `map_json` => bàn mở MVP. */
+function eventMapOf(event) {
+  if (!event||!event.map_json) return undefined;
+  try { return JSON.parse(event.map_json); } catch { throw fail(409,'bad_event_map','Map của giải không đọc được.'); }
+}
+/** Snapshot chuẩn hoá + hash; map hỏng thì chặn lên lịch thay vì tạo ván thiếu dữ liệu. */
+function eventSnapshot(event) {
+  try { return matchMapSnapshot(eventMapOf(event)); }
+  catch { throw fail(409,'bad_event_map','Map của giải không hợp lệ, không thể lên lịch trận.'); }
 }
 export async function startTournament(id) {
   const {event,entries} = await loadEvent(id);
@@ -122,7 +135,7 @@ export async function computeBracket(id) {
 export async function listMatches(id,stage) {
   const data=await loadEvent(id),entries=new Map(data.entries.map((e)=>[e.id,e]));
   const side=(id)=>{const e=entries.get(id);return {entry_id:id,participant_id:e.participant_id,name:e.participant_name,seed_order:e.seed_order};};
-  return data.matches.filter((m)=>!stage||m.stage===stage).map((m)=>({id:m.id,tournament_id:id,stage:m.stage,series_id:m.series_id,game_no:m.game_no,seed:Number(m.seed),status:m.status,result:m.result,reason:m.reason,ply_count:m.ply_count,started_at:m.started_at,finished_at:m.finished_at,red:side(m.red_entry_id),blue:side(m.blue_entry_id)}));
+  return data.matches.filter((m)=>!stage||m.stage===stage).map((m)=>({id:m.id,tournament_id:id,stage:m.stage,series_id:m.series_id,game_no:m.game_no,seed:Number(m.seed),status:m.status,result:m.result,reason:m.reason,ply_count:m.ply_count,map_hash:m.map_hash||null,started_at:m.started_at,finished_at:m.finished_at,red:side(m.red_entry_id),blue:side(m.blue_entry_id)}));
 }
 export async function advanceTournament(id) {
   const data=await loadEvent(id),{event,entries,matches}=data,stage=stageStatus[event.status];

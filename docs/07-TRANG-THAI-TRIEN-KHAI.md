@@ -286,3 +286,17 @@ Build pass; regression 70/70, kit tests 4/4 và adapter tests 5/5 (5 adapter tes
 Token generator: 44 cặp màu. Edge smoke: 81 ô, hai theme, setup, move, bàn phím, responsive desktop/mobile.
 Chưa nghiệm thu lại P2P hai máy hoặc toàn bộ màn admin/replay bằng trình duyệt.
 Xem [bàn giao UI](11-TICH-HOP-UI-KIT.md); đây không phải hoàn tất M2–M7 Campus.
+
+### Map snapshot theo ván — runtime shared (24/10/2026)
+
+- `mvp_matches` có thêm `map_json` + `map_hash` (migration `20261024120000_mvp_match_map_snapshot.sql`);
+  `mvp_stage_commit` chặn ván không có snapshot hợp lệ (`bad_game_map`).
+- Snapshot chốt lúc lên lịch trận cho cả 30 ván (vòng bảng, bán kết, chung kết); sửa map của giải sau
+  đó không làm lệch ván đã tạo. Ván cũ `NULL` dùng map hiện tại của giải.
+- `runMatch({ map })` dùng **cùng** `map`/`map_hash` cho setup, move và replay; worker tính lại hash và
+  coi snapshot hỏng/lệch hash là lỗi hạ tầng (release lease, không chạy bot) thay vì ghi kết quả.
+- Test: `node --test tests/matchMapSnapshot.test.js` 4/4 pass. Xem
+  [Supabase database](12-SUPABASE-DATABASE.md) cho chi tiết migration.
+- Giới hạn: runner MVP vẫn 200 plies và chưa chạy map có ô cản (`map_runner_unavailable`); 400 plies là
+  profile Campus (`CAMPUS_MAX_PLIES`, đã có test riêng).
+
