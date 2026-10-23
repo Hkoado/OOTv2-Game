@@ -55,6 +55,34 @@
 
 `status âˆˆ queued|leased|running|completed|bot_fault|infra_fault|canceled`; DB cÃ³ thÃªm
 `lease_token/lease_until` nhÆ°ng view loáº¡i bá».
+### Ví dụ luồng gọi API cho B2
+
+```text
+# 1) Đội đăng ký repo (team session + header x-csrf-token)
+PUT /api/local/events/<eventId>/repository
+    {"repository":"https://github.com/team-delta/ootv2-bot","branch":"main"}
+→ 200 {"connection":{...,"approved":false,"status":"pending_approval"}}
+
+# 2) Admin duyệt (admin session)
+PUT /api/local/events/<eventId>/repository
+    {"team":"<participantId>","repository":"https://github.com/team-delta/ootv2-bot","branch":"main"}
+→ 200 {"connection":{...,"approved":true,"status":"approved"}}
+
+# 3) Đội yêu cầu đồng bộ (gọi lại cùng SHA an toàn: created=false)
+POST /api/local/events/<eventId>/submissions/from-github   {}
+→ 202 {"created":true,
+       "job":{"id":"...","status":"queued","attempt":0},
+       "receipt":{"id":"...","status":"resolving","commit_sha":"<40 hex>","repo_id":987654321,...}}
+
+# 4) Poll trạng thái
+GET /api/local/repo-sync-jobs/<job.id>                    → {"job":{...},"receipt":{...}}
+GET /api/local/events/<eventId>/submissions/from-github   → {"event":{...},"connection":{...},"receipt":{...}}
+```
+
+Lưu ý UI: `status` chỉ sang `fetching/checking/valid/invalid` sau khi worker H2 xử lý job; hiện dừng ở
+`resolving` cho tới khi H2 xong.
+
+
 
 ### MÃ£ lá»—i API (map tá»« envelope RPC, khÃ´ng lá»™ SQL)
 
@@ -64,6 +92,10 @@
 `github_auth_failed` / `github_forbidden` / `github_bad_response` (502).
 
 ## Schema / RPC (migration `20261024130000_github_intake.sql`, additive, CHÆ¯A apply)
+
+- **Thứ tự áp dụng**: sau `20261022125205_shared_mvp_runtime_tables` (bảng `mvp_*`) và
+  `20261023160000_official_setup` (RPC đọc `mvp_official_setups.config.cutoff`); migration này không sửa
+  bảng cũ, chỉ thêm 3 bảng + 2 RPC.
 
 - `mvp_repo_connections`: unique `(event_id, team_id)` + unique `(event_id, repo_id)` (má»™t repo/Ä‘á»™i trong
   giáº£i), `approved boolean`, `approved_by`, check `repository` lÃ  https://github.com/..., `file_path='bot.py'`.
