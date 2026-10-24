@@ -2,7 +2,7 @@
  * create-admin.js — Tạo tài khoản admin đầu tiên trên Supabase (một lần).
  *
  * Không ghi đè, không đổi mật khẩu tài khoản đã có. Mật khẩu sinh ngẫu nhiên và
- * lưu vào `data/local-admin-credentials.txt` (không commit, không chia sẻ).
+ * lưu vào `data/primary-admin-credentials.txt` (không commit, không chia sẻ).
  *
  * Chạy: `node tools/cli/create-admin.js` sau khi đã điền SUPABASE_* trong `.env`.
  */
@@ -12,19 +12,29 @@ import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 
 import config from '../../server/config.js';
-import { assertSharedConfig } from '../../server/shared/client.js';
+import { assertSharedConfig, projectRefOf } from '../../server/shared/client.js';
 import * as accounts from '../../server/shared/accounts.js';
+
+const expectedPrimaryRef = 'ftzockzolisecnyhlwej';
+const primaryRef = projectRefOf(process.env.SUPABASE_URL);
+if (!primaryRef || primaryRef !== expectedPrimaryRef) {
+  throw new Error(`Refusing to create admin: .env must target the primary Supabase project ${expectedPrimaryRef}.`);
+}
 
 assertSharedConfig();
 
 if ((await accounts.listAccounts()).some((account) => account.role === 'admin')) {
   console.log('Admin đã tồn tại. Không thay mật khẩu hoặc ghi đè tài khoản.');
 } else {
-  const file = path.join(config.dataDir, 'local-admin-credentials.txt');
+  const file = path.join(config.dataDir, 'primary-admin-credentials.txt');
   if (existsSync(file)) throw new Error('File biên nhận admin đã tồn tại; kiểm tra thủ công trước khi tiếp tục.');
   const password = randomBytes(18).toString('base64url');
   await accounts.createAccount({ username: 'admin', password, role: 'admin' });
   mkdirSync(config.dataDir, { recursive: true });
-  writeFileSync(file, `Local trusted-only OOTv2\nUsername: admin\nPassword: ${password}\n`, { flag: 'wx', mode: 0o600 });
+  try {
+    writeFileSync(file, `Local trusted-only OOTv2\nUsername: admin\nPassword: ${password}\n`, { flag: 'wx', mode: 0o600 });
+  } catch (error) {
+    throw new Error(`Admin was created in primary Supabase (${primaryRef}), but credentials could not be saved locally. Do not rerun; reset its password via the approved operator flow.`, { cause: error });
+  }
   console.log(`Đã tạo admin. Thông tin đăng nhập lưu riêng tại ${file}. Không commit hoặc chia sẻ công khai.`);
 }

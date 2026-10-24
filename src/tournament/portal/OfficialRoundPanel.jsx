@@ -488,7 +488,7 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
                           <button
                             type="button"
-                            className="tt-btn tt-btn--sm"
+                            className="tt-btn tt-btn--info tt-btn--sm"
                             onClick={() => setViewerModal({ roundPk: round.roundId, gameKey: progress.pending.gameKey, game: progress.pending })}
                           >
                             <Eye size={12} style={{ marginRight: '3px' }} />
@@ -516,7 +516,7 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
                           <button
                             type="button"
-                            className="tt-btn tt-btn--sm"
+                            className="tt-btn tt-btn--info tt-btn--sm"
                             onClick={() => setViewerModal({ roundPk: round.roundId, gameKey: round.next.gameKey, game: round.next })}
                           >
                             <Eye size={12} style={{ marginRight: '3px' }} />
@@ -541,7 +541,7 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                   <div className="tt-form__actions" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                     <button
                       type="button"
-                      className="tt-btn tt-btn--primary"
+                      className="tt-btn tt-btn--success"
                       onClick={handlePublishNext}
                       disabled={publishing || round.frozen || busy?.event}
                     >
@@ -569,7 +569,7 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                   <div className="tt-form__actions" style={{ display: 'flex', gap: '0.5rem' }}>
                     <button
                       type="button"
-                      className="tt-btn"
+                      className="tt-btn tt-btn--info"
                       onClick={() => handleSync()}
                       disabled={!cutoffPassed || syncing || opening}
                     >
@@ -578,7 +578,7 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                     </button>
                     <button
                       type="button"
-                      className="tt-btn tt-btn--primary"
+                      className="tt-btn tt-btn--success"
                       onClick={handleOpen}
                       disabled={!canOpen}
                     >
@@ -622,7 +622,7 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                       <div style={{ marginTop: '0.25rem' }}>
                         <button
                           type="button"
-                          className="tt-btn tt-btn--sm"
+                          className="tt-btn tt-btn--info tt-btn--sm"
                           onClick={() => {
                             const pendingTeamIds = (cutoffStatus.teams || [])
                               .filter((t) => t.status === 'pending')
@@ -688,7 +688,7 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                           <div style={{ display: 'flex', gap: '0.25rem' }}>
                             <button
                               type="button"
-                              className="tt-btn tt-btn--sm"
+                              className="tt-btn tt-btn--warning tt-btn--sm"
                               onClick={() => {
                                 setJobModal({ type: 'requeue', jobId: fJob.gameKey, gameKey: fJob.gameKey });
                                 setJobReason('');
@@ -830,7 +830,7 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
                           <button
                             type="button"
-                            className="tt-btn tt-btn--sm"
+                            className="tt-btn tt-btn--info tt-btn--sm"
                             onClick={() => setViewerModal({ roundPk: bracket.next.round_id, gameKey: `${bracket.next.match_id}:main:1`, game: bracket.next })}
                           >
                             <Eye size={12} style={{ marginRight: '3px' }} />
@@ -849,7 +849,7 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                     <div className="tt-form__actions">
                       <button
                         type="button"
-                        className="tt-btn tt-btn--primary"
+                        className="tt-btn tt-btn--success"
                         onClick={handleOpenBracketNext}
                         disabled={openingBracket || bracket.complete || !!bracket.waiting || busy?.event}
                       >
@@ -890,7 +890,7 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                             <div style={{ display: 'flex', gap: '0.25rem' }}>
                               <button
                                 type="button"
-                                className="tt-btn tt-btn--sm tt-btn--ghost"
+                                className="tt-btn tt-btn--info tt-btn--sm"
                                 onClick={() => setViewerModal({ roundPk: s.round_id, gameKey: `${s.match_id}:main:1`, game: s })}
                                 title="Xem luồng phát sóng trực tiếp"
                               >
@@ -1045,7 +1045,7 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                           <td>
                             <button
                               type="button"
-                              className="tt-btn tt-btn--sm"
+                              className="tt-btn tt-btn--info tt-btn--sm"
                               onClick={() =>
                                 setViewerModal({
                                   roundPk: publishedGames.round_pk,
@@ -1110,7 +1110,7 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                 </button>
                 <button
                   type="submit"
-                  className={`tt-btn ${jobModal.type === 'cancel' ? 'tt-btn--danger' : 'tt-btn--primary'}`}
+                  className={`tt-btn ${jobModal.type === 'cancel' ? 'tt-btn--danger' : 'tt-btn--warning'}`}
                   disabled={submittingJobAction}
                 >
                   {submittingJobAction ? 'Đang gửi…' : jobModal.type === 'cancel' ? 'Xác nhận Hủy' : 'Xác nhận Chấm lại'}

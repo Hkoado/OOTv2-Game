@@ -157,7 +157,7 @@ function MatchTable({
               <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
                 <button
                   type="button"
-                  className="tt-btn tt-btn--ghost tt-btn--sm"
+                  className="tt-btn tt-btn--info tt-btn--sm"
                   onClick={() => onOpenReplay(match.id)}
                   disabled={match.status !== 'finished'}
                   title={match.status === 'finished' ? 'Xem lại ván đấu' : 'Replay chỉ mở khi ván đã kết thúc'}
@@ -181,7 +181,7 @@ function MatchTable({
                 {isAdmin && broadcast && broadcast.phase === 'waiting' && (
                   <button
                     type="button"
-                    className="tt-btn tt-btn--ghost tt-btn--sm"
+                    className="tt-btn tt-btn--danger tt-btn--sm"
                     onClick={() => onCancelBroadcast(match.id)}
                     title="Hủy lịch phát sóng"
                   >
@@ -345,7 +345,7 @@ export default function EventDetailPage({
             <ConfirmAction
               label="Bắt đầu giải"
               confirmLabel="Khóa bài & sinh lịch"
-              tone="primary"
+              tone="success"
               busy={busy?.start}
               onConfirm={() => actions.startEvent(event.id)}
             />
@@ -364,7 +364,7 @@ export default function EventDetailPage({
           {event.status === 'draft' && isAdmin && <DraftEventEditor key={event.id} event={event} teams={teams} actions={actions} busy={busy} />}
       {event.status === 'draft' && <Panel title="Nội dung thư mục giải"><p>{event.entries.length}/8 đội · {event.map.id}</p><p className="tt-muted">Chỉ xếp lịch khi đủ 8 đội có bot hợp lệ và map được worker hỗ trợ.</p></Panel>}
       {event.status !== 'draft' && <Panel title="Map thi đấu"><MapPreview map={event.map} /></Panel>}
-      <Panel title="Tiến độ giải" subtitle={isAdmin ? 'Worker chấm tuần tự; kết quả và ván phát được kiểm soát theo lịch.' : 'Kết quả cập nhật theo lịch phát sóng của BTC.'}>
+        <Panel title="Tiến độ giải">
         <Progress value={eventProgress({ match_total: event.match_counts?.total, match_finished: event.match_counts?.finished })} label={`${event.match_counts?.finished ?? 0}/${event.match_counts?.total ?? 0} ván đã chấm`} />
         <div className="tt-inline-facts">
           <span><Swords size={15} aria-hidden="true" />Vòng bảng {summary.group.finished}/{summary.group.total}</span>

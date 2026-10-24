@@ -50,17 +50,13 @@ export default function TeamProfilePage({ account, actions, busy }) {
         <div>
           <p className="tt-eyebrow">Hồ sơ đội</p>
           <h1 className="tt-page-title">{account.name}</h1>
-          <p className="tt-page-lead">
-            Một đội dùng một tài khoản. Tên đội do BTC cấp; thành viên và liên hệ chỉ là thông tin hồ sơ,
-            không phải tài khoản đăng nhập.
-          </p>
         </div>
       </header>
 
       <div className="tt-grid tt-grid--2 tt-grid--form">
-        <Panel title="Thông tin đội" subtitle="BTC dùng thông tin này khi cần liên hệ hoặc xác minh bài nộp.">
+        <Panel title="Thông tin đội">
           <form className="tt-form" onSubmit={handleSubmit}>
-            <Field label="Thành viên" hint={`Mỗi dòng một người. Hiện có ${memberCount} thành viên.`}>
+            <Field label={`Thành viên${memberCount ? ` · ${memberCount}` : ''}`}>
               <textarea
                 name="members"
                 rows={5}
@@ -70,7 +66,7 @@ export default function TeamProfilePage({ account, actions, busy }) {
                 placeholder={'Nguyễn Văn A — trưởng nhóm\nTrần Thị B — bot'}
               />
             </Field>
-            <Field label="Liên hệ" hint="Email hoặc kênh chat BTC có thể phản hồi nhanh.">
+            <Field label="Liên hệ">
               <input
                 name="contact"
                 maxLength={300}
@@ -79,7 +75,7 @@ export default function TeamProfilePage({ account, actions, busy }) {
                 placeholder="email@example.com hoặc Discord/Telegram"
               />
             </Field>
-            <Field label="Repository GitHub" hint="Repository mặc định của đội trên GitHub." error={repoError}>
+            <Field label="Repository GitHub" error={repoError}>
               <input
                 name="repository"
                 type="url"
@@ -90,7 +86,7 @@ export default function TeamProfilePage({ account, actions, busy }) {
                 spellCheck={false}
               />
             </Field>
-            <Field label="Branch" hint="Nhánh mặc định (ví dụ: main).">
+            <Field label="Branch">
               <input
                 name="branch"
                 maxLength={300}
@@ -101,7 +97,7 @@ export default function TeamProfilePage({ account, actions, busy }) {
               />
             </Field>
             <div className="tt-form__actions">
-              <button type="submit" className="tt-btn tt-btn--primary" disabled={saving || Boolean(repoError)}>
+              <button type="submit" className="tt-btn tt-btn--success" disabled={saving || Boolean(repoError)}>
                 <Save size={16} aria-hidden="true" />
                 {saving ? 'Đang lưu…' : 'Lưu hồ sơ'}
               </button>
@@ -117,7 +113,6 @@ export default function TeamProfilePage({ account, actions, busy }) {
               <div><dt>Tên đội</dt><dd>{account.name}</dd></div>
               <div><dt>Mã đội</dt><dd><code>{String(account.participant_id || '').slice(0, 8)}</code></dd></div>
             </dl>
-            <p className="tt-muted">Cần đổi tên đội hoặc cấp lại mật khẩu? Liên hệ BTC; đội không tự đổi được.</p>
           </Panel>
 
           <Panel title="GitHub & đồng bộ">

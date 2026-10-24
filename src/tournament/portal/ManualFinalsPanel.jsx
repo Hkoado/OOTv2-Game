@@ -385,7 +385,7 @@ export default function ManualFinalsPanel({ event, teams, actions, busy, admin, 
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <button
               type="button"
-              className="tt-btn tt-btn--sm"
+              className="tt-btn tt-btn--success tt-btn--sm"
               onClick={() => setShowCreateModal(true)}
               disabled={actionBusy}
             >
@@ -431,7 +431,7 @@ export default function ManualFinalsPanel({ event, teams, actions, busy, admin, 
                 {currentEvent.status === 'draft' && (
                   <button
                     type="button"
-                    className="tt-btn tt-btn--primary tt-btn--sm"
+                    className="tt-btn tt-btn--success tt-btn--sm"
                     onClick={() => handleStatusChange('intake')}
                     disabled={actionBusy}
                   >
@@ -442,7 +442,7 @@ export default function ManualFinalsPanel({ event, teams, actions, busy, admin, 
                 {currentEvent.status === 'intake' && (
                   <button
                     type="button"
-                    className="tt-btn tt-btn--primary tt-btn--sm"
+                    className="tt-btn tt-btn--warning tt-btn--sm"
                     onClick={() => handleStatusChange('locked')}
                     disabled={actionBusy || (readiness && !readiness.can_lock_round)}
                     title={readiness && !readiness.can_lock_round ? 'Khóa tất cả các đội trước khi khóa vòng' : ''}
@@ -454,7 +454,7 @@ export default function ManualFinalsPanel({ event, teams, actions, busy, admin, 
                 {currentEvent.status === 'locked' && (
                   <button
                     type="button"
-                    className="tt-btn tt-btn--ghost tt-btn--sm"
+                    className="tt-btn tt-btn--warning tt-btn--sm"
                     onClick={() => {
                       if (window.confirm('Bạn có chắc muốn đóng đợt chung kết này?')) {
                         handleStatusChange('closed');
@@ -473,7 +473,7 @@ export default function ManualFinalsPanel({ event, teams, actions, busy, admin, 
             <p className="tt-muted">Chưa có đợt chung kết thủ công nào được tạo.</p>
             <button
               type="button"
-              className="tt-btn tt-btn--primary"
+              className="tt-btn tt-btn--success"
               onClick={() => setShowCreateModal(true)}
             >
               <Plus size={16} aria-hidden="true" />
@@ -562,7 +562,7 @@ export default function ManualFinalsPanel({ event, teams, actions, busy, admin, 
                 <div className="tt-form__actions" style={{ marginTop: '0.75rem' }}>
                   <button
                     type="submit"
-                    className="tt-btn tt-btn--primary"
+                    className="tt-btn tt-btn--success"
                     disabled={actionBusy || !uploadTeamId || !selectedFile}
                   >
                     <UploadCloud size={16} aria-hidden="true" />
@@ -604,7 +604,7 @@ export default function ManualFinalsPanel({ event, teams, actions, busy, admin, 
                         ) : (
                           <button
                             type="button"
-                            className="tt-btn tt-btn--ghost tt-btn--sm"
+                            className="tt-btn tt-btn--success tt-btn--sm"
                             onClick={() => handleSelectSubmission(sub.id)}
                             disabled={actionBusy || sub.status !== 'valid' || sub.locked || currentEvent.status !== 'intake'}
                           >
@@ -618,7 +618,7 @@ export default function ManualFinalsPanel({ event, teams, actions, busy, admin, 
                         ) : (
                           <button
                             type="button"
-                            className="tt-btn tt-btn--ghost tt-btn--sm"
+                            className="tt-btn tt-btn--warning tt-btn--sm"
                             onClick={() => handleLockTeam(sub.team_id)}
                             disabled={actionBusy || !sub.selected || sub.status !== 'valid' || currentEvent.status !== 'intake'}
                           >
@@ -716,7 +716,7 @@ export default function ManualFinalsPanel({ event, teams, actions, busy, admin, 
                 <div className="tt-form__actions" style={{ marginTop: '0.75rem' }}>
                   <button
                     type="submit"
-                    className="tt-btn tt-btn--primary"
+                    className="tt-btn tt-btn--success"
                     disabled={actionBusy || !redTeamId || !blueTeamId || redTeamId === blueTeamId}
                   >
                     <Play size={16} aria-hidden="true" />
@@ -760,7 +760,7 @@ export default function ManualFinalsPanel({ event, teams, actions, busy, admin, 
                         {m.replay_available && (
                           <button
                             type="button"
-                            className="tt-btn tt-btn--ghost tt-btn--sm"
+                            className="tt-btn tt-btn--info tt-btn--sm"
                             onClick={() => handleOpenReplay(m.id)}
                           >
                             <Eye size={14} aria-hidden="true" />
@@ -771,7 +771,7 @@ export default function ManualFinalsPanel({ event, teams, actions, busy, admin, 
                         {m.can_cancel && (
                           <button
                             type="button"
-                            className="tt-btn tt-btn--ghost tt-btn--sm"
+                            className="tt-btn tt-btn--danger tt-btn--sm"
                             onClick={() => setAuditDialog({ type: 'cancel', matchId: m.id })}
                             disabled={actionBusy}
                           >
@@ -783,7 +783,7 @@ export default function ManualFinalsPanel({ event, teams, actions, busy, admin, 
                         {m.can_rerun && (
                           <button
                             type="button"
-                            className="tt-btn tt-btn--danger tt-btn--ghost tt-btn--sm"
+                            className="tt-btn tt-btn--warning tt-btn--sm"
                             onClick={() => setAuditDialog({ type: 'rerun', matchId: m.id })}
                             disabled={actionBusy}
                           >
@@ -890,7 +890,7 @@ export default function ManualFinalsPanel({ event, teams, actions, busy, admin, 
                 </button>
                 <button
                   type="submit"
-                  className="tt-btn tt-btn--primary"
+                  className="tt-btn tt-btn--success"
                   disabled={actionBusy || !newName.trim()}
                 >
                   {actionBusy ? 'Đang tạo…' : 'Xác nhận tạo đợt'}

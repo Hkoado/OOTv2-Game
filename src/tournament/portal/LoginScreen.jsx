@@ -11,8 +11,8 @@ import { Alert, Field } from './TournamentUi.jsx';
 
 const STATUS_COPY = {
   checking: { text: 'Đang kiểm tra máy chủ…', tone: 'checking', icon: Loader2 },
-  online: { text: 'API local sẵn sàng', tone: 'online', icon: Wifi },
-  offline: { text: 'Chưa kết nối được API local', tone: 'offline', icon: WifiOff },
+  online: { text: 'Hệ thống sẵn sàng', tone: 'online', icon: Wifi },
+  offline: { text: 'Không thể kết nối máy chủ', tone: 'offline', icon: WifiOff },
 };
 
 export default function LoginScreen({
@@ -49,7 +49,7 @@ export default function LoginScreen({
           <header className="tt-login__top">
             <div className="tt-brand">
               <span className="tt-brand__mark"><img src="/logo.png" alt="OOTv2" /></span>
-              <span className="tt-brand__text"><strong>OOTv2</strong><span>Bot League</span></span>
+              <span className="tt-brand__text"><strong>OTT-v2-T5</strong><span className="tt-brand__tagline">UI em thông cảm cho trường</span></span>
             </div>
             <button
               type="button"
@@ -61,13 +61,10 @@ export default function LoginScreen({
             </button>
           </header>
 
-          <p className="tt-eyebrow">Giải đấu bot · Oẳn Tù Tì 9×9</p>
+          <p className="tt-eyebrow">UET coding tournament</p>
           <h1 id="tt-login-title" className="tt-login__title">
-            Viết bot. Vào bảng.<br />Đấu bằng thuật toán.
+            Giải Oẳn Tù Tì UET mở rộng
           </h1>
-          <p className="tt-login__lead">
-            Đăng nhập tài khoản đội hoặc ban tổ chức để vào cổng giải đấu, nộp bài bot và theo dõi các trận đấu trực tiếp.
-          </p>
 
           <div className="tt-login__board"><GameBoard pieces={previewState.pieces} map={previewMap} title="Bàn luyện tập" readOnly /></div>
           <div className="tt-login__choices">
@@ -83,13 +80,9 @@ export default function LoginScreen({
 
         <section className="tt-login__card" aria-labelledby="tt-login-form-title">
           <div className="tt-login__card-head">
-            <span className="tt-eyebrow">Khu vực nội bộ</span>
-            <span className="tt-login__pill">Local · MVP</span>
+            <span className="tt-eyebrow">UET coding tournament</span>
           </div>
           <h2 id="tt-login-form-title" className="tt-login__card-title">Đăng nhập</h2>
-          <p className="tt-login__card-sub">
-            Mỗi đội dùng một tài khoản do BTC cấp. Không tự đăng ký, không dùng chung tài khoản.
-          </p>
 
           {error && <Alert tone="danger" title="Không đăng nhập được">{error}</Alert>}
           {notice && <Alert tone="success">{notice}</Alert>}
@@ -136,26 +129,15 @@ export default function LoginScreen({
                 onChange={(event) => setRemember(event.target.checked)}
                 disabled={busy}
               />
-              <span>
-                <strong>Ghi nhớ tài khoản trên máy này</strong>
-                <span className="tt-small tt-muted">
-                  Chỉ lưu tên đăng nhập (không lưu mật khẩu); phiên đăng nhập giữ tới 30 ngày.
-                </span>
-              </span>
+              <span>Nhớ mật khẩu</span>
             </label>
-            <button type="submit" className="tt-btn tt-btn--primary tt-btn--block" disabled={busy}>
+            <button type="submit" className="tt-btn tt-btn--success tt-btn--block" disabled={busy}>
               {busy ? <Loader2 size={18} className="tt-spinner__icon" aria-hidden="true" /> : <KeyRound size={18} aria-hidden="true" />}
               {busy ? 'Đang xác thực…' : 'Vào giải đấu'}
               {!busy && <ArrowRight size={16} aria-hidden="true" />}
             </button>
           </form>
 
-          <p className="tt-login__help">
-            Quên mật khẩu? Liên hệ BTC.
-          </p>
-          <p className="tt-login__legal">
-            Chỉ dành cho thành viên tin cậy trên máy BTC. Bot chạy bằng tiến trình riêng, không có sandbox cấp hệ điều hành.
-          </p>
         </section>
       </div>
     </main>

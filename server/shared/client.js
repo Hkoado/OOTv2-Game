@@ -3,6 +3,7 @@ import { HttpError } from '../lib/httpError.js';
 
 /** Project ref đích mà môi trường này được phép ghi (`OOTV2_EXPECTED_PROJECT_REF`). */
 const getExpectedProjectRef = () => (process.env.OOTV2_EXPECTED_PROJECT_REF || '').trim().toLowerCase();
+const PRIMARY_PROJECT_REF = 'ftzockzolisecnyhlwej';
 /** Chỉ áp cho URL Supabase thật; test double/PostgREST tự dựng (example.invalid) được bỏ qua. */
 const SUPABASE_HOST_RE = /\.supabase\.(co|in)$/u;
 
@@ -40,6 +41,10 @@ function connection() {
     throw new Error('SUPABASE_URL không phải URL hợp lệ.');
   }
   if (parsed.protocol !== 'https:') throw new Error('Supabase URL phải dùng HTTPS.');
+  if ((process.env.VERCEL === '1' || process.env.NODE_ENV === 'production')
+    && projectRefOf(url) !== PRIMARY_PROJECT_REF) {
+    throw new Error(`Production Supabase project must match the configured primary project (${PRIMARY_PROJECT_REF}).`);
+  }
   const expected = getExpectedProjectRef();
   if (expected && SUPABASE_HOST_RE.test(parsed.hostname)) {
     const ref = projectRefOf(url);

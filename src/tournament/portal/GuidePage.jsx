@@ -29,7 +29,7 @@ export default function GuidePage({ account }) {
             Tài liệu đầy đủ nằm trong thư mục <code>docs/</code> của repository.
           </p>
         </div>
-        <a className="tt-btn" href={campusBotDownload} download="bot.py">
+        <a className="tt-btn tt-btn--info" href={campusBotDownload} download="bot.py">
           <Download size={16} aria-hidden="true" />
           Tải bot mẫu (.py)
         </a>

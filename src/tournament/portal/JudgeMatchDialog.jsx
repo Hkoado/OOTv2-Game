@@ -131,7 +131,7 @@ export default function JudgeMatchDialog({ matchId, onClose, onOpenReplay, onExp
               <div className="tt-dialog__actions">
                 <button
                   type="button"
-                  className="tt-btn tt-btn--primary"
+                  className="tt-btn tt-btn--info"
                   onClick={() => onOpenReplay(match.id)}
                   disabled={!state.data?.replay_available}
                   title={state.data?.replay_available ? 'Xem lại ván đấu' : 'Replay chỉ mở khi ván đã kết thúc'}
