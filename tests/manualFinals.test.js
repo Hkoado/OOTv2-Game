@@ -95,3 +95,4 @@ test('Manual Finals: Yêu cầu kiểm toán (Audit reason) khi hủy hoặc ch�
   assert.equal(validateRerun('   ').ok, false);
   assert.equal(validateRerun('Sự cố mất điện phòng máy').ok, true);
 });
+

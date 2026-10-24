@@ -510,3 +510,4 @@ export default function ManualFinalsPanel({ event, teams, actions, busy, admin, 
     </div>
   );
 }
+
