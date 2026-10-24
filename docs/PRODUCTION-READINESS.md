@@ -9,10 +9,12 @@ hệ thống có kết nối là bắt buộc; bundle/sync/giải hoàn toàn kh
 Checklist hiện hành: [SAU-TICH-HOP](handoff/SAU-TICH-HOP.md). Evidence cũ theo môi trường
 không đóng gate mới, không chứng minh chức năng manual finals đã có.
 
-**Cập nhật 24/10/2026 — backend Chung kết thủ công (Huy):** route/RPC/migration đã có; migration
-`20261025100000_cutoff_capture` + `20261026100000_manual_final` **đã apply** trên project
-`wsyfcgurnrowcuefwynx` (OTTv2-G5) kèm smoke PASS; `db:check-github`/`db:verify` counts không đổi;
-`npm test` 372/372, build pass. UI/worker chưa nối, browser/VM/restore **NOT RUN** ⇒ **RC chưa đạt**.
+**Cập nhật 24/10/2026 — E2E online trên DB dev (Huy):** repo→intake→cutoff→vòng bảng 12/12 ván→
+standings→freeze **PASS**; knockout **mở/tiến series PASS** sau khi apply `20261026120000` trên DB dev;
+còn chặn ở series **toàn hòa** (`series_invalid`, cần chốt tie-break) và **publication official chưa hỗ trợ**;
+replay payload ở `mvp_official_job_attempts.replay`. `.env` (DB thật `ftzockzolisecnyhlwej`) **chưa có
+schema**; token hiện tại chỉ có quyền trên DB dev (403 với project thật) ⇒ bundle khởi tạo đã xuất ở
+`data/production/fresh-database.sql` (gitignored). `npm test` 417/417, build pass. **RC chưa đạt.**
 
 **Chưa đủ điều kiện mở chấm bot công khai.** Public source repository và vận hành
 dịch vụ nhận code không tin cậy là hai mốc riêng biệt. Không bỏ gate Start để demo.

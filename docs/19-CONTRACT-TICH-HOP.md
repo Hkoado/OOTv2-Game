@@ -200,4 +200,24 @@ Nguồn: `server/routes/official.js` (mount trong `server/shared/router.js`), b�
 - Không route nào tự tạo ván/kết quả; `publish` chỉ enqueue đúng ván đã pin qua chain, worker Khoa ghi
   accepted result bằng RPC fence.
 
+### 7.1 Kết quả E2E online trên DB dev (24/10/2026) — knockout mở được, còn 2 gap sản phẩm
+
+Chạy `node tools/cli/e2e-online-drill.js` trên `.envdev` (`wsyfcgurnrowcuefwynx`); GitHub API thay bằng
+test double tại lớp `fetch`, Supabase/Storage/engine trusted-dev là thật.
+
+| Chặng | Kết quả |
+| --- | --- |
+| repo (duyệt + job) → intake | PASS: 4 receipt `valid` + 4 submission (syntax + protocol smoke thật) |
+| cutoff capture | PASS: 4 đội pin đúng SHA/receipt |
+| mở vòng bảng | PASS: snapshot chính thức, 12 ván |
+| chấm bằng engine | PASS: 12/12 ván accepted; job `succeeded`; replay lưu ở `mvp_official_job_attempts.replay` |
+| standings + khóa vòng | PASS: complete (4 qualifiers), `frozen=true` |
+| knockout mở/tiến series | **PASS sau khi apply `20261026120000`** (trước đó `capture_roster_mismatch`) |
+| knockout kết thúc series | **BLOCKED khi cả series toàn hòa**: `resolveOfficialKnockoutSeries` ném `series_invalid` sau extra game ⇒ cần BTC/Khoa chốt tie-break (seed/administrative) thay vì fail-closed |
+| publication official | **CHƯA hỗ trợ**: `mvp_match_broadcasts` chỉ tham chiếu `mvp_matches` |
+
+Ghi chú môi trường: token Management API hiện tại chỉ thấy project dev `wsyfcgurnrowcuefwynx`;
+project thật `ftzockzolisecnyhlwej` trả **403** (không đủ quyền) và schema vẫn rỗng. Bundle khởi tạo
+đã xuất sẵn ở `data/production/fresh-database.sql` (gitignored) để dán vào SQL Editor của project thật.
+
 Các quyết định sản phẩm đã chốt trong docs/18 không được thay đổi khi điền bảng này.

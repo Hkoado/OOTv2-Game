@@ -121,6 +121,33 @@
 - `npm test` **399/399 pass**, `npm run build` pass (route test nằm ngoài `tests/` nên không đổi con số).
 - Bảo: nối UI theo docs/19 §7; Khoa: không cần đổi service, route chỉ gọi export hiện có.
 
+### E2E online trên DB dev + đánh giá RC (24/10/2026)
+
+- Đọc lại 2 file env theo yêu cầu: `.env` → **DB thật** `ftzockzolisecnyhlwej` (**chưa có schema**:
+  mọi bảng runtime 404); `.envdev` → **DB dev** `wsyfcgurnrowcuefwynx` (đã có đủ schema).
+- Token `SUPABASE_ACCESS_TOKEN` trong `.env` bị **thiếu tiền tố `sb`** (dài 42, không bắt đầu `sbp_`) ⇒ mọi
+  lệnh Management API trả 401. Đã bổ sung tiền tố (không in token); sau đó xác nhận token chỉ thấy
+  **project dev** `wsyfcgurnrowcuefwynx` (SQL 201), còn `ftzockzolisecnyhlwej` trả **403** (không đủ quyền).
+- Đã apply `20261026120000_ko_round_roster_guard.sql` trên **DB dev** (Kiểm `prosrc` = patched) — trigger
+  cho phép round knockout pin 2 đội, giữ nguyên mọi kiểm capture/receipt/submission.
+- `tools/cli/e2e-online-drill.js`: repo → intake → cutoff → snapshot vòng bảng → chấm engine thật
+  (trusted-dev + Python) → standings → freeze → knockout → vé; GitHub API là test double tại `fetch`.
+- **Kết quả (log `data/e2e-online-ko2.txt`/`ko3.txt`)**: intake 4/4 valid; cutoff 4/4 pin; vòng bảng 12/12
+  ván accepted; standings complete (4 qualifiers); freeze PASS; **knockout mở + tiến series PASS**;
+  nhưng series **toàn hòa** ⇒ `resolveOfficialKnockoutSeries` ném `series_invalid` sau extra game ⇒
+  chưa tới vé. Cần chốt tie-break (seed/administrative) — không tự bịa kết quả.
+- Replay: `mvp_official_games` chỉ có `replay_hash`; payload replay ở `mvp_official_job_attempts.replay`
+  (12/12 ván của drill có đủ).
+- **Publication official CHƯA hỗ trợ**: `mvp_match_broadcasts` chỉ tham chiếu `mvp_matches`.
+- Đã xuất bundle khởi tạo cho DB thật: `data/production/fresh-database.sql` (18 migration, gitignored).
+- **RC: CHƯA ĐẠT.** Blocker:
+  1. DB thật chưa có schema; token hiện tại **không có quyền** trên project thật ⇒ phải dùng SQL Editor
+     dán bundle (hoặc cấp token của project đó) rồi mới deploy được.
+  2. Series knockout toàn hòa chưa có tie-break ⇒ có thể chặn giải thật (cần BTC/Khoa chốt luật).
+  3. Publication/replay cho official games chưa có (chỉ MVP).
+  4. VM/2-worker thật + browser E2E + restore rehearsal vẫn NOT RUN.
+
+
 ### Việc của người khác (không tự làm thay)
 
 - Bảo: nối UI mục “Chung kết thủ công” theo DTO mục 6.3 của docs/19; migration **đã apply** nên có thể

@@ -210,6 +210,26 @@ PLAN.push({
 });
 
 
+PLAN.push({
+  version: '20261026120000',
+  file: 'supabase/migrations/20261026120000_ko_round_roster_guard.sql',
+  why: 'Huy review: cho phép round knockout pin 2 đội sau cutoff (giữ mọi kiểm provenance)',
+  exists: async () => {
+    // Không lộ qua PostgREST; đọc thân function bằng Management API (nếu có token).
+    if (!accessToken || !projectRef) return false;
+    try {
+      const found = await managementRows(
+        "select (prosrc like '%new.round_id = ''group''%') as patched from pg_proc"
+        + " where proname='mvp_cutoff_verify_round'"
+      );
+      return found?.[0]?.patched === true;
+    } catch {
+      return false;
+    }
+  },
+});
+
+
 const readSql = (relative) => readFileSync(path.join(root, relative), 'utf8');
 
 /** Management API không hiểu meta-command `\echo`; bỏ các dòng đó trước khi gửi. */
