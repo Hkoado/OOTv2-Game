@@ -91,10 +91,14 @@ export async function executeOfficialJob(job, {
   budget = OFFICIAL_BUDGET,
   leaseSeconds = 120,
   heartbeatMs,
+  signal,
   logger = console,
 } = {}) {
   if (!job || typeof job !== 'object') throw new Error('executeOfficialJob requires a claimed job');
   const abort = new AbortController();
+  const abortFromWorker = () => abort.abort(signal?.reason);
+  if (signal?.aborted) abortFromWorker();
+  else signal?.addEventListener('abort', abortFromWorker, { once: true });
   let leaseLost = false;
   let heartbeatFailure = null;
   const beatMs = Number.isSafeInteger(heartbeatMs) ? heartbeatMs : Math.max(5000, Math.floor(leaseSeconds * 1000 / 3));
@@ -187,6 +191,7 @@ export async function executeOfficialJob(job, {
     return await infraFault(code, true);
   } finally {
     clearInterval(timer);
+    signal?.removeEventListener('abort', abortFromWorker);
     for (const item of local) item.cleanup();
   }
 }

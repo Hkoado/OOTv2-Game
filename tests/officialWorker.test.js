@@ -21,8 +21,20 @@ test('processOfficialJob reaps, claims, and executes one claimed job with lease 
   assert.equal(calls[2][1], job);
   assert.equal(calls[2][2].heartbeatMs, 30000);
   assert.equal(calls[2][2].leaseSeconds, 90);
+  assert.equal(calls[2][2].signal, undefined);
   assert.deepEqual(result, { processed: true, jobId: 'job-1', recorded: true,
     reason: 'captured', result: 'red_win', attempt: 2 });
+});
+
+test('processOfficialJob forwards the shutdown signal to the claimed execution', async () => {
+  const controller = new AbortController();
+  let received;
+  await processOfficialJob({ workerId: 'worker-1', signal: controller.signal, logger: quiet,
+    reap: async () => ({ reaped: 0 }), claim: async () => ({ id: 'job-1', roundId: 'round-1',
+      gameKey: 'g1', attempt: 1 }),
+    execute: async (_job, options) => { received = options.signal; return { recorded: false }; },
+  });
+  assert.equal(received, controller.signal);
 });
 
 test('processOfficialJob does not execute when queue is empty and tolerates reap failure', async () => {
