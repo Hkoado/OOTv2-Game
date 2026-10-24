@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { syncAllAtCutoff, getCutoffStatus, CUTOFF_CAPTURE_POLICY } from '../server/services/githubCutoff.js';
+import { syncAllAtCutoff, getCutoffStatus, CUTOFF_CAPTURE_POLICY, DEFAULT_BATCH_LIMIT, MAX_BATCH_LIMIT } from '../server/services/githubCutoff.js';
 
 process.env.SUPABASE_URL = 'https://example.invalid';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-only';
@@ -20,6 +20,9 @@ function fixture(t) {
     if (name === 'mvp_tournaments') value = [{ id: EVENT, status: 'draft' }];
     else if (name === 'mvp_official_setups') value = [{ config: { cutoff, mapsPublished: true } }];
     else if (name === 'mvp_repo_connections') value = [connection];
+    else if (name === 'mvp_cutoff_captures') {
+      value = state.pinned ? [{ team_id: TEAM, receipt_id: 'rec-1', commit_sha: state.pinned, lease_until: null }] : [];
+    }
     else if (name === 'mvp_cutoff_claim') {
       value = state.pinned ? { ok: true, pinned: true } : state.busy ? { ok: true, busy: true }
         : { ok: true, token: 'token', connection };
@@ -131,6 +134,7 @@ test('syncAllAtCutoff supports teamIds filtering for targeted retry', async (t) 
     if (name === 'mvp_tournaments') return new Response(JSON.stringify([{ id: EVENT, status: 'draft' }]), { status: 200 });
     if (name === 'mvp_official_setups') return new Response(JSON.stringify([{ config: { cutoff, mapsPublished: true } }]), { status: 200 });
     if (name === 'mvp_repo_connections') return new Response(JSON.stringify([connection, connB]), { status: 200 });
+    if (name === 'mvp_cutoff_captures') return new Response(JSON.stringify([]), { status: 200 });
     if (name === 'mvp_cutoff_claim') {
       claimedTeam = body.p_team;
       return new Response(JSON.stringify({ ok: true, token: 'tok', connection: connB }), { status: 200 });
@@ -150,4 +154,111 @@ test('syncAllAtCutoff supports teamIds filtering for targeted retry', async (t) 
   assert.equal(summary.total, 1);
   assert.equal(summary.queued, 1);
   assert.equal(claimedTeam, teamB);
+});
+
+test('H4: Bounded batch cap and authoritative remaining progression across multiple batches', async (t) => {
+  const original = globalThis.fetch;
+  const teamList = Array.from({ length: 8 }, (_, i) => ({
+    event_id: EVENT,
+    team_id: `team-uuid-${i + 1}`,
+    repo_id: 100 + i,
+    repository: `https://github.com/org/bot-${i + 1}`,
+    branch: 'main',
+  }));
+
+  const pinnedMap = new Map();
+
+  globalThis.fetch = async (url, options = {}) => {
+    const name = new URL(url).pathname.split('/').pop();
+    const body = options.body ? JSON.parse(options.body) : {};
+    if (name === 'mvp_tournaments') return new Response(JSON.stringify([{ id: EVENT, status: 'draft' }]), { status: 200 });
+    if (name === 'mvp_official_setups') return new Response(JSON.stringify([{ config: { cutoff, mapsPublished: true } }]), { status: 200 });
+    if (name === 'mvp_repo_connections') return new Response(JSON.stringify(teamList), { status: 200 });
+    if (name === 'mvp_cutoff_captures') {
+      const captured = [];
+      for (const [tid, sha] of pinnedMap.entries()) {
+        captured.push({ team_id: tid, receipt_id: `rec-${tid}`, commit_sha: sha, lease_until: null });
+      }
+      return new Response(JSON.stringify(captured), { status: 200 });
+    }
+    if (name === 'mvp_cutoff_claim') {
+      const conn = teamList.find((c) => c.team_id === body.p_team);
+      if (pinnedMap.has(body.p_team)) return new Response(JSON.stringify({ ok: true, pinned: true }), { status: 200 });
+      return new Response(JSON.stringify({ ok: true, token: `tok-${body.p_team}`, connection: conn }), { status: 200 });
+    }
+    if (name === 'mvp_cutoff_pin') {
+      pinnedMap.set(body.p_team, body.p_sha);
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }
+    throw new Error(`Unexpected ${name}`);
+  };
+  t.after(() => { globalThis.fetch = original; });
+
+  // Batch 1: Tổng 8 đội, giới hạn DEFAULT_BATCH_LIMIT = 5 -> xử lý 5 đội, còn lại 3 đội
+  const batch1 = await syncAllAtCutoff({
+    eventId: EVENT,
+    clock: () => Date.parse(cutoff) + 1000,
+    getHead: async () => '1'.repeat(40),
+  });
+
+  assert.equal(batch1.total, 8);
+  assert.equal(batch1.batch_size, 5);
+  assert.equal(batch1.queued, 5);
+  assert.equal(batch1.remaining, 3);
+  assert.equal(batch1.complete, false);
+
+  // Batch 2: Tiếp tục chạy, 5 đội đã pin không tiêu slot -> xử lý 3 đội còn lại
+  const batch2 = await syncAllAtCutoff({
+    eventId: EVENT,
+    clock: () => Date.parse(cutoff) + 2000,
+    getHead: async () => '2'.repeat(40),
+  });
+
+  assert.equal(batch2.total, 8);
+  assert.equal(batch2.batch_size, 3);
+  assert.equal(batch2.queued, 3);
+  assert.equal(batch2.remaining, 0);
+  assert.equal(batch2.complete, true);
+});
+
+test('H4: Time budget exhaustion ngắt vòng lặp an toàn và bảo toàn số đội đã pin', async (t) => {
+  const original = globalThis.fetch;
+  const teamList = [
+    { event_id: EVENT, team_id: 't-fast', repository: 'https://github.com/org/fast', branch: 'main' },
+    { event_id: EVENT, team_id: 't-slow', repository: 'https://github.com/org/slow', branch: 'main' },
+  ];
+  let time = Date.parse(cutoff) + 1000;
+  const clock = () => time;
+
+  globalThis.fetch = async (url, options = {}) => {
+    const name = new URL(url).pathname.split('/').pop();
+    const body = options.body ? JSON.parse(options.body) : {};
+    if (name === 'mvp_tournaments') return new Response(JSON.stringify([{ id: EVENT, status: 'draft' }]), { status: 200 });
+    if (name === 'mvp_official_setups') return new Response(JSON.stringify([{ config: { cutoff, mapsPublished: true } }]), { status: 200 });
+    if (name === 'mvp_repo_connections') return new Response(JSON.stringify(teamList), { status: 200 });
+    if (name === 'mvp_cutoff_captures') return new Response(JSON.stringify([]), { status: 200 });
+    if (name === 'mvp_cutoff_claim') {
+      const conn = teamList.find((c) => c.team_id === body.p_team);
+      return new Response(JSON.stringify({ ok: true, token: 'tok', connection: conn }), { status: 200 });
+    }
+    if (name === 'mvp_cutoff_pin') return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    throw new Error(`Unexpected ${name}`);
+  };
+  t.after(() => { globalThis.fetch = original; });
+
+  const summary = await syncAllAtCutoff({
+    eventId: EVENT,
+    clock,
+    maxTimeMs: 1500, // Budget 1500ms
+    getHead: async () => {
+      // Đội 1 xử lý xong, sau đó thời gian tăng lên vượt budget
+      time += 2000;
+      return '3'.repeat(40);
+    },
+  });
+
+  assert.equal(summary.queued, 1, 'Đội 1 đã pin thành công');
+  assert.equal(summary.budget_exhausted, true, 'Ngắt vòng lặp do hết budget');
+  assert.equal(summary.remaining, 1, 'Còn 1 đội chưa xử lý');
+  assert.equal(summary.complete, false);
 });

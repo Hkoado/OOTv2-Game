@@ -153,3 +153,94 @@ test('listPublishedOfficialGames chỉ trả ván đã công bố cho đội thi
   }, deps);
   assert.equal(forAdmin.games.length, 2);
 });
+
+test('H1: officialBroadcastState và listPublishedOfficialGames giấu tuyệt đối result/hash/recorded_at trước khi reveal', async () => {
+  const secretGame = {
+    game_key: GAME,
+    stage: 'group',
+    result: 'red_win',
+    replay_hash: 'e'.repeat(64),
+    recorded_at: '2026-10-24T08:00:00.000Z',
+    red_participant_id: PLAYER_A,
+    blue_participant_id: PLAYER_B,
+  };
+
+  const bWindow = row({
+    starts_at: '2026-10-24T10:00:00.000Z',
+    ply_interval_ms: 1000,
+    release_mode: 'window',
+  });
+
+  // 1. officialBroadcastState khi đang phát (chưa reveal)
+  const nowDuringBroadcast = Date.parse('2026-10-24T10:00:01.000Z');
+  const teamState = await officialBroadcastState({
+    roundPk: ROUND,
+    gameKey: GAME,
+    account: { role: 'team', participant_id: PLAYER_B },
+    now: nowDuringBroadcast,
+  }, {
+    load: async () => frozen({ game: secretGame, broadcast: bWindow }),
+    member: async () => {},
+  });
+
+  assert.equal(teamState.broadcast.phase, 'broadcasting');
+  assert.equal(teamState.broadcast.reveal_result, false);
+  // Assert các key nhạy cảm vắng mặt hoàn toàn khỏi JSON
+  assert.equal(Object.hasOwn(teamState.game, 'result'), false, 'Key result phải vắng mặt');
+  assert.equal(Object.hasOwn(teamState.game, 'replay_hash'), false, 'Key replay_hash phải vắng mặt');
+  assert.equal(Object.hasOwn(teamState.game, 'recorded_at'), false, 'Key recorded_at phải vắng mặt');
+  assert.equal(teamState.game.game_key, GAME);
+
+  // Admin vẫn thấy kết quả điều hành
+  const adminState = await officialBroadcastState({
+    roundPk: ROUND,
+    gameKey: GAME,
+    account: { role: 'admin' },
+    now: nowDuringBroadcast,
+  }, {
+    load: async () => frozen({ game: secretGame, broadcast: bWindow }),
+    member: async () => {},
+  });
+  assert.equal(adminState.game.result, 'red_win');
+  assert.equal(adminState.game.replay_hash, 'e'.repeat(64));
+
+  // 2. listPublishedOfficialGames khi ván chưa reveal
+  const listRes = await listPublishedOfficialGames({
+    roundPk: ROUND,
+    account: { role: 'team', participant_id: PLAYER_B },
+    now: nowDuringBroadcast,
+  }, {
+    loadRound: async () => ({ id: ROUND, event_id: EVENT, round_id: 'group', frozen: true }),
+    member: async () => {},
+    loadBroadcasts: async () => [bWindow],
+    loadGames: async () => [secretGame],
+    loadAttempts: async () => [{ game_key: GAME, replay }],
+  });
+
+  assert.equal(listRes.games.length, 1);
+  const gameInList = listRes.games[0];
+  assert.equal(Object.hasOwn(gameInList, 'result'), false, 'Key result phải vắng mặt trong list game');
+  assert.equal(Object.hasOwn(gameInList, 'replay_hash'), false, 'Key replay_hash phải vắng mặt trong list game');
+  assert.equal(Object.hasOwn(gameInList, 'recorded_at'), false, 'Key recorded_at phải vắng mặt trong list game');
+
+  // Khi đã reveal (release_mode: full và phát xong)
+  const bFullEnded = row({
+    starts_at: '2026-10-24T10:00:00.000Z',
+    ply_interval_ms: 1000,
+    release_mode: 'full',
+  });
+  const nowAfterReveal = Date.parse('2026-10-24T10:00:10.000Z');
+
+  const teamStateRevealed = await officialBroadcastState({
+    roundPk: ROUND,
+    gameKey: GAME,
+    account: { role: 'team', participant_id: PLAYER_B },
+    now: nowAfterReveal,
+  }, {
+    load: async () => frozen({ game: secretGame, broadcast: bFullEnded }),
+    member: async () => {},
+  });
+  assert.equal(teamStateRevealed.broadcast.reveal_result, true);
+  assert.equal(teamStateRevealed.game.result, 'red_win');
+  assert.equal(teamStateRevealed.game.replay_hash, 'e'.repeat(64));
+});

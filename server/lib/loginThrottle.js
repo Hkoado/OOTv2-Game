@@ -1,52 +1,58 @@
 /**
  * loginThrottle.js — chặn brute-force đăng nhập mà không khoá cả một dải NAT.
  *
- * Hỗ trợ lưu phân tán qua Supabase RPC (`mvp_login_throttle_hit`, `mvp_login_throttle_reset`)
- * khi được truyền `rpcClient`. Nếu không có `rpcClient` hoặc DB lỗi, fallback đồng bộ về in-memory Map.
+ * Hai tầng bảo vệ:
+ * 1. Mỗi cặp `ip + username` được thử tối đa 10 lần / 60 giây. Thử sai liên tục tài khoản
+ *    nào thì chỉ khoá tài khoản đó trên IP đó.
+ * 2. Mỗi `ip` được thử tối đa 60 lần / 60 giây trên MỌI tài khoản. Cho phép cả lớp (~30 em)
+ *    chung một IP trường học cùng đăng nhập vào đầu giờ mà không bị dính đòn quét dải.
  *
- * Đếm hai tầng:
- * - `ip + username`: 10 lượt/phút — chặn dò mật khẩu một tài khoản từ một máy.
- * - `ip`: 60 lượt/phút — chặn dò nhiều username từ một máy, vẫn đủ rộng cho lớp sau NAT.
- *
- * Đăng nhập thành công chỉ xoá bộ đếm của cặp `ip + username` vừa dùng.
+ * Hỗ trợ phân tán qua Supabase RPC (`mvp_login_throttle_hit`), fallback in-memory nếu RPC lỗi.
+ * Không phụ thuộc thư viện ngoài; cấu hình qua tham số để test time-travel được.
  */
 
-export const LOGIN_WINDOW_MS = 60_000;
 export const LOGIN_PER_ACCOUNT = 10;
 export const LOGIN_PER_IP = 60;
-export const LOGIN_MAX_KEYS = 10_000;
+export const LOGIN_WINDOW_MS = 60000;
+export const MAX_TRACKED_KEYS = 5000;
 
-export const normalizeUser = (username) => String(username ?? '').trim().toLowerCase().slice(0, 64);
-export const normalizeIp = (ip) => String(ip ?? '').trim() || 'unknown';
-export const accountKey = (ip, username) => `id:${normalizeIp(ip)}|${normalizeUser(username)}`;
-export const ipKey = (ip) => `ip:${normalizeIp(ip)}`;
+function sanitize(value) {
+  return String(value ?? '').trim().toLowerCase().slice(0, 80);
+}
 
-/**
- * @param {{ windowMs?: number, perAccount?: number, perIp?: number, maxKeys?: number,
- *   now?: () => number, rpcClient?: Function|null }} [options]
- */
+function accountKey(ip, username) {
+  return `acc:${sanitize(ip)}:${sanitize(username)}`;
+}
+
+function ipKey(ip) {
+  return `ip:${sanitize(ip)}`;
+}
+
 export function createLoginThrottle({
-  windowMs = LOGIN_WINDOW_MS,
   perAccount = LOGIN_PER_ACCOUNT,
   perIp = LOGIN_PER_IP,
-  maxKeys = LOGIN_MAX_KEYS,
+  windowMs = LOGIN_WINDOW_MS,
+  maxKeys = MAX_TRACKED_KEYS,
   now = Date.now,
   rpcClient = null,
 } = {}) {
   const hits = new Map();
 
-  const bumpLocal = (key, max, at) => {
+  const bumpLocal = (key, limit, at) => {
     let entry = hits.get(key);
     if (!entry || entry.resetAt <= at) {
       entry = { count: 0, resetAt: at + windowMs };
       hits.set(key, entry);
     }
     entry.count += 1;
-    return { allowed: entry.count <= max, retryAfter: Math.max(1, Math.ceil((entry.resetAt - at) / 1000)) };
+    if (entry.count > limit) {
+      const retryAfter = Math.max(1, Math.ceil((entry.resetAt - at) / 1000));
+      return { allowed: false, retryAfter };
+    }
+    return { allowed: true, retryAfter: 0 };
   };
 
   const pruneLocal = (at) => {
-    if (hits.size <= maxKeys) return;
     for (const [key, entry] of hits) if (entry.resetAt <= at) hits.delete(key);
     while (hits.size > maxKeys) {
       const oldest = hits.keys().next().value;
@@ -63,7 +69,7 @@ export function createLoginThrottle({
 
       // Nếu có RPC Client (chế độ Supabase dùng chung phân tán)
       if (typeof rpcClient === 'function') {
-        const asyncRun = (async () => {
+        return (async () => {
           try {
             const accRes = await rpcClient('mvp_login_throttle_hit', {
               p_key: aKey,
@@ -85,22 +91,15 @@ export function createLoginThrottle({
               return { allowed: true, retryAfter: Math.max(accRes.retryAfter || 0, ipRes.retryAfter || 0) };
             }
           } catch {
-            // Fallback in-memory nếu DB/mạng lỗi
+            // Fallback in-memory nếu RPC lỗi
           }
+          // Chỉ bump in-memory ĐÚNG 1 LẦN khi RPC thất bại hoặc không trả kết quả (không đếm đôi)
           const byAccount = bumpLocal(aKey, perAccount, at);
           if (!byAccount.allowed) return byAccount;
           const result = bumpLocal(iKey, perIp, at);
           pruneLocal(at);
           return result;
         })();
-
-        // Đính kèm kết quả sync tức thời lên promise để tương thích cả sync caller
-        const syncFallback = bumpLocal(aKey, perAccount, at);
-        const syncResult = syncFallback.allowed ? bumpLocal(iKey, perIp, at) : syncFallback;
-        pruneLocal(at);
-        asyncRun.allowed = syncResult.allowed;
-        asyncRun.retryAfter = syncResult.retryAfter;
-        return asyncRun;
       }
 
       // Chế độ sync in-memory thuần túy
@@ -116,12 +115,15 @@ export function createLoginThrottle({
       const aKey = accountKey(ip, username);
       hits.delete(aKey);
       if (typeof rpcClient === 'function') {
-        return rpcClient('mvp_login_throttle_reset', { p_key: aKey }).catch(() => {});
+        return (async () => {
+          try {
+            await rpcClient('mvp_login_throttle_reset', { p_key: aKey });
+          } catch {
+            // Bỏ qua lỗi reset RPC
+          }
+        })();
       }
     },
-
-    /** Số key đang giữ trong bộ nhớ (dùng cho test/telemetry). */
-    size: () => hits.size,
   };
 }
 

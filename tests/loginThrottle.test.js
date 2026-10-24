@@ -103,3 +103,53 @@ test('5. Supabase RPC throttle: tự động fallback in-memory nếu RPC lỗi'
   const res = await throttle.check({ ip, username });
   assert.equal(res.allowed, true);
 });
+
+test('6. H5: RPC fallback không bị đếm đôi (double count) khi RPC lỗi', async () => {
+  const failingRpc = async () => {
+    throw new Error('Supabase network down');
+  };
+
+  const throttle = createLoginThrottle({ rpcClient: failingRpc });
+  const ip = '192.168.1.99';
+  const username = 'target_account';
+
+  // Thử 10 lần liên tiếp: tất cả 10 lần phải allowed = true (không bị chặn ở lần 6 do đếm đôi)
+  const results = [];
+  for (let i = 1; i <= 10; i++) {
+    const res = await throttle.check({ ip, username });
+    results.push(res.allowed);
+    assert.equal(res.allowed, true, `Lần thứ ${i} phải được phép`);
+  }
+
+  assert.deepEqual(results, [true, true, true, true, true, true, true, true, true, true]);
+
+  // Lần thứ 11 mới bị chặn
+  const eleventh = await throttle.check({ ip, username });
+  assert.equal(eleventh.allowed, false, 'Lần thứ 11 phải bị chặn');
+  assert.ok(eleventh.retryAfter > 0);
+});
+
+test('7. H5: RPC lỗi ở lần gọi thứ hai (IP check) vẫn fallback an toàn và không đếm đôi', async () => {
+  let callCount = 0;
+  const partialFailingRpc = async (proc, params) => {
+    callCount++;
+    if (callCount % 2 === 1) {
+      // Lần 1 (accountKey) thành công
+      return { allowed: true, retryAfter: 60 };
+    }
+    // Lần 2 (ipKey) thất bại
+    throw new Error('IP RPC timeout');
+  };
+
+  const throttle = createLoginThrottle({ rpcClient: partialFailingRpc });
+  const ip = '10.10.10.10';
+  const username = 'partial_user';
+
+  for (let i = 1; i <= 10; i++) {
+    const res = await throttle.check({ ip, username });
+    assert.equal(res.allowed, true, `Lần ${i} phải được phép`);
+  }
+
+  const blocked = await throttle.check({ ip, username });
+  assert.equal(blocked.allowed, false, 'Lần thứ 11 phải bị chặn');
+});

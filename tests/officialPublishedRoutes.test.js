@@ -35,6 +35,7 @@ function buildApp({ apiOverrides = {} } = {}) {
     },
     roundProgress: async () => ({ frozen: false }),
     groupStandings: async () => ({ complete: true, games: 12, groups: { A: [] } }),
+    getRoundBroadcastStatuses: async () => [{ game_key: 'g1', isRevealed: true, isPublished: true, phase: 'ended' }],
     bracketProgress: async () => ({
       plan: {
         schemaVersion: 'campus-knockout.v1', level: 'weekly', seed: 42,
@@ -42,7 +43,7 @@ function buildApp({ apiOverrides = {} } = {}) {
         bracket: { rounds: [{ stage: 'semifinal', matches: [{ id: 'sf1' }] }] },
       },
       expected: 1, resolved: 1, waiting: null, next: null,
-      outcomes: { sf1: { complete: true, winnerParticipantId: 'p1' } },
+      outcomes: { sf1: { complete: true, winnerParticipantId: 'p1', roundId: 'ko:semifinal:1' } },
     }),
     knockoutTickets: async () => {
       throw new HttpError(409, 'bracket_incomplete', 'Chưa xong bracket.');
@@ -69,7 +70,6 @@ async function request(app, method, path, { user, body } = {}) {
   if (user) headers['x-test-user'] = user;
   if (body) headers['content-type'] = 'application/json';
 
-  // Dùng mock dispatch của Node qua supertest-like fetch nếu cần, hoặc giả lập trực tiếp qua server listener
   return new Promise((resolve, reject) => {
     const server = app.listen(0, '127.0.0.1', async () => {
       const { port } = server.address();
@@ -122,10 +122,11 @@ test('3. Đội thi thuộc giải: khi vòng bảng chưa freeze thì nhận 40
   assert.equal(res.body.error, 'round_not_published');
 });
 
-test('4. Đội thi thuộc giải: khi vòng bảng đã freeze thì nhận standings published', async () => {
+test('4. Đội thi thuộc giải: khi vòng bảng đã freeze và đã phát sóng hết thì nhận standings published', async () => {
   const app = buildApp({
     apiOverrides: {
       roundProgress: async () => ({ frozen: true }),
+      getRoundBroadcastStatuses: async () => [{ game_key: 'g1', isRevealed: true }],
       groupStandings: async () => ({ complete: true, games: 12, groups: { A: [] } }),
     },
   });
@@ -136,7 +137,7 @@ test('4. Đội thi thuộc giải: khi vòng bảng đã freeze thì nhận sta
   assert.equal(res.body.event_id, EVENT_ID);
 });
 
-test('5. Đội thi thuộc giải: bracket published chỉ mở khi vòng bảng đã freeze', async () => {
+test('5. Đội thi thuộc giải: bracket published chỉ mở khi vòng bảng đã freeze và phát sóng', async () => {
   const appFrozenFalse = buildApp({
     apiOverrides: { roundProgress: async () => ({ frozen: false }) },
   });
@@ -145,7 +146,10 @@ test('5. Đội thi thuộc giải: bracket published chỉ mở khi vòng bản
   assert.equal(resDenied.body.error, 'round_not_published');
 
   const appFrozenTrue = buildApp({
-    apiOverrides: { roundProgress: async () => ({ frozen: true }) },
+    apiOverrides: {
+      roundProgress: async () => ({ frozen: true }),
+      getRoundBroadcastStatuses: async () => [{ game_key: 'g1', isRevealed: true }],
+    },
   });
   const resOk = await request(appFrozenTrue, 'GET', `/events/${EVENT_ID}/official/published/bracket`, { user: 'member' });
   assert.equal(resOk.status, 200);
@@ -234,3 +238,77 @@ test('9. Broadcast state: kiểm tra phân quyền đội thi và anonymous', as
   assert.equal(resAdmin.status, 200);
 });
 
+test('10. H2: Standings bị từ chối 409 khi vòng bảng đã freeze nhưng broadcast chưa reveal', async () => {
+  const appUnrevealed = buildApp({
+    apiOverrides: {
+      roundProgress: async () => ({ frozen: true }),
+      getRoundBroadcastStatuses: async () => [
+        { game_key: 'g1', isRevealed: false, phase: 'broadcasting' },
+      ],
+    },
+  });
+  const res = await request(appUnrevealed, 'GET', `/events/${EVENT_ID}/official/published/standings`, { user: 'member' });
+  assert.equal(res.status, 409);
+  assert.equal(res.body.error, 'round_not_published');
+});
+
+test('11. H2: Bracket giấu outcome của series knockout chưa phát sóng hoàn tất đối với đội thi', async () => {
+  const appKnockoutPartial = buildApp({
+    apiOverrides: {
+      roundProgress: async () => ({ frozen: true }),
+      getRoundBroadcastStatuses: async (roundId) => {
+        // Vòng bảng đã reveal
+        if (roundId === ROUND_ID) return [{ game_key: 'g1', isRevealed: true }];
+        // Trận knockout sf1 chưa reveal (đang phát)
+        return [{ game_key: 'ko_sf1_g1', isRevealed: false }];
+      },
+      bracketProgress: async () => ({
+        plan: {
+          schemaVersion: 'campus-knockout.v1', level: 'weekly', seed: 42,
+          qualifiers: [{ participantId: 'p1', groupName: 'A', seed: 1, rank: 1 }],
+          bracket: { rounds: [{ stage: 'semifinal', matches: [{ id: 'sf1' }] }] },
+        },
+        expected: 1, resolved: 1, waiting: null, next: null,
+        outcomes: { sf1: { complete: true, winnerParticipantId: 'p1', roundId: 'ko:semifinal:1' } },
+      }),
+    },
+  });
+
+  // Đội thi: kết quả sf1 bị giấu khỏi series
+  const resMember = await request(appKnockoutPartial, 'GET', `/events/${EVENT_ID}/official/published/bracket`, { user: 'member' });
+  assert.equal(resMember.status, 200);
+  assert.equal(resMember.body.series.length, 0, 'Series chưa reveal bị loại khỏi DTO');
+
+  // Admin xem nội bộ qua admin route vẫn thấy
+  const resAdmin = await request(appKnockoutPartial, 'GET', `/events/${EVENT_ID}/official/bracket`, { user: 'admin' });
+  assert.equal(resAdmin.status, 200);
+  assert.equal(resAdmin.body.series.length, 1);
+});
+
+test('12. H2: Tickets bị từ chối 409 khi có series knockout chưa hoàn tất broadcast', async () => {
+  const appTicketsUnrevealed = buildApp({
+    apiOverrides: {
+      getRoundBroadcastStatuses: async (roundId) => {
+        if (roundId === ROUND_ID) return [{ game_key: 'g1', isRevealed: true }];
+        return [{ game_key: 'ko_g1', isRevealed: false }];
+      },
+      bracketProgress: async () => ({
+        plan: {
+          schemaVersion: 'campus-knockout.v1', level: 'weekly', seed: 42,
+          qualifiers: [{ participantId: 'p1', groupName: 'A', seed: 1, rank: 1 }],
+          bracket: { rounds: [{ stage: 'semifinal', matches: [{ id: 'sf1' }] }] },
+        },
+        expected: 1, resolved: 1, waiting: null, next: null,
+        outcomes: { sf1: { complete: true, winnerParticipantId: 'p1', roundId: 'ko:semifinal:1' } },
+      }),
+      knockoutTickets: async () => ({
+        ranking: [{ participant_id: 'p1', rank: 1 }],
+        tickets: { awarded: [{ participant_id: 'p1' }], reserves: [], vacant: 0 },
+      }),
+    },
+  });
+
+  const res = await request(appTicketsUnrevealed, 'GET', `/events/${EVENT_ID}/official/published/tickets`, { user: 'member' });
+  assert.equal(res.status, 409);
+  assert.equal(res.body.error, 'tickets_not_published');
+});

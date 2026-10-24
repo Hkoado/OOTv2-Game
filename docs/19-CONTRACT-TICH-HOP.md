@@ -280,3 +280,18 @@ Theo điều lệ [RC online tối giản](20-RC-ONLINE-TOI-GIAN.md):
   - `ip:ip`: 60 lần / 60 giây (chặn quét từ một máy sau NAT).
   - Đăng nhập thành công chỉ reset bộ đếm cặp `id:ip|username`.
 - Adapter Node.js: `server/lib/loginThrottle.js` tự động dùng RPC Supabase khi có kết nối, và fallback về in-memory Map nếu RPC/mạng gián đoạn.
+
+
+### 8.3 Publication Gate authoritative và DTO Whitelist bảo mật kết quả kín (H1, H2, H3)
+- **Publication Gate (H2)**:
+  - `GET /events/:id/official/published/standings`: Chỉ công bố khi vòng bảng `frozen = true` VÀ 100% các ván vòng bảng có bản ghi broadcast với `reveal_result = true`. Nếu chưa: trả `409 round_not_published`.
+  - `GET /events/:id/official/published/bracket`: Chỉ công bố khi toàn bộ vòng bảng đã phát sóng hoàn tất (`isRevealed = true`). Các series knockout đang thi đấu/phát sóng chỉ hiển thị outcome khi các ván tương ứng đã được broadcast `reveal_result = true`; series chưa phát xong bị giấu outcome đối với thành viên giải.
+  - `GET /events/:id/official/published/tickets`: Chỉ công bố khi toàn bộ vòng bảng VÀ 100% các series knockout đã hoàn tất phát sóng (`reveal_result = true`). Nếu chưa: trả `409 tickets_not_published`.
+- **DTO Whitelist bảo mật (H1)**:
+  - `officialBroadcastState` và `listPublishedOfficialGames`: Khi `reveal_result = false` và tài khoản không phải admin, các trường `result`, `replay_hash`, `recorded_at` HOÀN TOÀN VẮNG MẶT khỏi object trả về.
+- **Khớp Schema DB Thực Tế (H3)**:
+  - Query `mvp_official_games` loại bỏ hoàn toàn các cột không tồn tại (`series_id`, `reason`, `ply_count`); chỉ select các cột thực có. `totalPlies` được tính authoritative từ `official_job_attempts` (attempt `succeeded` mới nhất).
+- **Serverless Bounded Cutoff (H4)**:
+  - `DEFAULT_BATCH_LIMIT = 5`, `MAX_BATCH_LIMIT = 10`, `MAX_BATCH_TIME_MS = 20000` (dưới trần 30s của Vercel). Đội đã pinned không tiêu tốn slot limit của batch. Authoritative `remaining` và `complete` dựa trên toàn bộ approved connections.
+- **Login Throttle Fallback không đếm đôi (H5)**:
+  - Khi RPC gặp sự cố hoặc timeout, fallback in-memory chỉ bump local đúng 1 lần duy nhất, giữ chuẩn ngưỡng 10 lần/tài khoản và 60 lần/IP.

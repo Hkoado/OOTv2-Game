@@ -43,6 +43,7 @@ export const liveOfficialApi = Object.freeze({
   broadcastState: broadcasts.officialBroadcastState,
   broadcastViewer: broadcasts.officialGameViewerPackage,
   listPublishedGames: broadcasts.listPublishedOfficialGames,
+  getRoundBroadcastStatuses: broadcasts.getRoundBroadcastStatuses,
 });
 
 export function requireReason(value) {
@@ -54,70 +55,67 @@ export function requireReason(value) {
 
 async function groupRoundId(eventId, api) {
   const roundId = await api.findRound({ eventId, roundId: 'group' });
-  if (!roundId) throw fail(404, 'round_not_found', 'Chưa mở vòng bảng chính thức cho giải này.');
+  if (!roundId) throw fail(404, 'group_round_not_found', 'Giải chưa mở vòng bảng.');
   return roundId;
 }
 
 async function eventLevel(eventId, api) {
-  const config = await api.setup(eventId);
-  return LEVELS.includes(config?.level) ? config.level : 'weekly';
+  const cfg = await api.setup(eventId);
+  return LEVELS.includes(cfg?.level) ? cfg.level : 'weekly';
 }
 
-export function matchOrder(bracket) {
-  const list = [];
-  for (const roundInfo of bracket?.rounds ?? []) {
-    for (const match of roundInfo.matches ?? []) list.push({ stage: roundInfo.stage, match });
-  }
-  if (bracket?.thirdPlace) list.push({ stage: 'third_place', match: bracket.thirdPlace });
-  return list;
-}
-
-/** DTO bracket: chỉ trạng thái series/kết quả accepted, không lộ snapshot hay plan nội bộ. */
-export function bracketView({ eventId, groupRoundId: roundId, progress }) {
+function bracketView({ eventId, groupRoundId: roundId, progress }) {
   const plan = progress.plan;
+  const series = [];
+  for (const [matchId, outcome] of Object.entries(progress.outcomes || {})) {
+    series.push({
+      match_id: matchId,
+      series_id: outcome.seriesId,
+      round_id: outcome.roundId,
+      complete: outcome.complete,
+      winner_participant_id: outcome.winnerParticipantId || null,
+      games_played: outcome.gamesPlayed,
+    });
+  }
   return {
     event_id: eventId,
-    round_id: roundId,
-    schema_version: plan.schemaVersion,
+    group_round_id: roundId,
     level: plan.level,
     seed: plan.seed,
-    expected: progress.expected,
-    resolved: progress.resolved,
-    complete: progress.resolved === progress.expected && !progress.waiting,
+    expected_matches: progress.expected,
+    resolved_matches: progress.resolved,
     waiting: progress.waiting,
-    next: progress.next
-      ? { match_id: progress.next.matchId, stage: progress.next.stage,
-        round_id: progress.next.roundId, opened: progress.next.opened === true }
-      : null,
-    qualifiers: plan.qualifiers.map((row) => ({
-      participant_id: row.participantId, group_name: row.groupName,
-      seed: row.seed, rank: row.rank,
+    next: progress.next ? {
+      match_id: progress.next.matchId,
+      stage: progress.next.stage,
+      series_id: progress.next.series?.id || null,
+      opened: progress.next.opened,
+      round_id: progress.next.roundId || null,
+    } : null,
+    qualifiers: plan.qualifiers.map((q) => ({
+      participant_id: q.participantId,
+      group_name: q.groupName,
+      seed: q.seed,
+      rank: q.rank,
     })),
-    series: matchOrder(plan.bracket).map(({ stage, match }) => {
-      const outcome = progress.outcomes[match.id] ?? null;
-      return {
-        match_id: match.id,
-        stage,
-        round_id: outcome?.roundId ?? null,
-        complete: outcome?.complete === true,
-        reason: outcome?.reason ?? null,
-        winner_participant_id: outcome?.winnerParticipantId ?? null,
-        loser_participant_id: outcome?.loserParticipantId ?? null,
-        administrative: outcome?.administrative === true,
-        games_played: Number(outcome?.gamesPlayed ?? 0),
-      };
-    }),
+    series,
   };
 }
 
 export function officialRouter({ api = liveOfficialApi } = {}) {
   const router = Router();
 
-  // ---- Vòng bảng (Admin-only): tiến độ, bảng xếp hạng kín, phát ván kế tiếp, khóa vòng ----
+  // ---- Vòng bảng (Admin-only): tiến độ, mở ván, bảng điểm, khóa ----
   router.get('/events/:id/official/progress', requireLocalAdmin, async (req, res) => {
     const roundId = await groupRoundId(req.params.id, api);
     const progress = await api.roundProgress({ roundId });
-    res.json({ round_id: roundId, ...progress });
+    res.json({ event_id: req.params.id, round_id: roundId, ...progress });
+  });
+
+  router.post('/events/:id/official/publish', requireLocalAdmin, async (req, res) => {
+    const roundId = await groupRoundId(req.params.id, api);
+    const result = await api.publishNextGame({ roundId });
+    res.status(['published', 'advanced'].includes(result.status) ? 202 : 200).json(result);
   });
 
   router.get('/events/:id/official/standings', requireLocalAdmin, async (req, res) => {
@@ -126,17 +124,9 @@ export function officialRouter({ api = liveOfficialApi } = {}) {
     res.json({ event_id: req.params.id, round_id: roundId, ...standings });
   });
 
-  router.post('/events/:id/official/publish', requireLocalAdmin, async (req, res) => {
-    const roundId = await groupRoundId(req.params.id, api);
-    res.json({ round_id: roundId, ...await api.publishNextGame({ roundId }) });
-  });
-
   router.post('/events/:id/official/freeze', requireLocalAdmin, async (req, res) => {
     const roundId = await groupRoundId(req.params.id, api);
-    const expected = req.body?.expected_games;
-    if (expected !== undefined && (!Number.isInteger(expected) || expected < 1 || expected > 100000)) {
-      throw fail(400, 'bad_expected_games', 'expected_games phải là số nguyên dương.');
-    }
+    const expected = req.body?.expected_games !== undefined ? Number(req.body.expected_games) : undefined;
     res.json({ round_id: roundId, ...await api.freezeGroupRound({ roundId, expectedGames: expected }) });
   });
 
@@ -170,6 +160,10 @@ export function officialRouter({ api = liveOfficialApi } = {}) {
     if (!progress?.frozen) {
       throw fail(409, 'round_not_published', 'Bảng xếp hạng chỉ được công bố khi vòng bảng đã kết thúc và được khóa.');
     }
+    const statuses = await api.getRoundBroadcastStatuses(roundId);
+    if (!statuses || statuses.length === 0 || !statuses.every((s) => s.isRevealed)) {
+      throw fail(409, 'round_not_published', 'Bảng xếp hạng chỉ được công bố sau khi toàn bộ các ván đấu vòng bảng đã phát sóng hoàn tất.');
+    }
     const standings = await api.groupStandings({ roundId });
     res.json({ published: true, event_id: req.params.id, round_id: roundId, ...standings });
   });
@@ -181,15 +175,56 @@ export function officialRouter({ api = liveOfficialApi } = {}) {
     if (!progress?.frozen) {
       throw fail(409, 'round_not_published', 'Nhánh đấu knockout chưa được công bố.');
     }
+    const groupStatuses = await api.getRoundBroadcastStatuses(roundId);
+    if (!groupStatuses || groupStatuses.length === 0 || !groupStatuses.every((s) => s.isRevealed)) {
+      throw fail(409, 'round_not_published', 'Nhánh đấu knockout chỉ được công bố khi toàn bộ vòng bảng đã phát sóng hoàn tất.');
+    }
     const level = await eventLevel(req.params.id, api);
     const bracketProg = await api.bracketProgress({ groupRoundId: roundId, level });
-    res.json({ published: true, ...bracketView({ eventId: req.params.id, groupRoundId: roundId, progress: bracketProg }) });
+
+    // DTO Whitelist cho team/member: nếu một series knockout chưa phát sóng hoàn tất (chưa reveal),
+    // giấu kết quả chi tiết của series đó để không lộ trước giờ phát
+    let sanitizedProg = bracketProg;
+    if (req.account?.role !== 'admin' && bracketProg?.outcomes) {
+      const sanitizedOutcomes = { ...bracketProg.outcomes };
+      for (const [matchId, outcome] of Object.entries(bracketProg.outcomes)) {
+        if (outcome?.roundId) {
+          const koStatuses = await api.getRoundBroadcastStatuses(outcome.roundId).catch(() => []);
+          const allRevealed = koStatuses.length > 0 && koStatuses.every((s) => s.isRevealed);
+          if (!allRevealed) {
+            delete sanitizedOutcomes[matchId];
+          }
+        }
+      }
+      sanitizedProg = { ...bracketProg, outcomes: sanitizedOutcomes };
+    }
+
+    res.json({ published: true, ...bracketView({ eventId: req.params.id, groupRoundId: roundId, progress: sanitizedProg }) });
   });
 
   router.get('/events/:id/official/published/tickets', requireSession, async (req, res) => {
     await api.assertMember(req.params.id, req.account);
     const roundId = await groupRoundId(req.params.id, api);
+    const groupStatuses = await api.getRoundBroadcastStatuses(roundId);
+    if (!groupStatuses || groupStatuses.length === 0 || !groupStatuses.every((s) => s.isRevealed)) {
+      throw fail(409, 'tickets_not_published', 'Vé chung kết chỉ được công bố khi toàn bộ vòng bảng đã phát sóng hoàn tất.');
+    }
     const level = await eventLevel(req.params.id, api);
+    const bracketProg = await api.bracketProgress({ groupRoundId: roundId, level });
+    if (bracketProg.waiting || bracketProg.resolved !== bracketProg.expected) {
+      throw fail(409, 'tickets_not_published', 'Vé chung kết chỉ được công bố khi toàn bộ nhánh knockout đã hoàn tất.');
+    }
+    if (bracketProg.outcomes) {
+      for (const outcome of Object.values(bracketProg.outcomes)) {
+        if (outcome?.roundId) {
+          const koStatuses = await api.getRoundBroadcastStatuses(outcome.roundId).catch(() => []);
+          const allRevealed = koStatuses.length > 0 && koStatuses.every((s) => s.isRevealed);
+          if (!allRevealed) {
+            throw fail(409, 'tickets_not_published', 'Vé chung kết chỉ được công bố khi toàn bộ các trận knockout đã phát sóng hoàn tất.');
+          }
+        }
+      }
+    }
     try {
       const result = await api.knockoutTickets({ groupRoundId: roundId, level });
       res.json({ published: true, event_id: req.params.id, round_id: roundId, ...result });
@@ -218,28 +253,27 @@ export function officialRouter({ api = liveOfficialApi } = {}) {
   router.get('/official/rounds/:roundPk/games/:gameKey/broadcast', requireSession, async (req, res) => {
     const result = await api.broadcastState({ roundPk: req.params.roundPk,
       gameKey: req.params.gameKey, account: req.account });
-    res.json({ round_pk: req.params.roundPk, game_key: req.params.gameKey, ...result });
+    res.json(result);
   });
 
-  /** Viewer: cần phiên đăng nhập + thuộc giải; chỉ dữ liệu đã tới hạn phát. */
   router.get('/official/rounds/:roundPk/games/:gameKey/viewer', requireSession, async (req, res) => {
-    const afterSeq = req.query?.after_seq ?? req.query?.afterSeq ?? 0;
-    res.set('Cache-Control', 'private, no-store');
-    res.json(await api.broadcastViewer({ roundPk: req.params.roundPk,
-      gameKey: req.params.gameKey, account: req.account, afterSeq }));
+    const afterSeq = req.query.after_seq !== undefined ? Number(req.query.after_seq) : 0;
+    const result = await api.broadcastViewer({ roundPk: req.params.roundPk,
+      gameKey: req.params.gameKey, account: req.account, afterSeq });
+    res.json(result);
   });
 
-  // ---- Hủy / chấm lại job (bắt buộc lý do, giữ audit ở DB) ----
+  // ---- Vận hành sự cố (Admin-only): hủy job đang treo, xếp lại job lỗi kèm lý do ----
   router.post('/official/jobs/:jobId/cancel', requireLocalAdmin, async (req, res) => {
     const reason = requireReason(req.body?.reason);
-    const result = await api.cancelGameJob({ jobId: req.params.jobId, actor: req.account.id, reason });
-    res.json({ job_id: req.params.jobId, ...result, reason });
+    const result = await api.cancelGameJob({ jobId: req.params.jobId, reason, actor: req.account });
+    res.json(result);
   });
 
   router.post('/official/jobs/:jobId/requeue', requireLocalAdmin, async (req, res) => {
     const reason = requireReason(req.body?.reason);
-    const result = await api.requeueGameJob({ jobId: req.params.jobId, actor: req.account.id, reason });
-    res.json({ job_id: req.params.jobId, ...result, reason });
+    const result = await api.requeueGameJob({ jobId: req.params.jobId, reason, actor: req.account });
+    res.json(result);
   });
 
   return router;

@@ -5,7 +5,7 @@
  * Một ván official chỉ được đặt lịch khi đã có kết quả accepted; viewer chỉ nhận đúng
  * `visible_plies` nước đã phát và không bao giờ thấy kết quả trước `reveal_result`.
  *
- * Hàm thuần (`trimOfficialReplay`, `officialBroadcastView`, `officialViewerPackage`)
+ * Hàm thuần (`trimOfficialReplay`, `officialBroadcastView`, `officialViewerPackage`, `sanitizeOfficialGame`)
  * test được bằng `node --test`; phần DB tách thành tham số `deps` để test không chạm Supabase.
  */
 import { rows, insert, update } from '../shared/client.js';
@@ -74,6 +74,28 @@ export function officialBroadcastView(row, info) {
   };
 }
 
+/** Whitelist DTO ván official: giấu kết quả/hash/recorded_at khi chưa reveal và không phải admin. */
+export function sanitizeOfficialGame(game, { reveal = false, isAdmin = false } = {}) {
+  if (!game) return null;
+  const base = {
+    game_key: game.game_key,
+    stage: game.stage ?? null,
+    group_name: game.group_name ?? null,
+    game_no: game.game_no ?? null,
+    red_participant_id: game.red_participant_id ?? null,
+    blue_participant_id: game.blue_participant_id ?? null,
+  };
+  if (isAdmin || reveal) {
+    return {
+      ...base,
+      result: game.result ?? null,
+      replay_hash: game.replay_hash ?? null,
+      recorded_at: game.recorded_at ?? null,
+    };
+  }
+  return base;
+}
+
 /**
  * Gói dữ liệu cho viewer: chỉ event `seq` đã tới hạn phát (hoặc toàn bộ khi đã mở).
  * Kết quả chỉ xuất hiện khi `reveal_result = true`.
@@ -105,7 +127,7 @@ export function officialViewerPackage({ roundPk, gameKey, game, replay, info, af
 }
 
 // ---------- DB ----------
-const selectGame = 'game_key,stage,result,replay_hash,recorded_at';
+const selectGame = 'round_pk,game_key,stage,group_name,game_no,red_participant_id,blue_participant_id,result,replay_hash,recorded_at';
 
 export async function loadOfficialBroadcastContext(roundPk, gameKey) {
   const [round] = await rows('official_rounds', `id=eq.${roundPk}&select=id,event_id,round_id,frozen`);
@@ -193,8 +215,15 @@ export async function officialBroadcastState({ roundPk, gameKey, account, now = 
   const row = context.broadcast || { round_pk: roundPk, game_key: gameKey,
     event_id: context.round.event_id, state: 'scheduled', starts_at: null,
     ply_interval_ms: 2000, release_mode: 'window' };
-  return { broadcast: officialBroadcastView(row, info), round_id: context.round.round_id,
-    game: context.game };
+
+  const isAdmin = account?.role === 'admin';
+  const shouldReveal = isAdmin || Boolean(info.reveal_result);
+
+  return {
+    broadcast: officialBroadcastView(row, info),
+    round_id: context.round.round_id,
+    game: sanitizeOfficialGame(context.game, { reveal: shouldReveal, isAdmin }),
+  };
 }
 
 /** Gói viewer: cần đúng membership; chưa công bố thì 404. */
@@ -230,33 +259,80 @@ export async function listPublishedOfficialGames({ roundPk, account, now = Date.
   });
   const loadGames = deps.loadGames || (async (id) => {
     return rows('official_games',
-      `round_pk=eq.${id}&select=round_pk,game_key,stage,series_id,game_no,red_participant_id,blue_participant_id,result,reason,ply_count`);
+      `round_pk=eq.${id}&select=round_pk,game_key,stage,group_name,game_no,red_participant_id,blue_participant_id,result,replay_hash,recorded_at`);
+  });
+  const loadAttempts = deps.loadAttempts || (async (id) => {
+    return rows('official_job_attempts',
+      `round_pk=eq.${id}&outcome=eq.succeeded&select=game_key,replay`);
   });
 
-  const [broadcastRows, gameRows] = await Promise.all([
+  const [broadcastRows, gameRows, attemptRows] = await Promise.all([
     loadBroadcasts(roundPk),
     loadGames(roundPk),
+    loadAttempts(roundPk),
   ]);
 
   const gamesByKey = new Map((gameRows || []).map((g) => [g.game_key, g]));
+  const attemptsByKey = new Map((attemptRows || []).map((a) => [a.game_key, a]));
   const published = [];
 
   for (const bRow of (broadcastRows || [])) {
     const game = gamesByKey.get(bRow.game_key);
-    const totalPlies = game?.ply_count ? Number(game.ply_count) : 0;
+    const attempt = attemptsByKey.get(bRow.game_key);
+    const totalPlies = replayPlyCount(attempt?.replay);
     const info = computeBroadcast(bRow, { now, totalPlies });
     if (account?.role === 'admin' || isPublished(info)) {
+      const isAdmin = account?.role === 'admin';
+      const shouldReveal = isAdmin || Boolean(info.reveal_result);
       published.push({
         game_key: bRow.game_key,
         stage: game?.stage ?? null,
-        series_id: game?.series_id ?? null,
+        group_name: game?.group_name ?? null,
         game_no: game?.game_no ?? null,
         red_participant_id: game?.red_participant_id ?? null,
         blue_participant_id: game?.blue_participant_id ?? null,
         broadcast: officialBroadcastView(bRow, info),
+        ...(shouldReveal ? {
+          result: game?.result ?? null,
+          replay_hash: game?.replay_hash ?? null,
+          recorded_at: game?.recorded_at ?? null,
+        } : {}),
       });
     }
   }
 
   return { round_id: round.round_id, round_pk: roundPk, event_id: round.event_id, games: published };
+}
+
+/** Lấy trạng thái phát sóng của tất cả các ván trong một round (phục vụ publication gate). */
+export async function getRoundBroadcastStatuses(roundPk, { now = Date.now() } = {}, deps = {}) {
+  requireRoundPk(roundPk);
+  const loadGames = deps.loadGames || (async (id) => rows('official_games',
+    `round_pk=eq.${id}&select=round_pk,game_key,stage,group_name,game_no,red_participant_id,blue_participant_id,result,replay_hash,recorded_at`));
+  const loadBroadcasts = deps.loadBroadcasts || (async (id) => rows('official_broadcasts',
+    `round_pk=eq.${id}&order=starts_at.asc`));
+  const loadAttempts = deps.loadAttempts || (async (id) => rows('official_job_attempts',
+    `round_pk=eq.${id}&outcome=eq.succeeded&select=game_key,replay`));
+
+  const [games, broadcasts, attempts] = await Promise.all([
+    loadGames(roundPk),
+    loadBroadcasts(roundPk),
+    loadAttempts(roundPk),
+  ]);
+
+  const broadcastsByKey = new Map((broadcasts || []).map((b) => [b.game_key, b]));
+  const attemptsByKey = new Map((attempts || []).map((a) => [a.game_key, a]));
+
+  return (games || []).map((game) => {
+    const broadcast = broadcastsByKey.get(game.game_key);
+    const attempt = attemptsByKey.get(game.game_key);
+    const totalPlies = replayPlyCount(attempt?.replay);
+    const info = broadcast ? computeBroadcast(broadcast, { now, totalPlies }) : null;
+    return {
+      game_key: game.game_key,
+      isRevealed: Boolean(info?.reveal_result),
+      isPublished: Boolean(info && isPublished(info)),
+      phase: info?.phase ?? 'hidden',
+    };
+  });
 }
