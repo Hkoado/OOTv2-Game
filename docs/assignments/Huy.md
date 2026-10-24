@@ -1,5 +1,23 @@
 # Huy — Backend, dữ liệu, bảo mật và release integration
 
+## Phân công hiện hành — 25/10/2026
+
+Ưu tiên [RC online tối giản](../20-RC-ONLINE-TOI-GIAN.md). Chỉ thực hiện:
+
+1. API kết quả **đã công bố** cho đội: standings/bracket/vé/danh sách ván, membership/ACL;
+   giữ API admin riêng, không lộ kết quả kín. Tái sử dụng scoring/services có sẵn.
+2. Cutoff batch có tiến độ/retry giữ SHA/policy; login throttle dùng chung Supabase.
+3. Chốt DTO + fixture sớm với Bảo trong docs/19; tự kiểm backend, ghi migration/env/evidence.
+
+Không làm UI, runner, cấu hình package/Vercel hoặc nghiệm thu manual đợt này.
+**Khoa sở hữu config/package/lock/Vercel và tổng hợp RC**, không còn dồn vào Huy.
+Test tập trung phần sửa, không chạy full suite mỗi patch. Không tự apply remote/push/deploy.
+Đọc tài liệu chung để biết ownership, kiểm tra tối thiểu và điều kiện mở giải.
+
+---
+
+## Lịch sử ngày 24/10 — không dùng làm checklist giao việc đợt này
+
 ## Nhiệm vụ hiện hành — 24/10/2026
 
 Đọc AGENTS.md, docs/18-CHOT-HOAN-THIEN-VA-NGHIEM-THU.md,

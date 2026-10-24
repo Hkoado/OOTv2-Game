@@ -1,5 +1,25 @@
 # Khoa — Runtime chính thức, điều phối giải và máy chấm
 
+## Phân công hiện hành — 25/10/2026
+
+Ưu tiên [RC online tối giản](../20-RC-ONLINE-TOI-GIAN.md). Chỉ thực hiện:
+
+1. Guard production không chạy trusted-dev, tách env; xác minh/vá dependency.
+2. Health nhẹ/readiness được bảo vệ, header/proxy/Vercel; tận dụng health/log hiện có
+   cho worker/queue, không dựng monitoring hoặc runner mới.
+3. Runbook deploy/rollback/backup DB + artifact; tổng hợp một RC, chạy full tests/build/diff
+   cuối và gom evidence từng owner. Không ký thay Huy/Bảo.
+
+**Sở hữu package/lock/Vercel/server/app.js và cấu hình chung đợt này**, thay ownership Huy cũ;
+giữ phạm vi worker/sandbox/tools. Không sửa routes/auth/nghiệp vụ cutoff/React.
+Bot đã chạy OK theo user: không yêu cầu chạy lại nếu boundary không đổi; không suy ra sandbox/
+recovery đã PASS. Manual E2E tạm hoãn; giữ gate an toàn và ghi NOT RUN/BLOCKED trung thực.
+Không tự push/deploy/apply remote hoặc tạo worktree. User review RC rồi tự deploy.
+
+---
+
+## Lịch sử ngày 24/10 — không dùng làm checklist giao việc đợt này
+
 ## Nhiệm vụ hiện hành — 24/10/2026
 
 Đọc AGENTS.md, docs/18-CHOT-HOAN-THIEN-VA-NGHIEM-THU.md,

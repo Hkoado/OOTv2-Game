@@ -1,5 +1,10 @@
 # OTTv2 — Bộ tài liệu giải đấu và giao diện
 
+**Ưu tiên hiện hành 25/10/2026:** [RC online tối giản — ba người làm song song](20-RC-ONLINE-TOI-GIAN.md).
+Huy API/ACL/cutoff/throttle; Bảo UI online/review; Khoa cấu hình/worker health/tổng hợp RC.
+User đã thử bot trả kết quả OK; tạm hoãn nghiệm thu Chung kết thủ công. Không bỏ gate an toàn.
+Các quyết định 24/10 bên dưới giữ làm nền tảng; phạm vi/ownership đợt này theo docs/20.
+
 **Quyết định mới 24/10/2026:** [Phạm vi hoàn thiện và một RC nghiệm thu](18-CHOT-HOAN-THIEN-VA-NGHIEM-THU.md),
 [contract phối hợp](19-CONTRACT-TICH-HOP.md), assignments [Huy](assignments/Huy.md),
 [Bảo](assignments/Bao.md), [Khoa](assignments/Khoa.md). Nhóm tự tích hợp toàn gói, không chờ

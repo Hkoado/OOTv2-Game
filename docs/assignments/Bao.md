@@ -1,5 +1,23 @@
 # Bảo — UI hiện có, trải nghiệm hoàn chỉnh và browser nghiệm thu
 
+## Phân công hiện hành — 25/10/2026
+
+Ưu tiên [RC online tối giản](../20-RC-ONLINE-TOI-GIAN.md). Chỉ thực hiện:
+
+1. UI đội xem standings/bracket/vé/ván đã công bố và mở viewer; không tính điểm client.
+2. Nối cutoff batch; hoàn thiện thao tác online, loading/error/401/403/409/logout/refresh.
+3. Bắt đầu bằng DTO/fixture đã chốt, tự nối API thật ngay khi có; không fallback fixture
+   ở production. Giữ component/style hiện có, không redesign hoặc thêm framework.
+4. Một smoke browser online admin/đội/khác giải và review script ngắn; hướng dẫn đội.
+
+Sở hữu frontend portal/adapters/tests và runbook SINH-VIEN; không sửa server/schema.
+Tạm gác nghiệm thu/manual E2E và benchmark dài; không chờ health UI mới hoàn thiện online.
+Ghi evidence/NOT RUN trong handoff; phối hợp sửa boundary, không chuyển việc nối UI cho Huy/user.
+
+---
+
+## Lịch sử ngày 24/10 — không dùng làm checklist giao việc đợt này
+
 ## Nhiệm vụ hiện hành — 24/10/2026
 
 Đọc AGENTS.md, docs/18-CHOT-HOAN-THIEN-VA-NGHIEM-THU.md,

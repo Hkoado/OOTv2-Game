@@ -1,5 +1,11 @@
 # Contract phối hợp cho đợt hoàn thiện
 
+**Cập nhật 25/10/2026:** phạm vi và ownership theo [RC online tối giản](20-RC-ONLINE-TOI-GIAN.md).
+Huy chốt với Bảo hai boundary kết quả đã công bố/cutoff batch bằng DTO + fixture versioned
+trước khi nối; tái sử dụng mapping sẵn có, không coi endpoint đề xuất là đã implement.
+Khoa sở hữu config/package/Vercel và tổng hợp RC; health UI chỉ nối nếu thực sự cần.
+Manual E2E tạm hoãn, mọi nguyên tắc ACL/provenance/fencing bên dưới vẫn giữ nguyên.
+
 Ngày 24/10/2026. Đi cùng [phạm vi chốt](18-CHOT-HOAN-THIEN-VA-NGHIEM-THU.md).
 Đây là **contract ngữ nghĩa bắt buộc**, không khẳng định các route/RPC dưới đây đã tồn tại.
 Nhóm map vào exports/routes/schema thật trước khi code từng boundary; không tạo tên trùng hoặc

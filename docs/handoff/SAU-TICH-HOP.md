@@ -1,5 +1,15 @@
 # Các bước còn lại để hoàn thiện sau Huy / Bảo / Khoa
 
+## Checklist hiện hành — 25/10/2026
+
+Dùng [RC online tối giản](../20-RC-ONLINE-TOI-GIAN.md), mục 5 làm checklist nghiệm thu.
+Huy ký API/DB, Bảo ký UI/smoke online, Khoa ký cấu hình/worker và tổng hợp RC.
+User đã báo bot chạy/trả kết quả OK; không coi là bằng chứng tất cả gate runtime đạt.
+Manual E2E tạm hoãn; không yêu cầu nghiệm thu manual để bàn giao RC online.
+Giữ trạng thái thật của sandbox/recovery và gate trước mở bot không tin cậy.
+**Toàn bộ checklist ngày 24/10 bên dưới là lịch sử**, không dùng để mở rộng scope mới
+hoặc suy ra trạng thái deployment hiện tại.
+
 ## Checklist RC hiện hành — quyết định 24/10/2026
 
 Ưu tiên [docs/18](../18-CHOT-HOAN-THIEN-VA-NGHIEM-THU.md) và
