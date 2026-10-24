@@ -79,6 +79,32 @@
   API), không thể qua REST. Không được tắt trigger ngoài dọn dẹp có kiểm soát.
 - `npm test` **372/372 pass**, `npm run build` pass sau thay đổi.
 
+### Review + apply hàng đợi official của Khoa (24/10/2026)
+
+- Nhận `origin/dev` (`96f6231`, merge `e6ad2af`) gồm `officialWorker`, `officialJobs`, `officialExecution`,
+  `officialOrchestration`, `officialKnockout` và migration `20261026090000_official_worker_jobs.sql`.
+- **Review SQL (Huy):** RPC có fence đúng (`for update skip locked`, lease/generation → `lease_lost`,
+  finish idempotent `already_recorded`/`result_conflict`, `unique(round_pk, game_key)`, `reap`, `notify pgrst`).
+  Nhưng bảng `mvp_official_jobs`/`job_attempts` (và `rounds`/`games` từ migration cũ) đang cấp
+  `INSERT/UPDATE` cho `service_role` ⇒ PostgREST có thể ghi đè `status/result` bỏ qua fence.
+- **Đã thêm** `supabase/migrations/20261026110000_official_grants_hardening.sql`: `service_role` chỉ còn
+  `SELECT` trên 4 bảng; browser không có quyền. Không đổi schema/RPC.
+- **Đã apply** `20261026090000` + `20261026110000` bằng `db:apply-migrations -- --apply --smoke`
+  (**OK 2/2**, smoke rollback PASS). Kiểm chứng: 2 bảng + 8 RPC tồn tại;
+  `has_table_privilege('service_role', …, 'UPDATE'|'INSERT') = false`, `SELECT = true`, `anon = false`;
+  REST `GET` jobs 200 nhưng `PATCH`/`POST` → **403 `42501`**. Counts dữ liệu không đổi
+  (`tournaments=2, participants=16, matches=4, official_rounds=0`).
+- `npm test` **395/395 pass**, `npm run build` pass; `db:check-github` không còn 404/5xx.
+- **Dọn repo:** 7 file nháp `.tmp_*` do commit trước vô tình thêm vào đã được xoá khỏi git + thêm `/.tmp_*`
+  vào `.gitignore` (nội dung chỉ là output git/docs/test, không có secret).
+- **Cần Khoa nối tiếp:** worker hiện chỉ xử lý `mvp_official_jobs`; **manual final chưa có consumer**.
+  Producer đã có (`mvp_manual_final_*` + `snapshot_json` + `mvp_manual_final_claim/finish/release`,
+  client `server/shared/manualFinalJobs.js`) — đề nghị mở rộng `officialWorker` nhận thêm kind manual.
+  Ghi chú “manual chưa có producer” trong `docs/handoff/Khoa.md` đã lỗi thời.
+- **Còn lại của Huy:** API route cho official orchestration/knockout (`publishNextGame`, `roundProgress`,
+  `groupStandings`, `freezeGroupRound`, `cancel/requeue job`, knockout/bracket/tickets), test route + smoke;
+  sau đó drill 2 worker trên VM.
+
 ### Việc của người khác (không tự làm thay)
 
 - Bảo: nối UI mục “Chung kết thủ công” theo DTO mục 6.3 của docs/19; migration **đã apply** nên có thể

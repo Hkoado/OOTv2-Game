@@ -177,11 +177,38 @@ PLAN.push({
 });
 
 PLAN.push({
+  version: '20261026090000',
+  file: 'supabase/migrations/20261026090000_official_worker_jobs.sql',
+  why: 'K3 official jobs queue + lease/generation fencing + attempts audit',
+  exists: async () => (await restGet('/rest/v1/mvp_official_jobs?select=*&limit=1')).status === 200,
+});
+
+PLAN.push({
   version: '20261026100000',
   file: 'supabase/migrations/20261026100000_manual_final.sql',
   why: 'Chung kết thủ công: 6 bảng + 7 RPC mvp_manual_final_*',
   exists: async () => (await restGet('/rest/v1/mvp_manual_final_events?select=*&limit=1')).status === 200,
 });
+
+PLAN.push({
+  version: '20261026110000',
+  file: 'supabase/migrations/20261026110000_official_grants_hardening.sql',
+  why: 'Huy review: service_role chỉ SELECT trên official jobs/rounds/games (ghi qua RPC fence)',
+  exists: async () => {
+    // Quyền bảng không lộ qua PostgREST; đọc bằng Management API.
+    if (!accessToken || !projectRef) return false;
+    try {
+      const found = await managementRows(
+        "select has_table_privilege('service_role','public.mvp_official_jobs','UPDATE') as upd,"
+        + " has_table_privilege('service_role','public.mvp_official_games','UPDATE') as games_upd"
+      );
+      return found?.[0]?.upd === false && found?.[0]?.games_upd === false;
+    } catch {
+      return false;
+    }
+  },
+});
+
 
 const readSql = (relative) => readFileSync(path.join(root, relative), 'utf8');
 

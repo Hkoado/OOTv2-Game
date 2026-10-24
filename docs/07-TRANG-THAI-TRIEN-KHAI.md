@@ -28,6 +28,11 @@
   chưa chọn/pair chưa khóa/nhảy trạng thái/thiếu CSRF); dọn sạch, counts trở lại 2 tournaments / 11
   accounts / 0 manual events. Hợp đồng đã khớp UI: POST trả kèm `id/name/status`, `blockers` là chuỗi +
   `blocker_details`; cookie session path `/api` kèm xoá cookie legacy `/api/local`.
+- **Hàng đợi official của Khoa (24/10/2026):** review SQL xong; thêm `20261026110000_official_grants_hardening`
+  (service_role chỉ `SELECT` trên `mvp_official_rounds/games/jobs/job_attempts`), apply
+  `20261026090000` + `20261026110000` bằng `--apply --smoke` (**OK 2/2**). Kiểm: 2 bảng + 8 RPC; REST
+  `PATCH/POST` jobs → 403 `42501`; counts không đổi. `npm test` 395/395, build pass. Xoá 7 file `.tmp_*`
+  bị commit nhầm + ignore `/.tmp_*`. **Manual final vẫn chưa có consumer** ở worker (Khoa).
 
 
 ## Đã nối DB thật + smoke PASS — 24/10/2026

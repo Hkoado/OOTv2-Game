@@ -30,6 +30,8 @@ tests-local/
 *.local.test.js
 tests-*.log
 manual-final-*.txt
+# File nháp tạm của công cụ/agent ở root repo
+/.tmp_*
 
 # Editor directories and files
 .vscode/*

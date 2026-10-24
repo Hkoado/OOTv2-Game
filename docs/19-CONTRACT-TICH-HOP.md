@@ -14,6 +14,9 @@ Nhóm map vào exports/routes/schema thật trước khi code từng boundary; k
 - Cookie phiên: `HttpOnly`, `SameSite=strict`, `Secure` khi HTTPS; **path `/api`** (không chỉ `/api/local`) vì
   `/api/live/*` cũng dùng `requireSession`. Khi đổi path phải xoá cookie path cũ (`/api/local`) lúc login/logout,
   nếu không browser gửi cookie cũ trước và phiên mới bị che.
+- Bảng runtime chỉ ghi qua RPC `SECURITY DEFINER` có fence (lease/generation/chain): `service_role` **chỉ được
+  `SELECT`** trên `mvp_official_rounds/games/jobs/job_attempts` và `mvp_manual_final_*`; cấp `INSERT/UPDATE`
+  bảng sẽ cho PostgREST bỏ qua fence (ví dụ PATCH thẳng `status='succeeded'` hoặc `result`).
 - Idempotency cho request retry; optimistic version cho draft; transaction cho khóa/chọn/claim/finish.
 - Dùng error envelope/code hiện có, bổ sung code có test nếu thiếu. UI phân biệt forbidden,
   conflict/frozen, validation, infrastructure; không suy thành công từ HTTP 202 hay trạng thái process.
@@ -71,7 +74,7 @@ và consumer đã xác nhận. Chỉ đánh VERIFIED khi đã tích hợp và c�
 | Boundary | Owner chốt | Mapping/test/consumer | Trạng thái |
 | --- | --- | --- | --- |
 | Intake/readiness/publication | Huy, Bảo xác nhận | `PUT/GET/DELETE /api/local/events/:id/repository`, `POST/GET .../submissions/from-github`, `GET /repo-sync-jobs/:id`, `GET /broadcasts/:matchId`; test `githubIntakeApi`, `uploadDisabled`, `publication`; Postgres smoke `db:h4` 30/30 | VERIFIED (mock + DB smoke; browser chưa) |
-| Snapshot/schedule/job/result/standings | Khoa + Huy, Bảo xác nhận DTO | `server/shared/officialSchedule.js` + RPC `mvp_official_*`, `server/lib/officialGroups.js`; test `officialSchedule`, `officialGroups`, `officialBracket`, `officialRounds` | PARTIAL — code/test có, worker Campus/VM chưa nghiệm thu |
+| Snapshot/schedule/job/result/standings | Khoa + Huy, Bảo xác nhận DTO | `officialSchedule.js` + RPC `mvp_official_*`; `officialJobs.js` (claim/heartbeat/finish/fail/requeue/reap) sau `20261026090000`; grants siết bởi `20261026110000` (service_role chỉ `SELECT`, REST PATCH/POST → 403 `42501`); test `officialSchedule`, `officialGroups`, `officialBracket`, `officialRounds`, `officialWorker` | PARTIAL — queue + worker code có, **API route chưa nối**, VM/2 worker chưa nghiệm thu |
 | Manual intake/lock/judging | Huy + Khoa, Bảo xác nhận | Xem mục 6: route `/api/local/manual-finals/*`, RPC `mvp_manual_final_*`; test `manualFinalApi` (9), `manualFinalDrill` (5), `supabaseSchema` (+1); **migration đã apply 24/10/2026** (project OTTv2-G5) + drill PASS | IMPLEMENTED + APPLIED; UI/worker chưa nối (Bảo/Khoa) |
 | Worker install/control/readiness | Khoa | Có scaffolding, cần sửa và nghiệm thu VM | NOT VERIFIED |
 
