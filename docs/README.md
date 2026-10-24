@@ -1,5 +1,9 @@
 # OTTv2 — Bộ tài liệu giải đấu và giao diện
 
+**Trạng thái nghiệm thu hiện hành:** [Production readiness](PRODUCTION-READINESS.md).
+Phân biệt code/test local, migration remote và sandbox thật; các handoff/drill cũ
+không phải tuyên bố hệ thống đã production-ready.
+
 **Luật mới 24/10/2026:** [Địa hình, setup kín và phân màu Campus v2](17-LUAT-DIA-HINH-VA-XEP-KIN.md).
 Thay phần v1 chỉ ô cản và Xanh thấy setup Đỏ cho giải mới; giữ replay/phòng cũ.
 

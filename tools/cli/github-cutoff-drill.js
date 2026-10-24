@@ -26,6 +26,13 @@ async function cleanup() {
 }
 
 try {
+  // Legacy fixture/cleanup predates authoritative captures. Refuse before seeding:
+  // its cleanup cannot delete captures and must not leave locked fixture data.
+  let capturesAvailable = false;
+  try { await rows('cutoff_captures', 'limit=1&select=event_id'); capturesAvailable = true; }
+  catch (error) { if (error.code !== 'shared_db_error') throw error; }
+  if (capturesAvailable) throw Object.assign(new Error('legacy_drill_requires_capture_upgrade'),
+    { code: 'legacy_drill_requires_capture_upgrade' });
   state.teams = Array.from({ length: 2 }, () => randomUUID());
   for (const [index, id] of state.teams.entries()) {
     await insert('participants', [{ id, name: `Cutoff drill ${runId} ${index}`,

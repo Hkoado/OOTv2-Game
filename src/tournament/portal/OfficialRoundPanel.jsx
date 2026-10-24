@@ -33,7 +33,7 @@ export default function OfficialRoundPanel({ event, admin, busy, actions }) {
   const cutoff = event.competition.cutoff ? Date.parse(event.competition.cutoff) : NaN;
   const cutoffPassed = Number.isFinite(cutoff) && Date.now() >= cutoff;
   const canOpen = admin && event.status === 'draft' && event.competition.mapsPublished === true
-    && cutoffPassed && !opening && !busy?.event;
+    && cutoffPassed && !opening && !syncing && !busy?.event;
 
   async function handleSync() {
     setSyncing(true);
@@ -103,6 +103,7 @@ export default function OfficialRoundPanel({ event, admin, busy, actions }) {
           <p className="tt-muted">
             Bước 1: sau cutoff, chốt GitHub một lần cho tất cả repo đã duyệt và để worker tải bài.
             Bước 2: mở vòng bảng để khóa snapshot. Cả hai thao tác đều idempotent.
+            {' '}SHA là lần resolve thành công đầu tiên sau cutoff, không phải xác minh HEAD lịch sử tại deadline.
           </p>
           {!event.competition.mapsPublished ? <Alert tone="warning">Cần công bố map pack trước.</Alert> : null}
           {!cutoffPassed ? <Alert tone="warning">Chưa tới cutoff; chưa thể chốt bài.</Alert> : null}

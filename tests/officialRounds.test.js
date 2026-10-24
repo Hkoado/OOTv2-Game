@@ -27,10 +27,15 @@ function fixtures({ cutoffAt = cutoff } = {}) {
       primaryMap: EMPTY_TERRAIN_MAP, reserveMap: EMPTY_TERRAIN_MAP } },
     participants: ids.map((id, index) => ({ id, name: `Team ${index + 1}` })),
     submissions,
-    receipts: ids.slice(0, 2).map((team_id, index) => ({
-      team_id, submission_id: team_id, source_hash: bytes(index),
+    captures: ids.map((team_id, index) => ({ team_id, receipt_id: `receipt-${index}`,
+      cutoff: cutoffAt, policy: 'cutoff-first-resolution.v1', commit_sha: String(index + 1).repeat(40),
+      captured_at: '2026-10-24T00:00:01.000Z',
+      connection: { repo_id: 100 + index, repository: `https://github.com/example/bot-${index}`, branch: 'main' } })),
+    receipts: ids.map((team_id, index) => ({
+      id: `receipt-${index}`, team_id, submission_id: team_id, source_hash: bytes(index),
       commit_sha: String(index + 1).repeat(40), repo_id: 100 + index,
-      resolved_at: '2026-10-23T23:00:00.000Z', status: 'valid',
+      repository: `https://github.com/example/bot-${index}`, branch: 'main', file_path: 'bot.py',
+      resolved_at: '2026-10-24T00:00:01.000Z', status: 'valid',
     })),
   };
 }
@@ -46,13 +51,13 @@ function setupFetch(t, data) {
           : table === 'mvp_submissions' ? data.submissions
             : table === 'mvp_github_receipts' ? data.receipts
               : table === 'mvp_participants' ? data.participants
-                : [];
+                : table === 'mvp_cutoff_captures' ? data.captures : [];
     return new Response(JSON.stringify(values), { status: 200, headers: { 'content-type': 'application/json' } });
   };
   t.after(() => { globalThis.fetch = original; });
 }
 
-test('buildGroupSnapshot pins one valid bot per team, GitHub + offline', async (t) => {
+test('buildGroupSnapshot pins only authoritative receipts completed after cutoff', async (t) => {
   setupFetch(t, fixtures());
   const { snapshot } = await buildGroupSnapshot({ eventId: EVENT, clock: () => now });
   assert.equal(snapshot.eventId, EVENT);
@@ -62,10 +67,27 @@ test('buildGroupSnapshot pins one valid bot per team, GitHub + offline', async (
   assert.equal(snapshot.bots[0].sourceKind, 'github');
   assert.equal(snapshot.bots[0].repositoryId, '100');
   assert.equal(snapshot.bots[0].commitSha, '1'.repeat(40));
-  assert.equal(snapshot.bots[2].sourceKind, 'offline_file');
+  assert.equal(snapshot.bots[2].sourceKind, 'github');
+  assert.equal(snapshot.bots[0].receiptId, 'receipt-0');
   assert.match(snapshot.contentHash, /^[a-f0-9]{64}$/);
   assert.equal(snapshot.runtime.runtimeVersion, 'campus-runtime.v1');
 });
+
+for (const state of ['missing', 'resolving', 'invalid', 'infrastructure', 'wrong_hash', 'wrong_receipt', 'wrong_sha', 'wrong_repo', 'early_capture']) {
+  test(`snapshot blocks ${state} official capture despite older valid submissions`, async (t) => {
+    const data = fixtures();
+    if (state === 'missing') data.captures = data.captures.slice(1);
+    else if (state === 'wrong_hash') data.receipts[0].source_hash = bytes(9);
+    else if (state === 'wrong_receipt') data.captures[0].receipt_id = 'another-receipt';
+    else if (state === 'wrong_sha') data.captures[0].commit_sha = 'f'.repeat(40);
+    else if (state === 'wrong_repo') data.receipts[0].repository = 'https://github.com/example/other';
+    else if (state === 'early_capture') data.captures[0].captured_at = '2026-10-23T00:00:00.000Z';
+    else data.receipts[0].status = state;
+    setupFetch(t, data);
+    await assert.rejects(buildGroupSnapshot({ eventId: EVENT, clock: () => now }),
+      (error) => error.code === 'missing_submission');
+  });
+}
 
 test('buildGroupSnapshot refuses before cutoff or with a missing bot', async (t) => {
   setupFetch(t, fixtures({ cutoffAt: '2026-10-26T00:00:00.000Z' }));

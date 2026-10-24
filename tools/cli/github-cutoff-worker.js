@@ -54,4 +54,4 @@ for (let index = 0; index < max; index++) {
 }
 const processed = results.filter((item) => item.processed).length;
 console.log(`RESULT processed=${processed} results=${results.length}`);
-process.exit(0);
+process.exitCode = results.some((item) => item.processed && !item.recorded) ? 1 : 0;

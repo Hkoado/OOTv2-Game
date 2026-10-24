@@ -29,6 +29,13 @@ async function cleanup() {
 }
 
 try {
+  // This legacy fixture lacks official receipts/captures. Stop before inserting
+  // any fixture rows on a database using the new capture contract.
+  let capturesAvailable = false;
+  try { await rows('cutoff_captures', 'limit=1&select=event_id'); capturesAvailable = true; }
+  catch (error) { if (error.code !== 'shared_db_error') throw error; }
+  if (capturesAvailable) throw Object.assign(new Error('legacy_drill_requires_capture_upgrade'),
+    { code: 'legacy_drill_requires_capture_upgrade' });
   const now = new Date().toISOString();
   const cutoff = new Date(Date.now() - 3600_000).toISOString();
   state.teamIds = Array.from({ length: 4 }, () => randomUUID());

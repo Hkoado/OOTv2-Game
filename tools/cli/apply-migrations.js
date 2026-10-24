@@ -169,6 +169,13 @@ const PLAN = [
   },
 ];
 
+PLAN.push({
+  version: '20261025100000',
+  file: 'supabase/migrations/20261025100000_cutoff_capture.sql',
+  why: 'authoritative cutoff capture + fenced atomic pin',
+  exists: async () => (await restGet('/rest/v1/mvp_cutoff_captures?select=*&limit=1')).status === 200,
+});
+
 const readSql = (relative) => readFileSync(path.join(root, relative), 'utf8');
 
 /** Management API không hiểu meta-command `\echo`; bỏ các dòng đó trước khi gửi. */

@@ -15,6 +15,12 @@ dist-ssr
 # Dữ liệu private của MVP tournament: DB SQLite + bot upload
 data/
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
 
 # Editor directories and files
 .vscode/*

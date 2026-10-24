@@ -27,11 +27,17 @@ export function createOfficialRoundSnapshot({ eventId, roundId, seed, cutoff, ma
     if (bot.sourceKind === 'github' && (!/^[a-f0-9]{40}$/.test(bot.commitSha)
       || !/^[1-9]\d*$/.test(bot.repositoryId) || typeof bot.resolvedAt !== 'string'
       || !/(?:Z|[+-]\d{2}:\d{2})$/.test(bot.resolvedAt) || !Number.isFinite(Date.parse(bot.resolvedAt))
-      || Date.parse(bot.resolvedAt) > Date.parse(cutoff))) throw new Error('Invalid GitHub receipt/cutoff');
+      || (bot.capturePolicy !== 'cutoff-first-resolution.v1'
+        && Date.parse(bot.resolvedAt) > Date.parse(cutoff)))) throw new Error('Invalid GitHub receipt/cutoff');
+    if (bot.capturePolicy !== undefined && (bot.sourceKind !== 'github'
+      || bot.capturePolicy !== 'cutoff-first-resolution.v1'
+      || !label(bot.receiptId)
+      || Date.parse(bot.resolvedAt) < Date.parse(cutoff))) throw new Error('Invalid capture provenance');
     return { participantId: bot.participantId, submissionId: bot.submissionId, sourceKind: bot.sourceKind,
       sourceSha256: bot.sourceSha256, artifactKey: bot.artifactKey,
       ...(bot.sourceKind === 'github' ? { commitSha: bot.commitSha, repositoryId: bot.repositoryId,
-        resolvedAt: new Date(bot.resolvedAt).toISOString() } : {}) };
+        resolvedAt: new Date(bot.resolvedAt).toISOString(),
+        ...(bot.capturePolicy ? { capturePolicy: bot.capturePolicy, receiptId: bot.receiptId } : {}) } : {}) };
   }).sort((a, b) => a.participantId < b.participantId ? -1 : a.participantId > b.participantId ? 1 : 0);
   const primary = normalizeMap(primaryMap), reserve = normalizeMap(reserveMap);
   if ([primary, reserve].some((map) => map.rulesVersion !== runtime.rulesVersion)) throw new Error('Map/runtime rules mismatch');

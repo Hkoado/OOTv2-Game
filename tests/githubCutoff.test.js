@@ -4,65 +4,80 @@ import { syncAllAtCutoff } from '../server/services/githubCutoff.js';
 
 process.env.SUPABASE_URL = 'https://example.invalid';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-only';
-
 const EVENT = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
-const TEAM_A = '11111111-1111-4111-8111-111111111111';
-const TEAM_B = '22222222-2222-4222-8222-222222222222';
+const TEAM = '11111111-1111-4111-8111-111111111111';
 const cutoff = '2026-10-24T00:00:00.000Z';
-const now = Date.parse('2026-10-25T00:00:00.000Z');
-const sha = 'a'.repeat(40);
+const connection = { event_id: EVENT, team_id: TEAM, repo_id: 11,
+  repository: 'https://github.com/example/bot', branch: 'main' };
 
-function setupFetch(t, state) {
+function fixture(t) {
   const original = globalThis.fetch;
+  const state = { pinned: null, busy: false, pins: 0, failPinResponse: false };
   globalThis.fetch = async (url, options = {}) => {
-    const target = new URL(url);
-    const table = target.pathname.split('/').pop();
-    const method = options.method || 'GET';
-    if (method !== 'GET') {
-      state.inserted.push({ table, body: JSON.parse(options.body) });
-      return new Response(JSON.stringify(JSON.parse(options.body)), { status: 201,
-        headers: { 'content-type': 'application/json' } });
-    }
-    const query = target.search;
-    let values = [];
-    if (table === 'mvp_tournaments') values = [{ id: EVENT, status: 'draft' }];
-    else if (table === 'mvp_official_setups') values = [{ config: { cutoff, mapsPublished: true } }];
-    else if (table === 'mvp_repo_connections') values = state.connections;
-    else if (table === 'mvp_github_receipts') values = query.includes(`team_id=eq.${TEAM_A}`) ? state.receipts : [];
-    else if (table === 'mvp_submissions') values = [{ id: 'previous-submission' }];
-    return new Response(JSON.stringify(values), { status: 200, headers: { 'content-type': 'application/json' } });
+    const name = new URL(url).pathname.split('/').pop();
+    const body = options.body ? JSON.parse(options.body) : {};
+    let value;
+    if (name === 'mvp_tournaments') value = [{ id: EVENT, status: 'draft' }];
+    else if (name === 'mvp_official_setups') value = [{ config: { cutoff, mapsPublished: true } }];
+    else if (name === 'mvp_repo_connections') value = [connection];
+    else if (name === 'mvp_cutoff_claim') {
+      value = state.pinned ? { ok: true, pinned: true } : state.busy ? { ok: true, busy: true }
+        : { ok: true, token: 'token', connection };
+      state.busy = true;
+    } else if (name === 'mvp_cutoff_pin') {
+      state.pinned = body.p_sha;
+      state.pins++;
+      if (state.failPinResponse) throw new Error('response_lost');
+      value = { ok: true, already_pinned: false };
+    } else throw new Error(`Unexpected request ${name}`);
+    return new Response(JSON.stringify(value), { status: 200 });
   };
   t.after(() => { globalThis.fetch = original; });
+  return state;
 }
+const run = (getHead) => syncAllAtCutoff({ eventId: EVENT,
+  clock: () => Date.parse(cutoff) + 1000, getHead });
 
-const connection = (teamId, repoId, name) => ({ event_id: EVENT, team_id: teamId, repo_id: repoId,
-  repository: `https://github.com/example/${name}`, branch: 'main', file_path: 'bot.py', approved: true });
-
-test('cutoff sync queues one pinned job per approved repo only', async (t) => {
-  const state = { connections: [connection(TEAM_A, 11, 'a'), connection(TEAM_B, 12, 'b')],
-    receipts: [], inserted: [] };
-  setupFetch(t, state);
-  const getHead = async (fullName) => fullName.endsWith('/a') ? sha : 'b'.repeat(40);
-  const summary = await syncAllAtCutoff({ eventId: EVENT, actor: { id: null }, clock: () => now, getHead });
-  assert.deepEqual(summary, { cutoff, queued: 2, skipped: 0, failed: [] });
-  assert.equal(state.inserted.filter((item) => item.table === 'mvp_repo_sync_jobs').length, 2);
-  assert.equal(state.inserted.filter((item) => item.table === 'mvp_github_receipts').length, 2);
-  const job = state.inserted.find((item) => item.table === 'mvp_repo_sync_jobs').body[0];
-  assert.equal(job.commit_sha, sha);
-  assert.equal(job.status, 'queued');
+test('repeated sync never resolves changed HEAD after authoritative pin', async (t) => {
+  const state = fixture(t);
+  let calls = 0;
+  const getHead = async () => (++calls === 1 ? 'a' : 'b').repeat(40);
+  assert.equal((await run(getHead)).queued, 1);
+  assert.equal((await run(getHead)).skipped, 1);
+  assert.equal(calls, 1);
+  assert.equal(state.pinned, 'a'.repeat(40));
 });
 
-test('cutoff sync skips an already pinned SHA and reports pull failures', async (t) => {
-  const state = { connections: [connection(TEAM_A, 11, 'a'), connection(TEAM_B, 12, 'b')],
-    receipts: [{ id: 'existing', status: 'valid' }], inserted: [] };
-  setupFetch(t, state);
-  const getHead = async (fullName) => {
-    if (fullName.endsWith('/b')) throw Object.assign(new Error('offline'), { code: 'github_unavailable' });
-    return sha;
-  };
-  const summary = await syncAllAtCutoff({ eventId: EVENT, actor: { id: null }, clock: () => now, getHead });
-  assert.equal(summary.queued, 0);
-  assert.equal(summary.skipped, 1);
-  assert.equal(summary.failed.length, 1);
-  assert.equal(summary.failed[0].error, 'github_unavailable');
+test('concurrent sync respects busy reservation before GitHub request', async (t) => {
+  const state = fixture(t);
+  let calls = 0;
+  const values = await Promise.all([run(async () => { calls++; return 'a'.repeat(40); }),
+    run(async () => { calls++; return 'b'.repeat(40); })]);
+  assert.equal(calls, 1);
+  assert.equal(state.pins, 1);
+  assert.equal(values.reduce((sum, item) => sum + item.skipped, 0), 1);
+});
+
+test('interrupted resolution retries after lease expiry without creating a fake pin', async (t) => {
+  const state = fixture(t);
+  const failed = await run(async () => { throw Object.assign(new Error('private detail'), { code: 'github_unavailable' }); });
+  assert.equal(failed.failed[0].error, 'github_unavailable');
+  assert.equal(state.pinned, null);
+  state.busy = false; // Simulate DB lease expiry, not client-side release.
+  assert.equal((await run(async () => 'c'.repeat(40))).queued, 1);
+});
+
+test('lost pin response reconciles on retry without resolving a second HEAD', async (t) => {
+  const state = fixture(t);
+  state.failPinResponse = true;
+  assert.equal((await run(async () => 'd'.repeat(40))).failed.length, 1);
+  assert.equal((await run(async () => { throw new Error('must not resolve'); })).skipped, 1);
+  assert.equal(state.pins, 1);
+});
+
+test('before cutoff rejects without contacting GitHub', async (t) => {
+  fixture(t);
+  await assert.rejects(syncAllAtCutoff({ eventId: EVENT, clock: () => 0,
+    getHead: async () => { throw new Error('must not resolve'); } }),
+  (error) => error.code === 'cutoff_not_reached');
 });

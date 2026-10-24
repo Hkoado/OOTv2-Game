@@ -3,7 +3,7 @@
  * then open (or read) the persisted group round.
  *
  * Readiness is deliberately strict: every entrant must have one valid submission pinned
- * at/before cutoff. Missing bots are reported to BTC; they are never silently replaced
+ * by the authoritative cutoff capture. Missing bots are reported; never replaced
  * by an older submission or skipped from the schedule.
  */
 import { rows, uuid } from '../shared/client.js';
@@ -19,30 +19,18 @@ const fail = (status, code, message) => new HttpError(status, code, message);
 const ROUND_ID = 'group';
 const isDate = (value) => typeof value === 'string' && Number.isFinite(Date.parse(value));
 
-function pinTime(receipt, submission) {
-  if (receipt) return Date.parse(receipt.resolved_at);
-  return Date.parse(submission.created_at);
-}
-
-function botFrom(receipt, submission) {
-  if (receipt) {
-    return {
-      participantId: submission.participant_id,
-      submissionId: submission.id,
-      artifactKey: submission.storage_path,
-      sourceSha256: submission.sha256,
-      sourceKind: 'github',
-      repositoryId: String(receipt.repo_id),
-      commitSha: String(receipt.commit_sha).toLowerCase(),
-      resolvedAt: new Date(receipt.resolved_at).toISOString(),
-    };
-  }
+function botFrom(receipt, submission, capture) {
   return {
     participantId: submission.participant_id,
     submissionId: submission.id,
     artifactKey: submission.storage_path,
     sourceSha256: submission.sha256,
-    sourceKind: 'offline_file',
+    sourceKind: 'github',
+    repositoryId: String(receipt.repo_id),
+    commitSha: String(receipt.commit_sha).toLowerCase(),
+    resolvedAt: new Date(capture.captured_at).toISOString(),
+    capturePolicy: 'cutoff-first-resolution.v1',
+    receiptId: receipt.id,
   };
 }
 
@@ -71,34 +59,37 @@ export async function buildGroupSnapshot({ eventId, clock = Date.now } = {}) {
 
   const participantIds = entries.map((entry) => entry.participant_id);
   if (new Set(participantIds).size !== participantIds.length) throw fail(409, 'duplicate_team', 'Danh sách đội bị trùng.');
-  const [submissions, receipts, participants] = await Promise.all([
+  const [submissions, receipts, participants, captures] = await Promise.all([
     rows('submissions', `participant_id=in.(${participantIds.join(',')})&status=eq.valid`
       + '&order=created_at.desc&select=id,participant_id,storage_path,sha256,status,created_at'),
-    rows('github_receipts', `event_id=eq.${uuid(eventId)}&status=eq.valid&team_id=in.(${participantIds.join(',')})`
-      + '&select=team_id,submission_id,source_hash,commit_sha,repo_id,resolved_at'),
+    rows('github_receipts', `event_id=eq.${uuid(eventId)}&team_id=in.(${participantIds.join(',')})`
+      + '&select=id,team_id,submission_id,source_hash,commit_sha,repo_id,repository,branch,file_path,resolved_at,status'),
     rows('participants', `id=in.(${participantIds.join(',')})&select=id,name`),
+    rows('cutoff_captures', `event_id=eq.${uuid(eventId)}&select=team_id,receipt_id,cutoff,policy,connection,commit_sha,captured_at`),
   ]);
   const names = new Map(participants.map((team) => [team.id, team.name]));
-  const receiptBySubmission = new Map(receipts.filter((receipt) => receipt.submission_id)
-    .map((receipt) => [receipt.submission_id, receipt]));
-  const cutoff = Date.parse(config.cutoff);
   const missing = [];
   const bots = [];
   for (const participantId of participantIds) {
-    let best = null;
-    for (const submission of submissions.filter((row) => row.participant_id === participantId)) {
-      const receipt = receiptBySubmission.get(submission.id);
-      const pinnedAt = pinTime(receipt, submission);
-      if (!Number.isFinite(pinnedAt)) continue;
-      if (receipt && receipt.source_hash !== submission.sha256) continue;
-      if (pinnedAt > cutoff) continue;
-      if (!best || pinnedAt > best.pinnedAt) best = { submission, receipt, pinnedAt };
+    const capture = captures.find((row) => row.team_id === participantId);
+    const receipt = capture && receipts.find((row) => row.id === capture.receipt_id
+      && row.team_id === participantId && row.status === 'valid');
+    const submission = receipt && submissions.find((row) => row.id === receipt.submission_id
+      && row.participant_id === participantId && row.status === 'valid'
+      && row.sha256 === receipt.source_hash);
+    if (!submission || capture.policy !== 'cutoff-first-resolution.v1'
+      || Date.parse(capture.cutoff) !== Date.parse(config.cutoff)
+      || !isDate(capture.captured_at) || Date.parse(capture.captured_at) < Date.parse(capture.cutoff)
+      || capture.commit_sha !== receipt.commit_sha
+      || String(capture.connection?.repo_id) !== String(receipt.repo_id)
+      || capture.connection?.repository !== receipt.repository
+      || capture.connection?.branch !== receipt.branch || receipt.file_path !== 'bot.py') {
+      missing.push(names.get(participantId) || participantId); continue;
     }
-    if (!best) { missing.push(names.get(participantId) || participantId); continue; }
-    bots.push(botFrom(best.receipt, best.submission));
+    bots.push(botFrom(receipt, submission, capture));
   }
   if (missing.length) {
-    throw fail(409, 'missing_submission', `Chưa có bot hợp lệ trước cutoff: ${missing.join(', ')}.`);
+    throw fail(409, 'missing_submission', `Bài chốt chính thức chưa hợp lệ: ${missing.join(', ')}.`);
   }
 
   let snapshot;
