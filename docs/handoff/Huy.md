@@ -1,35 +1,5 @@
 # Kết quả Huy — Backend / GitHub / privacy
 
-## Đợt 25/10/2026 (Lần 2) — Sửa & Xác minh hoàn tất 5 Findings RC (H1–H5 theo docs/21)
-
-- **Phạm vi:** Xử lý toàn bộ findings kỹ thuật tại [docs/DEPLOY-REVIEW-2026-10-25.md](../DEPLOY-REVIEW-2026-10-25.md) theo kịch bản [docs/21-KICH-BAN-SUA-VA-VERIFY-RC.md](../21-KICH-BAN-SUA-VA-VERIFY-RC.md).
-- **H1 — Chặn lộ kết quả trước giờ reveal (P1):**
-  - Tạo hàm whitelist `sanitizeOfficialGame(game, { reveal, isAdmin })` trong `server/services/officialBroadcasts.js`.
-  - Khi `reveal_result = false` và tài khoản không phải admin: các key nhạy cảm `result`, `replay_hash`, `recorded_at` **hoàn toàn vắng mặt** trong JSON trả về của `officialBroadcastState` và `listPublishedOfficialGames` (không chỉ là `null`).
-  - Đã bổ sung regression test trong `tests/officialBroadcast.test.js` (10/10 PASS).
-- **H2 — Publication gate cho standings, bracket, tickets (P1):**
-  - Thêm helper `getRoundBroadcastStatuses(roundPk)` kiểm tra authoritative broadcast state từ cơ sở dữ liệu.
-  - `GET /published/standings`: Chỉ công bố khi vòng bảng `frozen = true` VÀ 100% ván đấu vòng bảng có `reveal_result = true`.
-  - `GET /published/bracket`: Chỉ công bố khi vòng bảng đã phát xong; các series knockout đang phát bị giấu outcome đối với thành viên giải, chỉ hiển thị khi đã broadcast `reveal_result = true`.
-  - `GET /published/tickets`: Chỉ công bố khi toàn bộ vòng bảng và 100% series knockout đã hoàn tất phát sóng (`reveal_result = true`).
-  - Đã bổ sung 3 test cases trong `tests/officialPublishedRoutes.test.js` (12/12 PASS).
-- **H3 — Sửa query danh sách ván theo schema thật (P1):**
-  - Sửa `loadGames` trong `server/services/officialBroadcasts.js`: loại bỏ hoàn toàn các cột không tồn tại trong `mvp_official_games` (`series_id`, `reason`, `ply_count`); chỉ select các cột thực tế (`round_pk, game_key, stage, group_name, game_no, red_participant_id, blue_participant_id, result, replay_hash, recorded_at`).
-  - Lấy `totalPlies` từ attempt `succeeded` mới nhất trong bảng `mvp_official_job_attempts`.
-- **H4 — Bounded cutoff batch và tiến độ authoritative (P1):**
-  - `server/services/githubCutoff.js`: Đặt trần `DEFAULT_BATCH_LIMIT = 5`, `MAX_BATCH_LIMIT = 10`, và time budget `MAX_BATCH_TIME_MS = 20000` (ngắt an toàn dưới timeout 30s của Vercel).
-  - Loại trừ các đội đã `pinned` trước khi chia batch, bảo đảm không lãng phí slot limit.
-  - Trả về `remaining` và `complete` authoritative dựa trên toàn bộ approved connections của giải.
-  - Đã bổ sung 2 test cases trong `tests/githubCutoff.test.js` (9/9 PASS).
-- **H5 — Login throttle fallback không đếm đôi (P2):**
-  - `server/lib/loginThrottle.js`: Bỏ việc bump local trước ngoài Promise. Khi có RPC, chỉ fallback bump local đúng 1 lần duy nhất khi RPC thất bại hoặc timeout.
-  - Đã bổ sung 2 regression tests trong `tests/loginThrottle.test.js` (7/7 PASS), kiểm tra 10 lần liên tiếp allowed và lần 11 mới bị chặn khi RPC gặp sự cố.
-- **Bằng chứng kiểm thử tổng thể:**
-  - `npm test`: **491/491 tests PASS** (100% thành công, 0 fail, 0 skip).
-  - `npm run build`: **Vite build sạch** (1,656 modules).
-
----
-
 ## Đợt 25/10/2026 — Hoàn tất 3 phần việc Backend / Auth / Cutoff (RC online tối giản)
 
 - **Phạm vi:** Hoàn thành toàn bộ gói được giao cho Huy tại [docs/20-RC-ONLINE-TOI-GIAN.md](../20-RC-ONLINE-TOI-GIAN.md) và [docs/assignments/Huy.md](../assignments/Huy.md).
