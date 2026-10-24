@@ -5,7 +5,8 @@ param(
   [string]$ConfigPath,
   [string]$Address,
   [ValidateRange(1,2000)][int]$Tail = 100,
-  [switch]$PrepareOnly
+  [switch]$PrepareOnly,
+  [ValidateSet('github','judge')][string]$Service = 'github'
 )
 # Single entry point for a fresh Windows machine:
 #   copy worker.config.example.json -> worker.local.json, run -Action doctor, then install.
@@ -183,7 +184,7 @@ switch ($Action) {
     $Target = Resolve-TargetAddress
     if (-not $Target) { throw 'No guest IPv4 address yet (cloud-init may still be running).' }
     Assert-TrustedHost $Target
-    $ctl = '/srv/ootv2/current/tools/provision/workerctl.sh'
+    $ctl = "env OOTV2_WORKER_SERVICE=$Service /srv/ootv2/current/tools/provision/workerctl.sh"
     $code = 1
     switch ($Action) {
       'status' { $code = Invoke-Guest $Target "$ctl status" }
@@ -192,7 +193,7 @@ switch ($Action) {
       'start' { $code = Invoke-Guest $Target "sudo -n $ctl start" }
       'stop' { $code = Invoke-Guest $Target "sudo -n $ctl stop" }
       'restart' { $code = Invoke-Guest $Target "sudo -n $ctl restart" }
-      'logs' { $code = Invoke-Guest $Target "journalctl -u ootv2-github-worker.service -n $Tail --no-pager" }
+      'logs' { $code = Invoke-Guest $Target "$ctl logs $Tail" }
     }
     if ($code -ne 0) { throw "$Action failed on the guest (exit $code)" }
     break

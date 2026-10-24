@@ -5,7 +5,8 @@ After=network-online.target
 [Service]
 Type=oneshot
 User=root
-WorkingDirectory=/srv/ootv2
-ExecStart=/bin/bash /srv/ootv2/sandbox/linux/attest.sh /run/ootv2-sandbox-attestation.json --full
+WorkingDirectory=/srv/ootv2/current
+Environment=PATH=/opt/ootv2-node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/bin/bash /srv/ootv2/current/sandbox/linux/attest.sh /run/ootv2-sandbox-attestation.json --full
 TimeoutStartSec=180
 UMask=0077

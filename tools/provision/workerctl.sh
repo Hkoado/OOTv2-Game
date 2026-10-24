@@ -3,7 +3,12 @@
 # Usage: workerctl.sh status|health|version|start|stop|restart|logs [lines]
 set -euo pipefail
 root=/srv/ootv2
-service=ootv2-github-worker.service
+queue="${OOTV2_WORKER_SERVICE:-github}"
+case "$queue" in
+  github) service=ootv2-github-worker.service ;;
+  judge) service=ootv2-official-worker.service ;;
+  *) echo invalid_worker_service; exit 64 ;;
+esac
 node=/opt/ootv2-node/bin/node
 env_file=/etc/ootv2/worker.env
 action="${1:-status}"
@@ -60,6 +65,9 @@ case "$action" in
     . "$env_file"
     set +a
     if ! "$node" tools/cli/worker-health.js; then echo 'worker_start_refused: health check failed'; exit 79; fi
+    if [ "$queue" = judge ]; then
+      systemctl start ootv2-attest.service
+    fi
     before="$(systemctl is-active "$service" 2>/dev/null || true)"
     systemctl enable "$service" >/dev/null 2>&1 || true
     systemctl start "$service"
@@ -82,9 +90,16 @@ case "$action" in
   restart)
     require_sudo
     need_release
+    cd "$root/current"
+    set -a
+    . "$env_file"
+    set +a
+    if ! "$node" tools/cli/worker-health.js; then echo 'worker_restart_refused: health check failed'; exit 79; fi
+    if [ "$queue" = judge ]; then systemctl start ootv2-attest.service; fi
     systemctl restart "$service"
     sleep 3
-    echo "worker=$(systemctl is-active "$service" 2>/dev/null || true)"
+    systemctl is-active --quiet "$service" || { echo worker_restart_failed; exit 79; }
+    echo 'worker=active'
     ;;
   logs)
     case "$lines" in ''|*[!0-9]*) echo 'invalid_line_count'; exit 64 ;; esac

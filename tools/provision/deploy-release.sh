@@ -7,11 +7,11 @@ set -euo pipefail
 [ "$(id -u)" = 0 ] || { echo root_required; exit 78; }
 staging="${1:-}"
 root=/srv/ootv2
-service=ootv2-github-worker.service
+services=(ootv2-github-worker.service ootv2-official-worker.service)
 [ -d "$staging" ] || { echo staging_missing; exit 78; }
 
 for required in package.json package-lock.json server/githubWorker.js server/worker.js \
-  server/shared/githubWorkerDeps.js sandbox/linux/run-bot.sh tools/cli/worker-health.js; do
+  server/officialWorker.js server/shared/githubWorkerDeps.js sandbox/linux/run-bot.sh tools/cli/worker-health.js; do
   [ -f "$staging/$required" ] || { echo "release_incomplete:$required"; exit 78; }
 done
 
@@ -31,10 +31,13 @@ cd "$target"
 npm ci --omit=dev --ignore-scripts
 node --check server/githubWorker.js
 node --check server/worker.js
+node --check server/officialWorker.js
 
 previous="$(readlink "$root/current" 2>/dev/null || true)"
-was_active=0
-if systemctl is-active --quiet "$service"; then was_active=1; fi
+active_services=()
+for service in "${services[@]}"; do
+  if systemctl is-active --quiet "$service"; then active_services+=("$service"); fi
+done
 
 activate() {
   ln -sfn "$1" "$root/current.next"
@@ -43,12 +46,14 @@ activate() {
 
 rollback() {
   echo "release_failed:$release_id"
+  for service in "${active_services[@]}"; do systemctl stop "$service" || true; done
   if [ -n "$previous" ] && [ -d "$previous" ]; then
     activate "$previous"
     echo "rolled_back_to:$previous"
-    if [ "$was_active" = 1 ]; then
+    systemctl start ootv2-attest.service || echo 'attestation_after_rollback_failed'
+    for service in "${active_services[@]}"; do
       systemctl restart "$service" || echo 'restart_after_rollback_failed'
-    fi
+    done
   else
     rm -f "$root/current"
     echo 'no_previous_release'
@@ -56,22 +61,30 @@ rollback() {
   exit 79
 }
 
-activate "$target"
+for service in "${active_services[@]}"; do
+  if ! systemctl stop "$service"; then rollback; fi
+done
+if ! activate "$target"; then rollback; fi
 echo "activated:$release_id"
 
-if [ "$was_active" = 1 ]; then
-  if ! systemctl restart "$service"; then rollback; fi
+if [ "${#active_services[@]}" -gt 0 ]; then
+  if ! systemctl start ootv2-attest.service; then rollback; fi
+  for service in "${active_services[@]}"; do
+    if ! systemctl restart "$service"; then rollback; fi
+  done
   sleep 3
-  if ! systemctl is-active --quiet "$service"; then rollback; fi
-  node tools/cli/worker-health.js --json || echo 'health_degraded: worker is running but prerequisites changed'
+  for service in "${active_services[@]}"; do
+    if ! systemctl is-active --quiet "$service"; then rollback; fi
+  done
+  if ! node tools/cli/worker-health.js --json; then rollback; fi
 fi
 
-# Keep current + two previous releases for a manual rollback.
+# Keep the rollback target even when it falls outside the newest three releases.
 current="$(readlink -f "$root/current")"
 mapfile -t releases < <(ls -1d "$root"/releases/*/ 2>/dev/null | sed 's:/$::' | sort)
 if [ "${#releases[@]}" -gt 3 ]; then
   for old in "${releases[@]:0:${#releases[@]}-3}"; do
-    if [ "$old" = "$current" ]; then continue; fi
+    if [ "$old" = "$current" ] || [ "$old" = "$previous" ]; then continue; fi
     rm -rf "$old"
   done
 fi

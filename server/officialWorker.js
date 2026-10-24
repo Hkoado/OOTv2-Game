@@ -13,7 +13,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 import { assertSharedConfig } from './shared/client.js';
 import { claimOfficialJob, reapOfficialJobs } from './shared/officialJobs.js';
-import { claimManualFinalJobs } from './shared/manualFinalJobs.js';
+import { claimManualFinalJobs, heartbeatManualFinalJob } from './shared/manualFinalJobs.js';
 import { executeOfficialJob } from './services/officialExecution.js';
 import { MANUAL_WORKER_LEASE_SECONDS, executeManualFinalJob } from './services/manualFinalExecution.js';
 import { assertCampusSandboxReady } from './judge/campusSandboxFactory.js';
@@ -58,11 +58,54 @@ export async function processOfficialJob({ workerId, leaseSeconds = 120, signal,
  * Không có runner manual thứ hai; manual và official chỉ khác nguồn job.
  */
 export async function processManualFinalJob({ workerId, leaseSeconds = MANUAL_WORKER_LEASE_SECONDS,
-  signal, claim = claimManualFinalJobs, execute = executeManualFinalJob, logger = console } = {}) {
+  signal, claim = claimManualFinalJobs, execute = executeManualFinalJob,
+  heartbeat = heartbeatManualFinalJob, heartbeatMs, logger = console } = {}) {
+  if (signal?.aborted) return { processed: false };
   const { jobs } = await claim({ worker: workerId, limit: 1, leaseSeconds });
   const job = Array.isArray(jobs) ? jobs[0] ?? null : null;
   if (!job) return { processed: false };
-  const result = await execute(job, { signal, logger });
+  const controller = new AbortController();
+  const shutdown = () => controller.abort(signal?.reason);
+  signal?.addEventListener('abort', shutdown, { once: true });
+  if (signal?.aborted) shutdown();
+  let heartbeatError = null;
+  let renewing = null;
+  let stopped = false;
+  const renew = () => {
+    if (stopped || renewing) return renewing;
+    renewing = Promise.resolve().then(() => heartbeat({ jobId: job.jobId, token: job.token,
+      generation: job.generation, leaseSeconds })).then((ok) => {
+      if (!ok) throw Object.assign(new Error('lease_lost'), { code: 'lease_lost' });
+    }).catch((error) => {
+      heartbeatError = error;
+      controller.abort(error);
+    }).finally(() => { renewing = null; });
+    return renewing;
+  };
+  let timer;
+  let result;
+  try {
+    await renew();
+    if (heartbeatError) {
+      if (heartbeatError.code !== 'lease_lost') throw heartbeatError;
+      return { processed: true, jobId: job.jobId, kind: job.kind, recorded: false,
+        status: 'lease_lost', reason: 'lease_lost' };
+    }
+    timer = setInterval(renew, heartbeatMs ?? Math.max(1000, Math.floor(leaseSeconds * 1000 / 3)));
+    timer.unref?.();
+    result = await execute(job, { signal: controller.signal, logger });
+    // A failed renewal never turns an unrecorded attempt into success.
+    if (heartbeatError && result.recorded !== true) {
+      result = { ...result, recorded: false,
+        status: heartbeatError.code === 'lease_lost' ? 'lease_lost' : 'infrastructure',
+        reason: heartbeatError.code === 'lease_lost' ? 'lease_lost' : 'heartbeat_failed' };
+    }
+  } finally {
+    stopped = true;
+    clearInterval(timer);
+    await renewing;
+    signal?.removeEventListener('abort', shutdown);
+  }
   logger.log?.(JSON.stringify({ at: 'manual-worker', workerId, job: job.jobId, kind: job.kind,
     attempt: job.attempt, recorded: result.recorded === true, status: result.status ?? null,
     reason: result.reason ?? null }));
@@ -133,7 +176,6 @@ export async function runOfficialWorker({
   if (typeof workerId !== 'string' || !WORKER_ID.test(workerId)) {
     throw Object.assign(new Error('invalid_worker_id'), { code: 'invalid_worker_id' });
   }
-  // Mỗi queue giữ lease riêng: manual chưa có heartbeat nên cần lease dài hơn official.
   const processor = processJob ?? createQueueProcessor({ queues });
   if (typeof processor !== 'function' || typeof pause !== 'function') {
     throw Object.assign(new Error('invalid_worker_dependencies'), { code: 'invalid_worker_dependencies' });

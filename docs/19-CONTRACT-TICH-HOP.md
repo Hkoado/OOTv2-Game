@@ -42,6 +42,11 @@ Kết quả chính thức phải xuất phát accepted attempt, không chỉ th�
 
 ## 3. Chung kết thủ công
 
+**Bổ sung 24/10/2026 (Khoa, quyết định user):** manual heartbeat + expired-lease fencing
+và accepted engine result/replay 0-ply được chuẩn bị trong migration additive
+`20261026120000_manual_worker_heartbeat.sql` (chưa apply remote). Thay ghi chú lịch sử
+“chờ Huy heartbeat/0-ply” ở bên dưới; xem `KHOA-WORKER-RC.md` về order/gates.
+
 - Intake mode phân biệt online GitHub và manual final; binding nằm ở đợt/vòng, kiểm ở server.
 - Lifecycle ngữ nghĩa: draft → nhận/kiểm bài → chọn bài → locked → chấm → BTC xác nhận/chốt.
   Wire enum chọn theo code thật; không ép sửa enum cũ hoặc dùng status UI thay transaction.

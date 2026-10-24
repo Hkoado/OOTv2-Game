@@ -266,7 +266,7 @@ test('match: cờ trusted chỉ bật khi factory đã opt-in trusted-dev', asyn
   assert.deepEqual(capture, [false, true]);
 });
 
-test('match: bot lỗi ngay setup (0 ply) ghi bot_fault, không bịa kết quả', async () => {
+test('match: bot lỗi ngay setup (0 ply) lưu accepted result từ engine', async () => {
   const { download } = downloads();
   const rec = recorder();
   const result = await executeManualFinalJob(matchJob(), {
@@ -277,9 +277,10 @@ test('match: bot lỗi ngay setup (0 ply) ghi bot_fault, không bịa kết qu�
     loadSubmission: async ({ id }) => (id === RED_SUB
       ? submissionRow(RED_SUB, RED_TEAM) : submissionRow(BLUE_SUB, BLUE_TEAM)),
   });
-  assert.equal(result.status, 'bot_fault');
-  assert.equal(rec.finishes[0].outcome.status, 'bot_fault');
-  assert.equal(rec.finishes[0].outcome.error, 'setup_bot_fault');
+  assert.equal(result.status, 'finished');
+  assert.equal(rec.finishes[0].outcome.status, 'finished');
+  assert.equal(rec.finishes[0].outcome.result, 'red_win');
+  assert.equal(rec.finishes[0].outcome.ply_count, 0);
 });
 
 test('match: snapshot bị sửa → dừng ở infra_fault, không tải bài, không chạy bot', async () => {

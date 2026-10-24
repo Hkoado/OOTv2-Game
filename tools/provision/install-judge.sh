@@ -54,6 +54,7 @@ install -d -m 0750 -o ootv2-worker -g ootv2-worker /var/lib/ootv2
 
 # Stop before replacing runtime; a failed install never restarts an unverified worker.
 systemctl stop ootv2-github-worker.service 2>/dev/null || true
+systemctl stop ootv2-official-worker.service 2>/dev/null || true
 
 # Allow only runtime credentials/settings. DDL PAT/DB URL never enters the worker.
 python3 - "$source_env" <<'PY'
@@ -83,6 +84,7 @@ release=/srv/ootv2/current
 install -m 0644 "$release/tools/provision/ootv2-attest.service" /etc/systemd/system/
 install -m 0644 "$release/tools/provision/ootv2-attest.timer" /etc/systemd/system/
 install -m 0644 "$release/tools/provision/ootv2-github-worker.service" /etc/systemd/system/
+install -m 0644 "$release/tools/provision/ootv2-official-worker.service" /etc/systemd/system/
 systemctl daemon-reload
 
 # Attestation is refreshed every 12h; it does not start the judge worker.

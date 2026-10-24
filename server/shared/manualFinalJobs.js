@@ -63,7 +63,7 @@ export function validateManualOutcome(kind, outcome) {
     return { status: outcome.status, error: rawError || 'manual_final_infrastructure', message };
   }
   if (!RESULTS.includes(outcome.result)) throw fail('bad_outcome', 'result phải là red_win/blue_win/draw.');
-  if (!Number.isInteger(outcome.ply_count) || outcome.ply_count < 1 || outcome.ply_count > 1000) {
+    if (!Number.isInteger(outcome.ply_count) || outcome.ply_count < 0 || outcome.ply_count > 1000) {
     throw fail('bad_outcome', 'ply_count phải là số nguyên 1..1000.');
   }
   if (!outcome.replay || typeof outcome.replay !== 'object' || Array.isArray(outcome.replay)) {
@@ -157,6 +157,21 @@ export async function claimManualFinalJobs({ worker, limit = 1, leaseSeconds = M
   return { jobs: jobs.map(normalizeClaimedJob) };
 }
 
+/** Renew only a still-live fenced lease; never revive an expired attempt. */
+export async function heartbeatManualFinalJob({ jobId, token, generation,
+  leaseSeconds = MANUAL_DEFAULT_LEASE_SECONDS }) {
+  assertFence({ jobId, token, generation });
+  if (!Number.isInteger(leaseSeconds) || leaseSeconds < 10 || leaseSeconds > 900) {
+    throw fail('bad_lease', 'leaseSeconds phải từ 10 đến 900.');
+  }
+  const result = await rpc('mvp_manual_final_heartbeat', {
+    p_job: jobId, p_token: token, p_generation: generation, p_lease_seconds: leaseSeconds,
+  });
+  if (result?.ok === true) return true;
+  if (result?.error === 'lease_lost') return false;
+  throw new HttpError(503, 'heartbeat_failed', 'Không xác minh được lease manual.');
+}
+
 /** Ghi kết quả có fence; trả envelope để đối soát duplicate/lost lease. */
 export async function finishManualFinalJob({ jobId, token, generation, kind, outcome }) {
   assertFence({ jobId, token, generation });
@@ -211,6 +226,7 @@ export async function releaseManualFinalJob({ jobId, token, generation, error = 
 export default {
   MANUAL_JOB_KINDS,
   claimManualFinalJobs,
+  heartbeatManualFinalJob,
   finishManualFinalJob,
   releaseManualFinalJob,
   validateManualOutcome,

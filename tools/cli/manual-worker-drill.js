@@ -180,7 +180,9 @@ export function createDrillQueue({ jobs = [], maxAttempts = 3, leaseSeconds = 60
       const seconds = Math.min(900, Math.max(10, Number(lease) || leaseSeconds));
       for (const row of rows.values()) {
         if (row.status === 'running' && row.leaseUntil !== null && row.leaseUntil <= clock.ms) {
-          row.status = 'queued'; row.leaseToken = null; row.leaseUntil = null;
+          row.status = row.attempt >= row.maxAttempts ? 'infra_fault' : 'queued';
+          if (row.status === 'infra_fault') row.error = 'lease_expired_max_attempts';
+          row.leaseToken = null; row.leaseUntil = null;
         }
       }
       const picked = [...rows.values()]
@@ -206,7 +208,8 @@ export function createDrillQueue({ jobs = [], maxAttempts = 3, leaseSeconds = 60
         return { applied: false, alreadyFinished: true, leaseLost: false,
           jobStatus: row.status, matchStatus: row.result };
       }
-      if (row.leaseToken !== token || row.generation !== generation) {
+      if (row.leaseToken !== token || row.generation !== generation
+        || row.status !== 'running' || row.leaseUntil <= clock.ms) {
         return { applied: false, alreadyFinished: false, leaseLost: true,
           jobStatus: row.status, matchStatus: null };
       }
@@ -227,7 +230,7 @@ export function createDrillQueue({ jobs = [], maxAttempts = 3, leaseSeconds = 60
         }
         if (outcome.status === 'finished') {
           if (!['red_win', 'blue_win', 'draw'].includes(outcome.result)
-            || !Number.isInteger(outcome.ply_count) || outcome.ply_count < 1
+            || !Number.isInteger(outcome.ply_count) || outcome.ply_count < 0 || outcome.ply_count > 1000
             || !outcome.replay || typeof outcome.replay !== 'object') {
             throw new HttpError(400, 'bad_outcome', 'outcome finished thiếu result/ply/replay');
           }
@@ -290,6 +293,13 @@ export async function runDrillWorkers({ queue, workers = ['manual-drill-a', 'man
       queues: ['manual'],
       handlers: {
         manual: (context) => processManualFinalJob({ ...context, claim: queue.claim,
+          heartbeat: async ({ jobId, token, generation, leaseSeconds }) => {
+            const row = queue.row(jobId);
+            if (row?.status !== 'running' || row.leaseToken !== token
+              || row.generation !== generation || row.leaseUntil <= queue.clock.ms) return false;
+            row.leaseUntil = queue.clock.ms + leaseSeconds * 1000;
+            return true;
+          },
           execute: async (job) => {
             queue.executions.push({ jobId: job.jobId, worker: workerId, attempt: job.attempt,
               generation: job.generation, inputHash: job.inputHash });
@@ -468,8 +478,8 @@ async function scenarioSetupBotFault() {
       replay: { schemaVersion: 'campus-replay.v1', actions: [] } }),
   })(claimed);
   const row = queue.row(job.jobId);
-  return ok('bot lỗi setup 0 ply: bot_fault, 0 accepted', result.status === 'bot_fault'
-    && row.status === 'bot_fault' && row.error === 'setup_bot_fault' && queue.accepted.length === 0,
+  return ok('bot lỗi setup 0 ply: accepted engine result', result.status === 'finished'
+    && row.status === 'completed' && queue.accepted.length === 1,
   { result: result.status, row: row.status, error: row.error });
 }
 

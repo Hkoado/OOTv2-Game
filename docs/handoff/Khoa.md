@@ -1,5 +1,21 @@
 # Kết quả Khoa — Scheduler / worker / runtime
 
+## Cập nhật hiện hành 24/10/2026 — heartbeat manual / 0-ply / service judge
+
+Xem `docs/KHOA-WORKER-RC.md`: thay các ghi chú lịch sử bên dưới về “chờ Huy heartbeat”
+và “0-ply chỉ bot_fault”. Consumer + migration additive đã được bổ sung local;
+migration mới chưa apply remote, PostgreSQL/VM acceptance chưa đạt. Người dùng chọn
+Hyper-V và chấp thuận accepted result/replay 0-ply do engine xác định.
+Huy tiếp tục E2E online; không xem enqueue là publication hoặc tự đóng gate RC.
+
+Bằng chứng local mới: `node --test --test-concurrency=1 tests/*.test.js` **421/421 PASS**,
+exit 0; build/diff/Bash syntax exit 0 (`data/khoa-current/results.json`). Lượt full
+parallel trước đó 420/421 do viewer overview P95 904.9 > 800 ms; không nới test.
+PowerShell parser `Worker.ps1`: 0 lỗi. `.env` readiness: bucket private/256 KiB đạt,
+intake/manual tables và RPC trả 404/PGRST202, nên chưa thể chạy judge thật.
+PostgreSQL rehearsal migration mới, VM install/reboot/rollback và real-job recovery:
+**NOT RUN**. Chưa ký gate Khoa/RC, không push/deploy/apply remote.
+
 ## 24/10/2026 (sau khi pull) — Tích hợp gate sandbox của Huy + drill 2 worker
 
 - **Tôn trọng thay đổi của Huy:** `campusSandboxFactory` nay bắt opt-in `trusted-dev`

@@ -15,9 +15,7 @@
  * - Lỗi hạ tầng (Storage/sandbox/DB tạm thời) retry cùng input; lỗi bot là kết quả engine.
  * - Không tự bỏ gate sandbox/attestation: factory fail-closed như worker chính thức.
  *
- * Ghi chú contract đang mở: SQL `mvp_manual_final_finish` yêu cầu `ply_count >= 1`, nên một
- * ván kết thúc ngay ở setup (bot lỗi khi xếp quân, 0 ply) được ghi là `bot_fault` +
- * `error_code = setup_bot_fault`. Không tự sửa migration của Huy; xem docs/handoff/Khoa.md.
+ * Requires migration 20261026120000: heartbeat/lease fencing and accepted 0-ply results.
  */
 
 import config from '../config.js';
@@ -42,9 +40,7 @@ export const MANUAL_EXECUTION_VERSION = 'manual-final-execution.v1';
 /** Replay > 256 KiB bị từ chối thay vì cắt âm thầm (cùng profile với worker chính thức). */
 export const MAX_REPLAY_BYTES = 256 * 1024;
 /**
- * Queue manual chưa có RPC heartbeat, nên lease phải đủ dài cho trần thời gian đã pin:
- * 2 × responseTotalMs + setup + tải artifact. 300 s nằm dưới giới hạn 900 s của
- * `mvp_manual_final_claim`; heartbeat là việc tiếp theo của Huy (xem handoff Khoa).
+ * Renewed by processManualFinalJob throughout validation/match execution.
  */
 export const MANUAL_WORKER_LEASE_SECONDS = 300;
 
@@ -275,13 +271,6 @@ async function runMatchJob(job, { runMatch, startSessionFactory, identity, budge
     if (!Number.isSafeInteger(plyCount) || plyCount < 0) {
       throw new CampusInfrastructureError('result_unsupported');
     }
-    // Contract SQL hiện yêu cầu ply_count >= 1; bot lỗi ngay ở setup (0 ply) ghi `bot_fault`.
-    if (plyCount === 0) {
-      const result = await finish({ jobId: job.jobId, token: job.token, generation: job.generation,
-        kind: 'match',
-        outcome: { status: 'bot_fault', error: 'setup_bot_fault', message: String(outcome.reason ?? '') } });
-      return finishOutcome(result, 'bot_fault', { reason: outcome.reason ?? 'setup_bot_fault', attempt: job.attempt });
-    }
     const result = await finish({ jobId: job.jobId, token: job.token, generation: job.generation,
       kind: 'match',
       outcome: { status: 'finished', result: outcome.result, reason: outcome.reason ?? null,
@@ -311,8 +300,16 @@ export async function executeManualFinalJob(job, {
   logger = console,
 } = {}) {
   if (!job || typeof job !== 'object' || !job.jobId) throw new Error('executeManualFinalJob requires a claimed job');
-  const deps = { runMatch, startSessionFactory, identity, budget, signal, download, finish, loadSubmission };
+  const guardedFinish = async (payload) => {
+    if (signal?.aborted) throw signal.reason instanceof Error
+      ? signal.reason : new CampusInfrastructureError('match_cancelled');
+    return finish(payload);
+  };
+  const deps = { runMatch, startSessionFactory, identity, budget, signal, download,
+    finish: guardedFinish, loadSubmission };
   try {
+    if (signal?.aborted) throw signal.reason instanceof Error
+      ? signal.reason : new CampusInfrastructureError('match_cancelled');
     if (job.kind === 'validate') return await runValidate(job, deps);
     if (job.kind === 'match') return await runMatchJob(job, deps);
     throw new ManualInputError('unsupported_kind');
@@ -321,14 +318,14 @@ export async function executeManualFinalJob(job, {
       return { recorded: false, status: 'lease_lost', reason: 'lease_lost', attempt: job.attempt };
     }
     const code = codeOf(error);
-    if (isAbort(error)) {
+    if (signal?.aborted || isAbort(error)) {
       await release({ jobId: job.jobId, token: job.token, generation: job.generation,
         error: 'worker_shutdown' }).catch(() => null);
       return { recorded: false, status: 'released', reason: 'worker_shutdown', attempt: job.attempt };
     }
     if (isBotFault(error) && job.kind === 'validate') {
       const outcome = { status: 'invalid', error: code, message: String(error.message ?? '').slice(0, 400) };
-      const result = await finish({ jobId: job.jobId, token: job.token, generation: job.generation,
+      const result = await guardedFinish({ jobId: job.jobId, token: job.token, generation: job.generation,
         kind: 'validate', outcome });
       return finishOutcome(result, 'invalid', { reason: code, attempt: job.attempt });
     }

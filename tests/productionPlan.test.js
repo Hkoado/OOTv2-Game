@@ -42,6 +42,13 @@ test('guest shell/service files stay LF-only and the unit is sandboxed', () => {
   assert.match(unit, /^WantedBy=multi-user\.target$/m);
   assert.match(unit, /ExecStart=\/opt\/ootv2-node\/bin\/node \/srv\/ootv2\/current\/server\/githubWorker\.js/);
   assert.doesNotMatch(unit, /server\/worker\.js/);
+  const judge = readFileSync(new URL('../tools/provision/ootv2-official-worker.service', import.meta.url), 'utf8');
+  assert.match(judge, /server\/officialWorker\.js --all/);
+  assert.match(judge, /OOTV2_CAMPUS_SANDBOX=linux-sandbox/);
+  assert.match(judge, /assertCampusSandboxReady/);
+  assert.doesNotMatch(judge, /OOTV2_ALLOW_TRUSTED_DEV/);
+  const attest = readFileSync(new URL('../tools/provision/ootv2-attest.service', import.meta.url), 'utf8');
+  assert.match(attest, /\/srv\/ootv2\/current\/sandbox\/linux\/attest.sh/);
 });
 
 test('worker environment exports only runtime allowlist, never migration/browser secrets', () => {

@@ -106,6 +106,21 @@ if (base && key) {
   }
 }
 
+if (base && key) {
+  try {
+    // Invalid duration is rejected before UPDATE: no job is touched by this probe.
+    const response = await fetch(`${base}/rest/v1/rpc/mvp_manual_final_heartbeat`, {
+      method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_job: '00000000-0000-0000-0000-000000000000',
+        p_token: '00000000-0000-0000-0000-000000000000', p_generation: 0, p_lease_seconds: 0 }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const body = await response.json();
+    record('mvp_manual_final_heartbeat', response.status === 200 && body?.error === 'bad_lease',
+      response.status === 200 && body?.error === 'bad_lease' ? 'duration guard reachable' : `HTTP ${response.status}`);
+  } catch { record('mvp_manual_final_heartbeat', false, 'network or invalid response'); }
+}
+
 const ok = checks.every((item) => item.ok);
 if (process.argv.includes('--json')) {
   process.stdout.write(`${JSON.stringify({ ok, checks })}\n`);
