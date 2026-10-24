@@ -129,7 +129,7 @@ export default function OfficialSetupPanel({ event, teams, actions, busy, admin 
         {preview.executionBlocker} Map có thể công bố trước để đội chuẩn bị bot; công bố map không mở worker giải chính thức.
       </Alert>
 
-      <OfficialRoundPanel event={event} admin={admin} busy={busy} actions={actions} />
+      <OfficialRoundPanel event={event} teams={teams} admin={admin} busy={busy} actions={actions} />
 
       {conflict.hasConflict && (
         <Alert tone="danger" title="Phát hiện xung đột phiên bản">
