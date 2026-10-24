@@ -89,7 +89,6 @@ export default function SubmissionsPage({
   const [receipt, setReceipt] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [syncNotice, setSyncNotice] = useState(null);
-  const [offlineUploadError, setOfflineUploadError] = useState('');
 
   const frozen = submissionFreeze(events);
   const isEventFrozen = selectedEvent && selectedEvent.status !== 'draft';
@@ -262,28 +261,6 @@ export default function SubmissionsPage({
       setSyncing(false);
       actions.refresh();
     }, 2500);
-  }
-
-  // Offline direct file upload fallback for Admin / Giám thị
-  async function handleOfflineUpload(event) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const file = form.elements.file?.files?.[0];
-    if (!file) {
-      setOfflineUploadError('Chọn một file .py trước khi nộp.');
-      return;
-    }
-    if (!/\.py$/i.test(file.name)) {
-      setOfflineUploadError('Chỉ nhận đúng một file Python (.py).');
-      return;
-    }
-    if (file.size > MAX_BYTES) {
-      setOfflineUploadError(`File ${Math.ceil(file.size / 1024)} KiB vượt giới hạn ${MAX_BYTES / 1024} KiB.`);
-      return;
-    }
-    setOfflineUploadError('');
-    const ok = await actions.uploadBot(targetId, file);
-    if (ok) form.reset();
   }
 
   const receiptStatus = receipt ? syncStatusInfo(receipt.status) : null;
@@ -588,38 +565,15 @@ export default function SubmissionsPage({
             </ul>
           </Panel>
 
-          {/* Admin Offline USB Fallback Upload */}
+          {/* Chi dan sang muc Chung ket thu cong cho Admin */}
           {isAdmin && (
             <Panel
-              title="Nộp file trực tiếp (Giám thị / Offline)"
-              subtitle="Chế độ dự phòng khi thi đấu tập trung tại phòng máy hoặc mất kết nối Internet; nhận file bot.py qua USB."
+              title="Chung kết thủ công tại phòng thi"
+              subtitle="BTC nạp mã nguồn trực tiếp cho các vòng chung kết tập trung tại mục Quản lý giải đấu."
             >
-              <form className="tt-form" ref={formRef} onSubmit={handleOfflineUpload}>
-                <Field
-                  label="File bot (.py) từ USB"
-                  hint={`Dành cho giám thị nộp hộ đội ${selectedTeam ? selectedTeam.name : '(chưa chọn)'}. Tối đa 256 KiB.`}
-                >
-                  <input
-                    type="file"
-                    name="file"
-                    accept=".py"
-                    required
-                    disabled={!targetId || busy?.upload}
-                  />
-                </Field>
-                {offlineUploadError && <Alert tone="danger">{offlineUploadError}</Alert>}
-                <div className="tt-form__actions">
-                  <button
-                    type="submit"
-                    className="tt-btn"
-                    disabled={!targetId || busy?.upload}
-                  >
-                    <UploadCloud size={16} aria-hidden="true" />
-                    {busy?.upload ? 'Đang nộp…' : 'Nộp file USB'}
-                  </button>
-                  {!targetId && <span className="tt-muted">Chọn một đội ở trên trước khi nộp file.</span>}
-                </div>
-              </form>
+              <p className="tt-muted" style={{ margin: 0 }}>
+                Hệ thống nộp bài tại trang này dành riêng cho chế độ <strong>Online GitHub Intake</strong> (đồng bộ tự động qua commit SHA và biên nhận hợp lệ). Với vòng chung kết thi đấu trực tiếp tại sự kiện, vui lòng sử dụng mục <strong>Chung kết thủ công</strong> trong trang chi tiết giải đấu.
+              </p>
             </Panel>
           )}
         </div>

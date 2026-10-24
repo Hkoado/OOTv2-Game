@@ -1,5 +1,35 @@
 # Trạng thái triển khai Campus — 23/10/2026
 
+## Chung kết thủ công + cutoff đã apply DB — 24/10/2026 (Huy)
+
+- Module admin-only “Chung kết thủ công”: `server/services/manualFinal.js`,
+  `server/routes/manualFinal.js` (mount `/api/local/manual-finals`), `server/shared/manualFinalJobs.js`
+  (contract worker cho Khoa) và migration `20261026100000_manual_final.sql`.
+- 6 bảng mới (`mvp_manual_final_events/teams/submissions/matches/jobs/audit`) + 7 RPC
+  `mvp_manual_final_*`; quyền hẹp theo cột (không UPDATE trên bài/trận), audit append-only,
+  `service_role` bị revoke trước khi cấp lại, một ván chỉ một kết quả accepted.
+- Upload `.py` UTF-8 1..262144 B, hash/actor/thời gian do server; `storage_path` không ra DTO;
+  tải source chỉ admin và kiểm lại hash. Không dùng cờ `OOTV2_ALLOW_ONLINE_UPLOAD`.
+- **Đã apply DB** trên project `.env` (`wsyfcgurnrowcuefwynx` = **OTTv2-G5**, là project duy nhất
+  token hiện tại truy cập được; project `ftzockzolisecnyhlwej` trong PRODUCTION-BOOTSTRAP không
+  truy cập được bằng token này): `20261025100000_cutoff_capture.sql` +
+  `20261026100000_manual_final.sql` qua `npm run db:apply-migrations -- --apply --smoke`
+  (mỗi file một transaction, smoke rollback PASS).
+- `tools/cli/apply-migrations.js` đã thêm 2 migration vào PLAN; `db:manual` tự nhận schema đã apply
+  và chỉ chạy drill trong một transaction có ROLLBACK.
+- Bằng chứng (24/10/2026): `db:apply-migrations` OK 2/2 + smoke PASS; `db:check-github` mọi bảng 200,
+  RPC trả domain error; `db:verify` counts **16/11/2/12/28/4** không đổi; `db:manual` PASS ở chế độ
+  đã-apply; `npm test` **372/372 pass**; `npm run build` pass. Dữ liệu trước khi apply được chụp
+  vào `data/backup-before-step0.json` (gitignored).
+- **Chưa** nối worker, chưa browser E2E, chưa backup/**restore rehearsal**. Chi tiết:
+  [handoff Huy](handoff/Huy.md), [contract](19-CONTRACT-TICH-HOP.md).
+- **Smoke API thật sau khi Bảo nối UI (24/10/2026):** `data/smoke-manual-api.mjs` (gitignored) chạy trên
+  API local + Supabase đã apply → **16/16 PASS** (tạo đợt, upload/dup, intake, chặn chọn pending/khóa
+  chưa chọn/pair chưa khóa/nhảy trạng thái/thiếu CSRF); dọn sạch, counts trở lại 2 tournaments / 11
+  accounts / 0 manual events. Hợp đồng đã khớp UI: POST trả kèm `id/name/status`, `blockers` là chuỗi +
+  `blocker_details`; cookie session path `/api` kèm xoá cookie legacy `/api/local`.
+
+
 ## Đã nối DB thật + smoke PASS — 24/10/2026
 
 - Cấp `SUPABASE_ACCESS_TOKEN` (PAT) trong `.env`; apply **10/10** migration qua Management API

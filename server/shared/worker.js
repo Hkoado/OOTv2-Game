@@ -154,7 +154,7 @@ export async function runSharedWorker({once=false,drain=false}={}) {
         const result=await processSharedMatch({workerId});
         if(once||(drain&&!result.processed))break;
         if(!result.processed||result.reason==='infrastructure')await sleep(3000);
-      } catch {console.error('[shared-worker] DB unavailable; no local fallback');if(once)throw new Error('Shared worker unavailable');await sleep(5000);}
+      } catch (err) {console.error(`[shared-worker] Worker loop error: ${err?.message || err}; DB unavailable or local issue`);if(once)throw err;await sleep(5000);}
     }
   } finally {process.off('SIGINT',shutdown);process.off('SIGTERM',shutdown);}
 }

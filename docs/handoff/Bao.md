@@ -2,11 +2,11 @@
 
 ## Trạng thái mới nhất
 
-- Trạng thái: **READY FOR REVIEW** — hoàn thành milestone B4 và rà soát toàn diện tương thích B1–B4 với phân H (H1–H4).
-- Phạm vi: B1, B2, B3 & B4 trong [phân công Bảo](../assignments/Bao.md).
-- Checkpoint: branch `dev` (trên nền commit tích hợp H1/H2/H3/H4 và K1/K2/K3c/K4).
-- Tổng test suite hiện tại: **317/317 bài kiểm thử PASS** (100% thành công, 0 lỗi, 0 skip).
-- Build production: **Vite build sạch** (1650 modules transformed, bundle `dist/` sẵn sàng).
+- Trạng thái: **IN PROGRESS / CHECKPOINT 8** — Nối hoàn chỉnh API backend thật cho **Chung kết thủ công (Manual Finals Panel)**, mở rộng phạm vi cookie phiên sang `/api`, đồng bộ sạch sẽ với `origin/dev`.
+- Phạm vi: B1–B4 và Mục Chung kết thủ công theo quyết định 24/10/2026 trong [phân công Bảo](../assignments/Bao.md).
+- Checkpoint: branch `dev` (đã hợp nhất commit mới nhất từ `origin/dev`).
+- Tổng test suite hiện tại: **372/372 bài kiểm thử PASS** (100% thành công, 0 lỗi, 0 skip).
+- Build production: **Vite build sạch** (1654 modules transformed, bundle `dist/` sẵn sàng trong 2.90s).
 
 ---
 
@@ -90,6 +90,20 @@ NOT RUN + lý do:
 
 ## Lịch sử checkpoint
 
+- 24/10/2026 (Checkpoint 8): **Nối API thật cho Chung kết thủ công & Mở rộng phạm vi Cookie Session**:
+  - Tạo client API [`manualFinalApi.js`](../../src/tournament/portal/manualFinalApi.js) (10 hàm gọi API `/api/local/manual-finals/*` có CSRF & same-origin credentials).
+  - Nối toàn bộ UI [`ManualFinalsPanel.jsx`](../../src/tournament/portal/ManualFinalsPanel.jsx) với backend: nạp file `.py` thật qua multipart FormData, chọn bài chính thức, khóa snapshot đội (`lockManualTeam`), ghép cặp tạo trận (`createManualMatch`), xem Replay và kiểm toán bắt buộc lý do khi can thiệp (`rerunManualMatch`, `cancelManualMatch`).
+  - Mở rộng phạm vi cookie phiên `oot_local_session` từ `path: '/api/local'` sang `path: '/api'` tại [`server/shared/router.js`](../../server/shared/router.js) để các route trực tiếp `/api/live/*` (LivePage) nhận diện đúng phiên đăng nhập H3, giải quyết triệt để lỗi hiển thị sai "Worker offline" khi worker đang chạy.
+  - Đồng bộ nhánh với `origin/dev` (commit `a25aa81` của Huy).
+  - Kết quả kiểm thử: **372/372 tests PASS** (100%), Vite build sạch 1,654 modules (2.90s).
+
+- 24/10/2026 (Checkpoint 7): **Chung kết thủ công (Manual Finals) & Bỏ CTA Upload Online sai scope**:
+  - Tạo nhánh `Frontend-UI` độc lập từ `dev`.
+  - Xây dựng component mới [`ManualFinalsPanel.jsx`](../../src/tournament/portal/ManualFinalsPanel.jsx): Quản lý vòng đấu chung kết, 5 bản đồ Campus v2, BTC nạp bot theo đội ($\le 256\text{ KiB}$ .py), tính toán băm SHA-256, khóa bài thi đấu (Lock snapshot immutability), kích hoạt máy chấm Worker, hiển thị kết quả chính thức từ engine OOTv2, xem Replay và hủy/chấm lại bắt buộc có lý do kiểm toán (Audit reason).
+  - Tích hợp tab **"Chung kết thủ công"** trong [`EventDetailPage.jsx`](../../src/tournament/portal/EventDetailPage.jsx) cho Ban tổ chức.
+  - Làm sạch [`SubmissionsPage.jsx`](../../src/tournament/portal/SubmissionsPage.jsx): Bỏ CTA nộp USB gây hiểu nhầm sang mục Chung kết thủ công chuẩn scope.
+  - Thêm bài test tự động [`tests/manualFinals.test.js`](../../tests/manualFinals.test.js) (4 tests).
+  - Kết quả kiểm thử: **357/357 tests PASS**, `npm run build` thành công 1653 modules.
 - 24/10/2026 (Checkpoint 6): **Phân định rõ trạng thái xác thực trên Live View (LivePage.jsx)**:
   - Kiểm tra `account`: chỉ hiển thị cảnh báo chính sách H3 và nút *"Đăng nhập ngay"* khi người dùng **chưa đăng nhập** (`!account`).
   - Khi đã đăng nhập (`account`): ẩn cảnh báo yêu cầu đăng nhập, hiển thị thông tin tài khoản và đưa ra chỉ dẫn rõ ràng kèm nút *"Quay về trang tài khoản"*.

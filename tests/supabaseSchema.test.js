@@ -159,3 +159,65 @@ test('github hardening migration: lease expiry, idempotent finish, reclaim cap, 
   }
   assert.doesNotMatch(sql, /SECURITY DEFINER|DROP TABLE|DROP COLUMN/i);
 });
+
+test('manual final migration: 6 bảng RLS, quyền hẹp, RPC nguyên tử và không phá dữ liệu', () => {
+  const manual = readFileSync(new URL('../supabase/migrations/20261026100000_manual_final.sql', import.meta.url), 'utf8');
+  const tables = ['mvp_manual_final_events', 'mvp_manual_final_teams', 'mvp_manual_final_submissions',
+    'mvp_manual_final_matches', 'mvp_manual_final_jobs', 'mvp_manual_final_audit'];
+  const found = [...manual.matchAll(/create table public\.(\w+)/gu)].map((match) => match[1]);
+  assert.deepEqual(found.sort(), [...tables].sort());
+  assert.match(manual, /create unique index/iu);
+  assert.doesNotMatch(manual, /drop table|on delete cascade/iu);
+
+  // Đợt mới chỉ dùng map v2 + runtime chính thức; manual có intake_mode riêng.
+  assert.match(manual, /intake_mode text not null default 'manual_final'/u);
+  assert.match(manual, /map_json->>'schemaVersion' = 'map\.v2'/u);
+  assert.match(manual, /runtime_json->>'runtimeVersion' = 'campus-runtime\.v1'/u);
+  assert.match(manual, /byte_size between 1 and 262144/iu);
+  assert.match(manual, /storage_path text not null unique/iu);
+
+  // RLS + deny-by-default cho cả service_role (bảng mới thừa hưởng default privileges Supabase).
+  for (const table of tables) assert.ok(manual.includes(`'${table}'`), `${table} phải nằm trong vòng RLS/grant`);
+  assert.match(manual, /alter table public\.%I enable row level security/iu);
+  assert.match(manual, /revoke all on table public\.%I from public,anon,authenticated,service_role/iu);
+
+  // Không UPDATE toàn bảng trên bài/trận; chỉ đợt mới được đổi cột trạng thái.
+  assert.doesNotMatch(manual, /grant (select, )?insert,? update on public\.mvp_manual_final_(submissions|matches)/iu);
+  assert.doesNotMatch(manual, /update on public\.mvp_manual_final_submissions/iu);
+  assert.match(manual, /grant update \(status, closed_at, updated_at\) on public\.mvp_manual_final_events/iu);
+  assert.match(manual, /revoke update, delete on public\.mvp_manual_final_audit from service_role/iu);
+  assert.match(manual, /manual_final_audit_append_only/u);
+
+  // Khóa/chọn/chấm/claim đều qua RPC SECURITY DEFINER có search_path rỗng.
+  const signatures = [
+    'public.mvp_manual_final_select(uuid,uuid)',
+    'public.mvp_manual_final_lock(uuid,uuid,uuid)',
+    'public.mvp_manual_final_pair(jsonb,uuid)',
+    'public.mvp_manual_final_cancel(uuid,uuid,text)',
+    'public.mvp_manual_final_claim(text,integer,integer)',
+    'public.mvp_manual_final_finish(uuid,uuid,integer,jsonb)',
+    'public.mvp_manual_final_release(uuid,uuid,integer,text,integer)',
+  ];
+  // Grant/revoke đi qua vòng lặp `foreach fn in array [...]` với format(%s).
+  assert.match(manual, /foreach fn in array array\[/iu);
+  for (const signature of signatures) {
+    assert.ok(manual.includes(`'${signature}'`), `thiếu khai báo grant/revoke: ${signature}`);
+  }
+  assert.match(manual, /grant execute on function %s to service_role/iu);
+  assert.match(manual, /revoke all on function %s from public,anon,authenticated/iu);
+  assert.match(manual, /security definer set search_path = ''/iu);
+  assert.match(manual, /for update skip locked/iu);
+  assert.match(manual, /mvp_manual_final_one_accepted/u);
+  assert.match(manual, /mvp_manual_final_job_target/u);
+
+  // finish: duplicate (already_finished) phải trả trước khi kiểm lease để retry không ghi lần 2.
+  const finish = manual.slice(manual.indexOf('create function public.mvp_manual_final_finish'));
+  const already = finish.indexOf('already_finished');
+  const lease = finish.indexOf("'lease_lost'");
+  assert.ok(already > -1 && lease > -1 && already < lease, 'already_finished phải được kiểm trước lease');
+
+  // Lỗi hạ tầng retry cùng input; hủy không xóa audit; một ván chỉ một kết quả accepted.
+  assert.match(manual, /available_at = clock_timestamp\(\) \+ make_interval/iu);
+  assert.match(manual, /status = 'canceled', canceled_at = clock_timestamp\(\)/iu);
+  assert.match(manual, /where status = 'finished'/iu);
+});

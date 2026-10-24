@@ -4,6 +4,7 @@ import DraftEventEditor from './DraftEventEditor.jsx';
 import MapPreview from './MapPreview.jsx';
 import OfficialSetupPanel from './OfficialSetupPanel.jsx';
 import BroadcastDialog from './BroadcastDialog.jsx';
+import ManualFinalsPanel from './ManualFinalsPanel.jsx';
 import {
   Alert, Badge, ConfirmAction, DataTable, Empty, Panel, Progress, Spinner,
 } from './TournamentUi.jsx';
@@ -202,6 +203,7 @@ export default function EventDetailPage({
 }) {
   const isAdmin = account.role === 'admin';
   const [stage, setStage] = useState('all');
+  const [activeTab, setActiveTab] = useState('overview');
   const [broadcasts, setBroadcasts] = useState([]);
   const [schedulingMatch, setSchedulingMatch] = useState(null);
 
@@ -286,8 +288,29 @@ export default function EventDetailPage({
 
   if (event.competition) return <>
     {backButton}
-    <header className="tt-page-head"><div><h1 className="tt-page-title">{event.name}</h1><p>Thiết lập chính thức · seed {event.seed} · phiên bản {event.version}</p></div></header>
-    <OfficialSetupPanel key={`${event.id}:${account.role}`} event={event} teams={teams} actions={actions} busy={busy} admin={isAdmin} />
+    <header className="tt-page-head">
+      <div>
+        <h1 className="tt-page-title">{event.name}</h1>
+        <p>Thiết lập chính thức · seed {event.seed} · phiên bản {event.version}</p>
+      </div>
+      {isAdmin && (
+        <div className="tt-page-actions">
+          <button
+            type="button"
+            className={`tt-btn ${activeTab === 'finals' ? 'tt-btn--primary' : 'tt-btn--ghost'}`}
+            onClick={() => setActiveTab(activeTab === 'finals' ? 'overview' : 'finals')}
+          >
+            <Swords size={16} aria-hidden="true" />
+            {activeTab === 'finals' ? 'Quay lại thiết lập' : 'Chung kết thủ công'}
+          </button>
+        </div>
+      )}
+    </header>
+    {activeTab === 'finals' && isAdmin ? (
+      <ManualFinalsPanel event={event} teams={teams} actions={actions} busy={busy} admin={isAdmin} onOpenReplay={onOpenReplay} />
+    ) : (
+      <OfficialSetupPanel key={`${event.id}:${account.role}`} event={event} teams={teams} actions={actions} busy={busy} admin={isAdmin} />
+    )}
   </>;
 
   const groupsList = Object.keys(standings?.groups || {});
@@ -308,6 +331,16 @@ export default function EventDetailPage({
         </div>
         <div className="tt-page-actions">
           <Badge tone={eventTone(event.status)} dot>{eventStatusLabel(event.status)}</Badge>
+          {isAdmin && (
+            <button
+              type="button"
+              className={`tt-btn ${activeTab === 'finals' ? 'tt-btn--primary' : 'tt-btn--ghost'}`}
+              onClick={() => setActiveTab(activeTab === 'finals' ? 'overview' : 'finals')}
+            >
+              <Swords size={15} aria-hidden="true" />
+              {activeTab === 'finals' ? 'Bảng đấu & Lịch phát' : 'Chung kết thủ công'}
+            </button>
+          )}
           {isAdmin && event.status === 'draft' && event.entries.length === 8 && !event.map.blocked.length && (
             <ConfirmAction
               label="Bắt đầu giải"
@@ -324,7 +357,11 @@ export default function EventDetailPage({
         </div>
       </header>
 
-      {event.status === 'draft' && isAdmin && <DraftEventEditor key={event.id} event={event} teams={teams} actions={actions} busy={busy} />}
+      {activeTab === 'finals' && isAdmin ? (
+        <ManualFinalsPanel event={event} teams={teams} actions={actions} busy={busy} admin={isAdmin} onOpenReplay={onOpenReplay} />
+      ) : (
+        <>
+          {event.status === 'draft' && isAdmin && <DraftEventEditor key={event.id} event={event} teams={teams} actions={actions} busy={busy} />}
       {event.status === 'draft' && <Panel title="Nội dung thư mục giải"><p>{event.entries.length}/8 đội · {event.map.id}</p><p className="tt-muted">Chỉ xếp lịch khi đủ 8 đội có bot hợp lệ và map được worker hỗ trợ.</p></Panel>}
       {event.status !== 'draft' && <Panel title="Map thi đấu"><MapPreview map={event.map} /></Panel>}
       <Panel title="Tiến độ giải" subtitle={isAdmin ? 'Worker chấm tuần tự; kết quả và ván phát được kiểm soát theo lịch.' : 'Kết quả cập nhật theo lịch phát sóng của BTC.'}>
@@ -416,6 +453,8 @@ export default function EventDetailPage({
           isAdmin={isAdmin}
         />
       </Panel>
+      </>
+      )}
 
       {/* Broadcast Scheduling Modal */}
       <BroadcastDialog

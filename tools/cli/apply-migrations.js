@@ -176,6 +176,13 @@ PLAN.push({
   exists: async () => (await restGet('/rest/v1/mvp_cutoff_captures?select=*&limit=1')).status === 200,
 });
 
+PLAN.push({
+  version: '20261026100000',
+  file: 'supabase/migrations/20261026100000_manual_final.sql',
+  why: 'Chung kết thủ công: 6 bảng + 7 RPC mvp_manual_final_*',
+  exists: async () => (await restGet('/rest/v1/mvp_manual_final_events?select=*&limit=1')).status === 200,
+});
+
 const readSql = (relative) => readFileSync(path.join(root, relative), 'utf8');
 
 /** Management API không hiểu meta-command `\echo`; bỏ các dòng đó trước khi gửi. */

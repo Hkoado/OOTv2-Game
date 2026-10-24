@@ -1,5 +1,94 @@
 # Kết quả Huy — Backend / GitHub / privacy
 
+## Đợt 24/10/2026 — Backend Chung kết thủ công + rà gate API/DB (RC)
+
+- Phạm vi: toàn gói backend theo [docs/18](../18-CHOT-HOAN-THIEN-VA-NGHIEM-THU.md) và
+  [contract](../19-CONTRACT-TICH-HOP.md), **không chỉ H1**. Áp dụng cho module mới; không sửa
+  engine/runner của Khoa, không sửa UI của Bảo, giữ Campus v2 + Supabase-only + online GitHub capture.
+- Code mới: `server/services/manualFinal.js`, `server/routes/manualFinal.js`,
+  `server/shared/manualFinalJobs.js`, migration `supabase/migrations/20261026100000_manual_final.sql`,
+  mount tại `/api/local/manual-finals` trong `server/shared/router.js` (admin-only, CSRF, no-store).
+- Bảo mật/provenance: intake `manual_final` tách khỏi GitHub; không giả receipt/SHA; hash + thời gian +
+  actor do server ghi; `storage_path` và lease token **không** trả trong DTO; source chỉ tải qua route
+  admin riêng (`/submissions/:sid/source`, kiểm lại sha256/byte_size trước khi trả).
+- Ghi DB có nguyên tử/fence ở SQL: chọn/khóa/pair/cancel/claim/finish/release là RPC `SECURITY DEFINER`
+  (`set search_path=''`), cấm REST sửa bytes/hash/snapshot/result (revoke cả `service_role` rồi cấp
+  column-level grant), audit append-only, một ván chỉ một kết quả accepted.
+- Upload không dùng cờ `OOTV2_ALLOW_ONLINE_UPLOAD`; đội online vẫn bị `upload_disabled` (đã test lại).
+
+### Bằng chứng đã chạy (exit 0)
+
+| Lệnh | Kết quả |
+| --- | --- |
+| `npm test` | **372/372 pass**, 0 skip |
+| `node --test tests/manualFinalApi.test.js` | 9/9 — quyền/CSRF/IDOR, upload/dup, chọn/khóa, pair idempotent, cancel/rerun, finish fence/duplicate, release retry, replay/download |
+| `node --test tests/manualFinalDrill.test.js` | 5/5 — drill luôn một transaction + ROLLBACK, chặn COMMIT, có chế độ “schema đã apply” |
+| `node --test tests/supabaseSchema.test.js` | 10/10 — +1 test tĩnh cho migration manual final |
+| `npm run build` | pass (Vite) |
+| `npm run db:apply-migrations -- --apply --smoke` | **OK 2/2 + smoke PASS** (24/10/2026): `20261025100000_cutoff_capture` + `20261026100000_manual_final`, mỗi file một transaction |
+| `npm run db:check-github` | mọi bảng HTTP 200; RPC trả domain error (`event_not_found`, `bad_lease`), không còn `PGRST202` |
+| `npm run db:verify` | counts **16/11/2/12/28/4** đúng như trước apply; `apiAuthCsrfLogout: true` |
+| `npm run db:manual` | **PASS** ở chế độ đã-apply (drill trong một transaction, ROLLBACK) |
+
+### Môi trường đã chốt (24/10/2026)
+
+- Project đích = `wsyfcgurnrowcuefwynx` (**OTTv2-G5**, ACTIVE_HEALTHY) — project duy nhất mà
+  `SUPABASE_ACCESS_TOKEN` hiện tại truy cập được (`GET /v1/projects` chỉ trả project này).
+- `ftzockzolisecnyhlwej` nêu trong `PRODUCTION-BOOTSTRAP.md` **không** truy cập được bằng token này;
+  muốn dùng project đó phải cấp URL/token mới rồi chạy fresh bundle + 2 migration này.
+- Snapshot dữ liệu trước khi apply: `data/backup-before-step0.json` (gitignored, không chứa secret).
+
+### NOT RUN / blocker (không đổi thành PASS)
+
+- Worker Khoa chưa consume `claimManualFinalJobs`/`finishManualFinalJob`; chưa có VM/sandbox thật
+  cho job `match`/`validate`.
+- Bảo chưa nối UI vào API (panel hiện chạy state cục bộ).
+- Browser E2E, load 50/100/200 viewer, **restore rehearsal** (đã có snapshot dữ liệu, chưa diễn tập
+  phục hồi), `npm audit`/secret scan lại: **NOT RUN**.
+
+
+### Tích hợp sau merge `origin/dev` (e0d88d4)
+
+- Đã merge `origin/dev` (Bảo: `ManualFinalsPanel.jsx`, `tests/manualFinals.test.js`, dọn scope nộp bài)
+  và giữ nguyên phần API/DB của Huy; `npm test` **371/371 pass**, `npm run build` pass sau merge.
+- **Ranh giới cần Bảo nối tiếp:** `ManualFinalsPanel.jsx` hiện dùng state cục bộ (`Date.now()` cho match,
+  hash bằng Web Crypto ở client, không gọi API) — chưa phải luồng thật và không được coi là bằng chứng
+  E2E. Panel cần gọi đúng route mục 6.1 docs/19 (multipart + `x-csrf-token`), hiển thị trạng thái/lỗi
+  từ server (`submission_not_valid`, `event_not_open`, `result_conflict`...), không tự tính hash/lock.
+- Huy **không** sửa UI/runner của Bảo/Khoa trong đợt này.
+
+### Hợp nhất hợp đồng với UI Bảo + review cookie + smoke API thật (24/10/2026)
+
+- Nhận `origin/dev` (`918fab1`, `7773e47`): Bảo nối UI thật qua `src/tournament/portal/manualFinalApi.js`
+  (mọi route khớp prefix `/api/local/manual-finals`, không còn nút giả/local-state).
+- Sửa **phía API** để khớp UI đã xong (không sửa file UI của Bảo → tránh conflict):
+  - `POST /manual-finals` trả thêm `id`/`name`/`status` ở top-level (giữ nguyên `{event, teams, …}`);
+    trước đó UI đọc `created.id` nên đợt mới không được chọn.
+  - `readiness.blockers` → **mảng chuỗi** (UI `join('; ')`); giữ chi tiết máy ở `blocker_details`
+    `[{code, team_id, message}]`. Test `manualFinalApi` khoá cả 2 shape.
+- Review thay đổi file dùng chung của Bảo: cookie session đổi `path '/api/local' → '/api'`.
+  Kết luận: **giữ** (vì `/api/live/*` cũng `requireSession`), nhưng bổ sung xoá cookie legacy `/api/local`
+  ở login **và** logout — nếu không, browser gửi cookie path dài trước và phiên mới bị che.
+  Đã ghi vào docs/19 §1.
+- Smoke API **thật** trên DB đã apply (script `data/smoke-manual-api.mjs`, gitignored):
+  admin tạm → login + CSRF → tạo đợt → upload `.py` → upload trùng → mở intake → chặn chọn bài pending →
+  chặn khóa khi chưa chọn → chặn pair khi chưa khóa vòng → chặn nhảy bước trạng thái → chặn thiếu CSRF →
+  dọn sạch. Kết quả **16/16 PASS**; sau smoke counts trở lại `tournaments=2, accounts=11, manual_events=0`.
+- Lưu ý vận hành: audit của manual final là **append-only chặn cả DELETE**; dọn dữ liệu drill/smoke phải
+  tạm `disable trigger mvp_manual_final_audit_guard` trong một transaction rồi bật lại (chỉ owner/Management
+  API), không thể qua REST. Không được tắt trigger ngoài dọn dẹp có kiểm soát.
+- `npm test` **372/372 pass**, `npm run build` pass sau thay đổi.
+
+### Việc của người khác (không tự làm thay)
+
+- Bảo: nối UI mục “Chung kết thủ công” theo DTO mục 6.3 của docs/19; migration **đã apply** nên có thể
+  nối API thật ngay, fixture chỉ dùng để chạy song song trước khi nối.
+  Góp ý nhỏ còn lại (không chặn): reload `detail` sau khi đổi trạng thái đợt, và map `blocker_details`
+  nếu UI muốn hiện theo đội.
+- Khoa: nối worker vào queue chung (`server/shared/manualFinalJobs.js`), giữ luật “lỗi hạ tầng ≠ forfeit”,
+  dùng cùng Campus/budget; không tạo runner thứ hai.
+- Operator: rehearsal DB/VM + restore rehearsal trước khi đóng gate RC.
+
 ## Trạng thái mới nhất
 
 - Trạng thái: **H1/H2/H3 DONE — đã VERIFIED trên Postgres thật** (10/10 migration + smoke PASS,

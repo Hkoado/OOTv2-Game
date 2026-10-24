@@ -25,6 +25,12 @@ data/
 # Per-machine worker settings (VM name/paths); copy from worker.config.example.json
 tools/vm/worker.local.json
 
+# Kiểm thử/ad-hoc cục bộ cho từng đợt (không push lên dev)
+tests-local/
+*.local.test.js
+tests-*.log
+manual-final-*.txt
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
