@@ -13,6 +13,8 @@ chỉ làm Chung kết thủ công BTC nạp/chọn/khóa/chấm qua hệ thốn
 Đây là kế hoạch đã duyệt, không phải tuyên bố triển khai xong.
 
 **Trạng thái nghiệm thu hiện hành:** [Production readiness](PRODUCTION-READINESS.md).
+**Rà soát deploy và kịch bản sửa RC (25/10):** [biên bản findings](DEPLOY-REVIEW-2026-10-25.md),
+[kịch bản sửa/verify cho Huy và Bảo](21-KICH-BAN-SUA-VA-VERIFY-RC.md).
 **Gate trước chấm bot không tin cậy (25/10):** [kế hoạch và blocker](WORKER-UNTRUSTED-READINESS.md).
 **DB mới / bộ dựng Hyper-V đang triển khai:** [Production bootstrap](PRODUCTION-BOOTSTRAP.md).
 **Máy Windows khác pull repo chạy worker:** [Đóng gói worker](WORKER-PACKAGING.md).
