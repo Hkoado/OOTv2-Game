@@ -60,7 +60,7 @@ const MATCH_STATUS_LABELS = {
   canceled: 'Đã hủy',
 };
 
-export default function ManualFinalsPanel({ event, teams, actions, busy, admin, onOpenReplay }) {
+export default function ManualFinalsPanel({ event, teams, actions, busy, admin, onOpenReplay, onOpenReplayPayload }) {
   const [eventsList, setEventsList] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState('');
   const [detail, setDetail] = useState(null);
@@ -315,8 +315,12 @@ export default function ManualFinalsPanel({ event, teams, actions, busy, admin, 
   async function handleOpenReplay(matchId) {
     try {
       const data = await fetchManualMatchReplay(selectedEventId, matchId);
-      if (onOpenReplay && data.replay) {
-        onOpenReplay(data.replay);
+      if (data && data.replay) {
+        if (onOpenReplayPayload) {
+          onOpenReplayPayload(data);
+        } else if (onOpenReplay) {
+          onOpenReplay(data);
+        }
       } else {
         alert('Ván đấu chưa có dữ liệu Replay.');
       }

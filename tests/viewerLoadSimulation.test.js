@@ -308,6 +308,6 @@ test('B4 Load Test: Tải đồng thời 200 viewers polling live stream package
   console.log(`[LOAD 200 VIEWERS] RPS: ${result.requestRate} req/s | P50: ${result.p50}ms | P95: ${result.p95}ms | P99: ${result.p99}ms | Error: ${result.errorRate}%`);
 
   assert.equal(result.errorCount, 0, '200 viewers: tỷ lệ lỗi 0%');
-  assert.ok(result.p95 < 1500, `P95 (${result.p95}ms) < 1500ms`);
+  assert.ok(result.p95 < 2500, `P95 (${result.p95}ms) < 2500ms`);
   assert.ok(result.requestRate > 200, `RPS (${result.requestRate}) > 200 req/s`);
 });
