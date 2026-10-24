@@ -8,10 +8,10 @@
  * Chạy: `node server/officialWorker.js` (service) hoặc `--once`/`--drain` cho CI/kiểm thử.
  */
 import { hostname } from 'node:os';
-import { pathToFileURL } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 import { assertSharedConfig } from './shared/client.js';
+import { isMainModule } from './shared/entrypoint.js';
 import { claimOfficialJob, reapOfficialJobs } from './shared/officialJobs.js';
 import { claimManualFinalJobs, heartbeatManualFinalJob } from './shared/manualFinalJobs.js';
 import { executeOfficialJob } from './services/officialExecution.js';
@@ -249,7 +249,7 @@ export async function runOfficialWorkerEntry({ argv = process.argv.slice(2), ...
   }
 }
 
-const isEntryPoint = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+const isEntryPoint = isMainModule(import.meta.url);
 
 if (isEntryPoint) {
   runOfficialWorkerEntry().then((stats) => {

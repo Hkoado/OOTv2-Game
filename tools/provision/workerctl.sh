@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Guest-side control for the OOTv2 judge VM. Run on the VM (sudo for start/stop).
-# Usage: workerctl.sh status|health|version|start|stop|restart|logs [lines]
+# Usage: workerctl.sh status|health|version|attest|start|stop|restart|logs [lines]
 set -euo pipefail
 root=/srv/ootv2
 queue="${OOTV2_WORKER_SERVICE:-github}"
@@ -20,6 +20,41 @@ need_release() {
 require_sudo() {
   [ "$(id -u)" = 0 ] || { echo 'run_with_sudo'; exit 77; }
 }
+# Read-only readiness for the service actually being controlled: intake tables are not
+# required on a judge guest, and official tables are not required on an intake host.
+health_scope() {
+  cd "$root/current"
+  if [ -f "$env_file" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$env_file"
+    set +a
+  fi
+  "$node" tools/cli/worker-health.js --scope="$queue"
+}
+# A judge must never consume work without a fresh host attestation. The timer is what
+# refreshes it; a failed refresh stops the start instead of leaving a silent stale receipt.
+require_attestation() {
+  systemctl enable ootv2-attest.timer >/dev/null 2>&1 || true
+  systemctl start ootv2-attest.timer || { echo 'attestation_timer_failed'; exit 79; }
+  if ! systemctl start ootv2-attest.service; then
+    journalctl -u ootv2-attest.service -n 30 --no-pager >&2 || true
+    echo 'attestation_failed'
+    exit 79
+  fi
+}
+# Không đặt backslash trước nháy kép bên trong chuỗi nháy đơn của shell: backslash là ký tự
+# thật và Python sẽ báo "unexpected character after line continuation".
+print_attestation() {
+  # `/run/ootv2-sandbox-attestation.json` là root-only: lệnh read-only không có sudo vẫn phải
+  # chạy được thay vì chết vì PermissionError.
+  if [ ! -r /run/ootv2-sandbox-attestation.json ]; then
+    echo 'attestation=unreadable (run with sudo)'
+    return 0
+  fi
+  /usr/bin/python3 -c 'import json;d=json.load(open("/run/ootv2-sandbox-attestation.json"));print("attestation=%s expires=%s" % (d.get("result"), d.get("expiresAt")))'
+}
+
 
 case "$action" in
   status)
@@ -35,22 +70,20 @@ case "$action" in
     "$node" --version
     /usr/bin/python3 --version
     if [ -f /run/ootv2-sandbox-attestation.json ]; then
-      /usr/bin/python3 -c 'import json;d=json.load(open("/run/ootv2-sandbox-attestation.json"));print(f"attestation={d.get(\"result\")} expires={d.get(\"expiresAt\")}")'
+      print_attestation
     else
       echo 'attestation=missing'
     fi
     ;;
   health)
     need_release
-    cd "$root/current"
-    # Credentials must come from the root-owned EnvironmentFile, not an operator shell.
-    if [ -f "$env_file" ]; then
-      set -a
-      # shellcheck disable=SC1090
-      . "$env_file"
-      set +a
-    fi
-    "$node" tools/cli/worker-health.js
+    health_scope
+    ;;
+  attest)
+    require_sudo
+    need_release
+    require_attestation
+    print_attestation
     ;;
   start)
     require_sudo
@@ -58,16 +91,9 @@ case "$action" in
     # Refuse to enable a worker that cannot possibly process a job.
     mode="$(stat -c %a "$env_file" 2>/dev/null || echo missing)"
     if [ "$mode" != '600' ]; then echo "worker_env_mode_invalid:$mode"; exit 78; fi
+    if [ "$queue" = judge ]; then require_attestation; fi
     # Fail fast with a readable reason instead of a systemd restart loop.
-    cd "$root/current"
-    set -a
-    # shellcheck disable=SC1090
-    . "$env_file"
-    set +a
-    if ! "$node" tools/cli/worker-health.js; then echo 'worker_start_refused: health check failed'; exit 79; fi
-    if [ "$queue" = judge ]; then
-      systemctl start ootv2-attest.service
-    fi
+    if ! health_scope; then echo 'worker_start_refused: health check failed'; exit 79; fi
     before="$(systemctl is-active "$service" 2>/dev/null || true)"
     systemctl enable "$service" >/dev/null 2>&1 || true
     systemctl start "$service"
@@ -90,12 +116,8 @@ case "$action" in
   restart)
     require_sudo
     need_release
-    cd "$root/current"
-    set -a
-    . "$env_file"
-    set +a
-    if ! "$node" tools/cli/worker-health.js; then echo 'worker_restart_refused: health check failed'; exit 79; fi
-    if [ "$queue" = judge ]; then systemctl start ootv2-attest.service; fi
+    if [ "$queue" = judge ]; then require_attestation; fi
+    if ! health_scope; then echo 'worker_restart_refused: health check failed'; exit 79; fi
     systemctl restart "$service"
     sleep 3
     systemctl is-active --quiet "$service" || { echo worker_restart_failed; exit 79; }
@@ -106,7 +128,7 @@ case "$action" in
     journalctl -u "$service" -n "$lines" --no-pager
     ;;
   *)
-    echo 'usage: workerctl.sh status|health|version|start|stop|restart|logs [lines]' >&2
+    echo 'usage: workerctl.sh status|health|version|attest|start|stop|restart|logs [lines]' >&2
     exit 64
     ;;
 esac

@@ -67,6 +67,8 @@ test('VM install refuses unchecked SSH and never starts the legacy worker', () =
   const ps = readFileSync(new URL('../tools/vm/Install-Judge.ps1', import.meta.url), 'utf8');
   assert.match(ps, /StrictHostKeyChecking=yes/);
   assert.match(ps, /export-worker-env\.js/);
+  // known_hosts phải có entry cho đúng địa chỉ trước khi gửi archive credential.
+  assert.match(ps, /Invoke-Native 'ssh-keygen\.exe' @\('-F', \$Address, '-f', \$KnownHostsPath\)/);
   const sh = readFileSync(new URL('../tools/provision/install-judge.sh', import.meta.url), 'utf8');
   assert.match(sh, /wsl_is_not_a_judge_vm/);
   assert.match(sh, /sha256sum --check/);
@@ -74,7 +76,7 @@ test('VM install refuses unchecked SSH and never starts the legacy worker', () =
   assert.match(sh, /deploy-release\.sh/);
   assert.doesNotMatch(sh, /systemctl (enable|start)[^\n]*github-worker/);
   assert.doesNotMatch(sh, /server\/worker\.js/);
-  assert.match(sh, /NOT part of it/);
+  assert.match(sh, /NOT part of the github service/);
   const ctl = readFileSync(new URL('../tools/provision/workerctl.sh', import.meta.url), 'utf8');
   assert.match(ctl, /worker-health\.js/);
   assert.match(ctl, /worker_start_refused/);

@@ -52,12 +52,37 @@ install -d -m 0755 /srv/ootv2
 install -d -m 0700 /etc/ootv2
 install -d -m 0750 -o ootv2-worker -g ootv2-worker /var/lib/ootv2
 
+env_target=/etc/ootv2/worker.env
+env_backup=
+# A failed update must not leave the new credentials next to the old release.
+restore_env_on_failure() {
+  status=$?
+  trap - EXIT
+  if [ "$status" -ne 0 ] && [ -n "$env_backup" ] && [ -f "$env_backup" ]; then
+    install -m 0600 -o root -g root "$env_backup" "$env_target"
+    echo "worker_env_restored_previous:$status" >&2
+  fi
+  [ -n "$env_backup" ] && rm -f "$env_backup"
+  exit "$status"
+}
+trap restore_env_on_failure EXIT
+
+# Record which workers were running BEFORE stopping them: deploy-release.sh restores
+# exactly this set, so an update never silently leaves a previously-active worker off.
+previous_active=/run/ootv2-previous-active
+: > "$previous_active"
+chmod 0600 "$previous_active"
+for unit in ootv2-github-worker.service ootv2-official-worker.service; do
+  if systemctl is-active --quiet "$unit"; then echo "$unit" >> "$previous_active"; fi
+done
+export OOTV2_PREVIOUS_ACTIVE="$previous_active"
+
 # Stop before replacing runtime; a failed install never restarts an unverified worker.
 systemctl stop ootv2-github-worker.service 2>/dev/null || true
 systemctl stop ootv2-official-worker.service 2>/dev/null || true
 
 # Allow only runtime credentials/settings. DDL PAT/DB URL never enters the worker.
-python3 - "$source_env" <<'PY'
+python3 - "$source_env" "$env_target.next" <<'PY'
 import pathlib, re, sys
 allowed = {'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'OOTV2_GITHUB_TOKEN'}
 selected = {}
@@ -70,15 +95,24 @@ if not all(selected.get(k) for k in ('SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'
 for value in selected.values():
     if any(ch in value for ch in ('\r', '\n', '\0')):
         raise SystemExit('invalid_worker_environment')
-target = pathlib.Path('/etc/ootv2/worker.env')
+target = pathlib.Path(sys.argv[2])
 target.write_text(''.join(f'{k}={v}\n' for k, v in selected.items()), encoding='utf8')
 target.chmod(0o600)
 PY
+if [ -f "$env_target" ]; then
+  install -m 0600 -o root -g root "$env_target" "$env_target.previous"
+  env_backup="$env_target.previous"
+fi
+mv -f "$env_target.next" "$env_target"
 rm -f "$source_env"
 
 # Release swap: installs code into /srv/ootv2/releases/<id> and atomically repoints
 # /srv/ootv2/current. Rollback restores the previous release if the swap breaks.
 bash "$staging/tools/provision/deploy-release.sh" "$staging"
+# The new release and the new environment now belong together.
+if [ -n "$env_backup" ]; then rm -f "$env_backup"; fi
+env_backup=
+rm -f "$previous_active"
 
 release=/srv/ootv2/current
 install -m 0644 "$release/tools/provision/ootv2-attest.service" /etc/systemd/system/
@@ -89,24 +123,29 @@ systemctl daemon-reload
 
 # Attestation is refreshed every 12h; it does not start the judge worker.
 systemctl enable --now ootv2-attest.timer
-systemctl start ootv2-attest.service || echo 'attestation_failed: fix sandbox before trusting this VM'
+if ! systemctl start ootv2-attest.service; then
+  journalctl -u ootv2-attest.service -n 40 --no-pager >&2 || true
+  echo 'attestation_failed: the judge must not consume work on this VM until sandbox passes'
+fi
 
 cd "$release"
 set -a
 # shellcheck disable=SC1091
 . /etc/ootv2/worker.env
 set +a
-if ! node tools/cli/worker-health.js; then
-  echo 'VM_RUNTIME_INSTALLED_BUT_HEALTH_BLOCKED: fix schema/Storage before starting the worker.'
+if ! node tools/cli/worker-health.js --scope=all; then
+  echo 'VM_RUNTIME_INSTALLED_BUT_HEALTH_BLOCKED: fix schema/Storage/sandbox attestation before starting the worker.'
   exit 79
 fi
 
 cat <<'DONE'
 VM_RUNTIME_INSTALLED
   release: /srv/ootv2/current
-  worker service installed but NOT enabled.
+  services installed but NOT enabled.
   Next (on the VM): sudo /srv/ootv2/current/tools/provision/workerctl.sh start
-  Status/logs:      sudo /srv/ootv2/current/tools/provision/workerctl.sh status|logs
-Note: this service only performs GitHub source intake + static validation.
-Match execution (Campus runner) is NOT part of it; do not present it as a bot judge.
+  Judge only:      OOTV2_WORKER_SERVICE=judge sudo /srv/ootv2/current/tools/provision/workerctl.sh start
+  Attestation:     ... workerctl.sh attest      (fresh host sandbox receipt)
+  Status/logs:     ... workerctl.sh status|logs
+Services: github = GitHub source intake + static validation only; judge = official/manual
+Campus matches in the Linux sandbox. Match execution is NOT part of the github service.
 DONE

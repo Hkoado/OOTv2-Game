@@ -1,12 +1,14 @@
 [CmdletBinding()]
 param(
-  [ValidateSet('doctor','install','update','start','stop','restart','status','logs','health','version','config')]
+  [ValidateSet('doctor','install','update','start','stop','restart','status','logs','health','version','attest','config')]
   [string]$Action = 'status',
   [string]$ConfigPath,
   [string]$Address,
   [ValidateRange(1,2000)][int]$Tail = 100,
   [switch]$PrepareOnly,
-  [ValidateSet('github','judge')][string]$Service = 'github'
+  # VM này là judge guest: mặc định điều khiển ootv2-official-worker. Dùng -Service github nếu
+  # thật sự cần xem dịch vụ intake (dịch vụ đó thuộc host intake, không phải VM chấm).
+  [ValidateSet('github','judge')][string]$Service = 'judge'
 )
 # Single entry point for a fresh Windows machine:
 #   copy worker.config.example.json -> worker.local.json, run -Action doctor, then install.
@@ -43,13 +45,39 @@ function Test-Administrator {
     [Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+# wsl.exe writes progress/errors to stderr. With $ErrorActionPreference='Stop' that becomes a
+# NativeCommandError that kills this script silently, so every WSL call goes through here.
+function Invoke-Wsl([string[]]$WslArgs) {
+  $previous = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    $output = & wsl.exe @WslArgs 2>&1
+    return [pscustomobject]@{ ExitCode = $LASTEXITCODE
+      Output = (@($output) | ForEach-Object { "$_" }) -join "`n" }
+  } finally {
+    $ErrorActionPreference = $previous
+  }
+}
+
 function Resolve-TargetAddress {
   if ($Address) { return $Address }
   $adapter = Get-VMNetworkAdapter -VMName $cfg.vmName -ErrorAction SilentlyContinue
   if (-not $adapter) { return $null }
-  return (@($adapter.IPAddresses) | Where-Object {
+  $fromKvp = @($adapter.IPAddresses) | Where-Object {
       $_ -match '^\d{1,3}(\.\d{1,3}){3}$' -and $_ -notmatch '^(127\.|169\.254\.|0\.)'
-    } | Select-Object -First 1)
+    } | Select-Object -First 1
+  if ($fromKvp) { return $fromKvp }
+  # Ubuntu cloud images may ship without the KVP daemon, so Hyper-V reports no guest IP even
+  # though the guest is online. Fall back to the L2 neighbour table keyed by the VM's own MAC.
+  $mac = ($adapter.MacAddress -replace '[-:]', '').ToUpperInvariant()
+  if (-not $mac) { return $null }
+  foreach ($neighbour in Get-NetNeighbor -ErrorAction SilentlyContinue) {
+    if (($neighbour.LinkLayerAddress -replace '[-:]', '').ToUpperInvariant() -ne $mac) { continue }
+    if ($neighbour.IPAddress -match '^\d{1,3}(\.\d{1,3}){3}$' -and $neighbour.IPAddress -notmatch '^(127\.|169\.254\.|0\.)') {
+      return $neighbour.IPAddress
+    }
+  }
+  return $null
 }
 
 function Assert-TrustedHost([string]$Target) {
@@ -66,9 +94,15 @@ function Assert-TrustedHost([string]$Target) {
 function Invoke-Guest([string]$Target, [string]$Command) {
   $options = @('-i', $keyPath, '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes',
     '-o', "UserKnownHostsFile=$knownHostsPath", '-o', 'ConnectTimeout=20')
-  # Out-Host keeps guest output visible when the caller captures the exit code.
-  & ssh.exe @options "$($cfg.sshUser)@$Target" $Command | Out-Host
-  return $LASTEXITCODE
+  # ssh writes warnings to stderr; with $ErrorActionPreference='Stop' that would become a
+  # NativeCommandError, so the preference is relaxed for the call and the exit code decides.
+  $previous = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    # Out-Host keeps guest output visible when the caller captures the exit code.
+    & ssh.exe @options "$($cfg.sshUser)@$Target" $Command | Out-Host
+    return $LASTEXITCODE
+  } finally { $ErrorActionPreference = $previous }
 }
 
 
@@ -111,10 +145,27 @@ function Invoke-Doctor {
   if (Get-Command git.exe -ErrorAction SilentlyContinue) { Add-Pass 'git' 'available' }
   else { Add-Warn 'git' 'install git to pull updates' }
 
-  $distros = @(& wsl.exe --list --quiet 2>$null) -replace "`0", '' |
+  $distros = @((Invoke-Wsl @('--list', '--quiet')).Output -split "`n") -replace "`0", '' |
     ForEach-Object { $_.Trim() } | Where-Object { $_ }
   if ($distros -contains $cfg.wslDistribution) { Add-Pass 'wsl-distribution' $cfg.wslDistribution }
   else { Add-Fail 'wsl-distribution' "install WSL distro '$($cfg.wslDistribution)' (image preparation only)" }
+  # Image preparation happens inside WSL; missing tools would only surface mid-download.
+  $tools = Invoke-Wsl @('-d', $cfg.wslDistribution, '-u', 'root', '--', 'bash', '-lc',
+    'command -v qemu-img >/dev/null && command -v cloud-localds >/dev/null && command -v curl >/dev/null')
+  if ($tools.ExitCode -eq 0) { Add-Pass 'wsl-image-tools' 'qemu-img, cloud-localds, curl' }
+  else { Add-Fail 'wsl-image-tools' "apt-get install -y qemu-utils cloud-image-utils curl inside $($cfg.wslDistribution)" }
+  # Verify the directory is actually visible from the distribution instead of assuming /mnt.
+  if (Test-Path -LiteralPath $cfg.vmDirectory) {
+    # wsl.exe strips backslashes, so translate the forward-slash form (verified behaviour).
+    $windowsPath = [IO.Path]::GetFullPath($cfg.vmDirectory).Replace('\', '/')
+    $translated = Invoke-Wsl @('-d', $cfg.wslDistribution, '--', 'wslpath', '-a', $windowsPath)
+    $linuxVmDir = $translated.Output.Trim()
+    if ($translated.ExitCode -eq 0 -and $linuxVmDir -match '^/') {
+      $visible = Invoke-Wsl @('-d', $cfg.wslDistribution, '-u', 'root', '--', 'test', '-d', $linuxVmDir)
+      if ($visible.ExitCode -eq 0) { Add-Pass 'wsl-vm-directory' $linuxVmDir }
+      else { Add-Fail 'wsl-vm-directory' "WSL cannot see $($cfg.vmDirectory) (enable drive automount)" }
+    } else { Add-Fail 'wsl-path' "wslpath failed for $($cfg.vmDirectory): $linuxVmDir" }
+  }
 
   $vm = Get-VM -Name $cfg.vmName -ErrorAction SilentlyContinue
   if ($vm) { Add-Pass 'vm' "$($vm.Name) state=$($vm.State)" } else { Add-Warn 'vm' 'not created yet (install creates it)' }
@@ -127,8 +178,12 @@ function Invoke-Doctor {
   else { Add-Fail 'disk-space' "45 GiB free on $drive is required" }
 
   if (Test-Path -LiteralPath $keyPath) { Add-Pass 'ssh-key' $keyPath } else { Add-Warn 'ssh-key' 'created with the VM' }
-  if (Test-Path -LiteralPath $knownHostsPath) { Add-Pass 'known-hosts' $knownHostsPath }
-  else { Add-Warn 'known-hosts' 'must be filled from the VM console before install' }
+  if (Test-Path -LiteralPath $knownHostsPath) {
+    $pinned = @(Get-Content -LiteralPath $knownHostsPath |
+      Where-Object { $_.Trim() -and -not $_.Trim().StartsWith('#') })
+    if ($pinned.Count -gt 0) { Add-Pass 'known-hosts' "$($pinned.Count) pinned host key(s)" }
+    else { Add-Fail 'known-hosts' 'file exists but holds no host key; read the guest fingerprint in the VM console' }
+  } else { Add-Warn 'known-hosts' 'must be filled from the VM console before install' }
 
   & $node.Source (Join-Path $repoRoot 'tools\cli\export-worker-env.js') '--check'
   if ($LASTEXITCODE -eq 0) { Add-Pass 'repo-env' 'worker credentials present in .env' }
@@ -190,6 +245,7 @@ switch ($Action) {
       'status' { $code = Invoke-Guest $Target "$ctl status" }
       'version' { $code = Invoke-Guest $Target "$ctl version" }
       'health' { $code = Invoke-Guest $Target "sudo -n $ctl health" }
+      'attest' { $code = Invoke-Guest $Target "sudo -n $ctl attest" }
       'start' { $code = Invoke-Guest $Target "sudo -n $ctl start" }
       'stop' { $code = Invoke-Guest $Target "sudo -n $ctl stop" }
       'restart' { $code = Invoke-Guest $Target "sudo -n $ctl restart" }

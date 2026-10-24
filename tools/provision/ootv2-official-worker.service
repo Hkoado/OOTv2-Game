@@ -1,7 +1,8 @@
 [Unit]
 Description=OOTv2 official and manual Campus judge (dedicated VM only)
 After=network-online.target ootv2-attest.service
-Wants=network-online.target
+Wants=network-online.target ootv2-attest.service
+# A judge without a fresh attestation must not start at all; the timer keeps it fresh.
 
 [Service]
 Type=simple

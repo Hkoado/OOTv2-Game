@@ -11,10 +11,10 @@
  * Chạy: `npm run worker:github` (service) hoặc `--once`/`--drain` cho CI/kiểm thử.
  */
 import { hostname } from 'node:os';
-import { pathToFileURL } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 import { assertSharedConfig } from './shared/client.js';
+import { isMainModule } from './shared/entrypoint.js';
 import { processGithubJob } from './shared/githubConsumer.js';
 import { createCutoffWorkerDeps } from './shared/githubWorkerDeps.js';
 
@@ -122,7 +122,7 @@ export async function runGithubWorkerEntry({ argv = process.argv.slice(2), ...op
   }
 }
 
-const isEntryPoint = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+const isEntryPoint = isMainModule(import.meta.url);
 
 if (isEntryPoint) {
   runGithubWorkerEntry().then((stats) => {

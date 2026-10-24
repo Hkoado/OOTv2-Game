@@ -1,5 +1,85 @@
 # Kết quả Khoa — Scheduler / worker / runtime
 
+## 24/10/2026 (lượt 2) — dựng VM thật trên Hyper-V, chặn ở host key console
+
+Đã làm trong lượt này (chỉ trong phạm vi đã được duyệt: image/key/VM; **chưa** chuyển `.env`,
+chưa cài/chạy worker trên guest):
+
+1. `Worker.ps1 -Action doctor` → **PASS** (log `data/khoa-current/doctor-admin.log`), gồm check mới
+   `wsl-image-tools` và `wsl-vm-directory: /mnt/d/OOTv2-VM`.
+2. Image Ubuntu Noble tải + **verify SHA-256** (`image=downloaded`, 592.5 MB), chạy lại `image=reused`.
+3. `judge.vhdx` 40 GiB (Resize-VHD), `seed.vhdx` (cloud-init), VM `OOTv2-Judge` Gen2/4 vCPU/Default Switch.
+4. `Start-VM` 4 GiB tĩnh lỗi `0x800705AA`; theo lựa chọn của người dùng đã chuyển sang **dynamic memory**
+   (min 2 / startup 4 / max 4 GiB) → **VM Running, cấp đủ 4096 MB**.
+5. Guest boot, DHCP cấp **192.168.230.176**, TCP/22 mở (`OpenSSH_9.6p1 Ubuntu-3ubuntu13.20`),
+   Hyper-V event `successfully booted an operating system` lúc 22:08:32.
+6. Rebuild seed `--seed-only` (**SEED_REBUILT**, exit 0) để: thêm `linux-cloud-tools-virtual` +
+   `hv-kvp-daemon` (KVP báo IP) và in fingerprint public host key ra console.
+7. Full suite sau toàn bộ thay đổi: **442/442 PASS**, exit 0 (`data/khoa-current/full-test.log`).
+
+**Trạng thái cuối lượt:** VM `OOTv2-Judge` chạy, SSH strict đã pin, release `20261024T162131Z-fc5c364044fc`
+đã cài, **judge worker `active` + `enabled`**, attestation `pass`, `worker-health --scope=judge` OK.
+Việc còn lại: chấm **một job thật** (official hoặc manual final) rồi drill tranh chấp 2 worker / hết lease /
+kill giữa trận / reboot / rollback update hỏng.
+
+**Lỗi thật đã sửa trong lượt này:** `NativeCommandError` từ `wsl.exe`/`ssh`/`scp` giết script im lặng;
+`wsl.exe` bỏ backslash khiến `wslpath` fail; `Assert-WslVisible` nhận sai path; `qemu-img` không resize được vhdx;
+grow qua raw trên DrvFs treo; 4 GiB tĩnh không cấp được; KVP thiếu nên Hyper-V không báo IP;
+**cloud-init `ssh_deletekeys` sinh lại host key mỗi lần seed rebuild**; **entrypoint check sai khi release
+deploy qua symlink** (service chạy rồi thoát 0 mà không làm gì); `workerctl.sh` hỏng quoting Python +
+chết vì file attestation root-only; `-Service` mặc định sai.
+
+## 24/10/2026 — hoàn thiện runtime/bộ cài sau khi Huy chốt schema (mới nhất)
+
+Phạm vi: chỉ phần Khoa (readiness, provisioning Hyper-V, service/update/rollback, test). Không sửa
+engine/luật hoà/schema/router/UI của Huy–Bảo, không apply migration, không claim job remote.
+
+### Đã sửa
+
+| File | Lỗi đã đóng |
+| --- | --- |
+| `tools/cli/worker-health.js` + `tools/cli/workerHealthProbes.js` | Probe GitHub chỉ nhận `bad_lease` trong khi guard thật là `400/P0001 bad_worker` ⇒ DB đúng vẫn bị chặn start. Tách `--scope=github\|judge\|all`, thêm kiểm official tables/claim, kiểm attestation trên guest Linux, không claim job |
+| `tests/workerReadinessProbes.test.js` (mới) | Test hành vi thật của guard: `ok:true` (đã lease) phải FAIL, lỗi 401/404/PGRST202/500 phải FAIL |
+| `tools/provision/workerctl.sh` | `health` theo đúng service; `start`/`restart` của judge bắt buộc attestation timer + oneshot thành công; thêm `attest` |
+| `tools/provision/ootv2-official-worker.service` | `Wants=ootv2-attest.service` để boot kéo attestation trước judge |
+| `tools/provision/install-judge.sh` | Chụp service active **trước** khi stop (`OOTV2_PREVIOUS_ACTIVE`); env ghi file tạm rồi swap, rollback phục hồi env cũ; attestation lỗi được báo rõ thay vì bị `||` nuốt |
+| `tools/provision/deploy-release.sh` | Đọc trạng thái service từ state file (trước đây đọc sau khi installer đã stop nên update luôn tắt worker cũ); rollback chạy lại attestation, lỗi thì dừng service |
+| `tools/vm/New-JudgeVM.ps1` | Kiểm passphrase bằng header bcrypt (`ssh-keygen -y` **không** nhận `-P`), `Invoke-Capture` đóng stdin + timeout nên không treo prompt; derive `.pub` và kiểm khớp thay vì tạo lại key; chuyển path bằng `wslpath` + `test -e` thay vì giả định `/mnt/<drive>`; `exit 0/1` |
+| `tools/vm/Install-Judge.ps1` | `ssh-keygen -F` xác nhận `known_hosts` có entry trước khi gửi credential; kiểm release đủ file tại Windows; `ConnectTimeout`/`ServerAlive*` |
+| `tools/vm/Worker.ps1` | `doctor` kiểm `wsl-image-tools` và WSL thấy thư mục VM; `known_hosts` rỗng là FAIL; thêm action `attest` |
+| `tools/vm/prepare-image.sh` | Retry/resume (`-C -`, `--retry-all-errors`, speed-limit), partial đặt tên theo checksum build, mismatch bỏ partial, tối đa 3 lượt; conversion qua `judge.vhdx.stage`/`seed.vhdx.stage`; cloud-init thêm growpart + qemu-guest-agent |
+| `tests/workerVmProvisioning.test.js`, `tests/productionPlan.test.js` | Cập nhật theo code mới; thêm ca chạy `bash -n` thật trên 4 script |
+
+### Bằng chứng đã chạy (local)
+
+| Lệnh | Kết quả |
+| --- | --- |
+| `node --test --test-concurrency=1 'tests/*.test.js'` | **442/442 PASS**, 0 fail, exit 0 (`data/khoa-current/full-test.log`) |
+| `npm run build` | **PASS**, `built in 5.88s`, exit 0 (`data/khoa-current/build.log`). Lượt này không sửa file `src/` nào nên build không phụ thuộc các sửa shell/PowerShell sau đó |
+| `node --test tests/workerVmProvisioning.test.js tests/workerReadinessProbes.test.js tests/productionPlan.test.js` | **14/14 PASS**, exit 0 (`data/khoa-current/final-check.log`) |
+| `bash -n` cho `prepare-image.sh`, `install-judge.sh`, `deploy-release.sh`, `workerctl.sh` | exit 0 (có trong test + `final-check.exit`) |
+| PowerShell `Parser::ParseFile` cho `New-JudgeVM.ps1`, `Worker.ps1`, `Install-Judge.ps1` | **0 lỗi** |
+| `node --check tools/cli/worker-health.js`, `workerHealthProbes.js` | exit 0 |
+| `node tools/cli/worker-health.js --scope=bogus` | usage + **exit 64** (không chạm mạng/DB) |
+| Kiểm chứng thủ công key: ProcessStartInfo tạo key `-N ""`, phát hiện bcrypt, `ssh-keygen -y` derive khớp `.pub` | PASS (`plain_detected=False`, `locked_detected=True`, `pub_matches_derived=True`) |
+| `git diff --check` | sạch |
+
+### NOT RUN (không đổi thành PASS)
+
+- Chưa tạo VM/VHDX: `.part` cũ không hợp lệ, chưa có lần download kết thúc với exit code quan sát được.
+  **Chưa có bằng chứng kết luận nguyên nhân là reset kết nối** — script mới sẽ cho kết luận rõ.
+- Chưa có guest host-key fingerprint ⇒ chưa pin `known_hosts`. Fingerprint `SHA256:BjbX…` ở lượt trước là
+  **client key**, không phải host key.
+- Chưa chuyển `.env`, chưa cài/start worker trên guest, chưa chấm job thật, chưa kill/reclaim/reboot/rollback
+  trên VM, chưa chạy PostgreSQL rehearsal riêng.
+- Browser E2E, load 50/100/200 viewer, restore rehearsal: NOT RUN (thuộc Bảo/operator).
+
+### Bước tiếp theo cần người dùng cho phép
+
+1. Chạy lại provisioning (`Worker.ps1 -Action doctor` → `install`) để image tải/resume và tạo VM.
+2. Đọc **host key của guest trong console**, ghi `known_hosts`, rồi mới cài release.
+3. Sau khi được phép: `workerctl.sh attest` + `health` + `start` cho `judge`, rồi chấm job thật.
+
 ## 24/10/2026 — tiếp tục sau pull Huy / elevated Windows
 
 - `doctor` chạy elevated: PASS. `.env` project hiện `ftzockzolisecnyhlwej`; health read-only
