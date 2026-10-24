@@ -18,9 +18,26 @@ export async function openOfficialRound(eventId) {
 }
 
 /** Admin: enqueue one pinned pull per approved repo at/after cutoff. */
-export async function syncGithubCutoff(eventId) {
+export async function syncGithubCutoff(eventId, { teamIds, limit } = {}) {
   if (!eventId) throw new Error('Cần mã giải.');
-  return await apiRequest(`/events/${encodeURIComponent(eventId)}/github-cutoff-sync`, { method: 'POST' });
+  const body = {};
+  if (Array.isArray(teamIds) && teamIds.length > 0) body.team_ids = teamIds;
+  if (Number.isInteger(limit) && limit > 0) body.limit = limit;
+  return await apiRequest(`/events/${encodeURIComponent(eventId)}/github-cutoff-sync`, {
+    method: 'POST',
+    body: Object.keys(body).length > 0 ? body : undefined,
+  });
+}
+
+/** Admin: fetch detailed progress of github cutoff batch. */
+export async function fetchOfficialCutoffStatus(eventId, { signal } = {}) {
+  if (!eventId) return null;
+  try {
+    return await apiRequest(`/events/${encodeURIComponent(eventId)}/github-cutoff-status`, { signal });
+  } catch (error) {
+    if (error?.status === 404) return null;
+    throw error;
+  }
 }
 
 /** §7 Admin: fetch round progress & jobs overview. */
@@ -115,7 +132,7 @@ export async function requeueOfficialJob(jobId, reason) {
   });
 }
 
-/** §7 Admin: fetch broadcast state of an official game. */
+/** §7 Admin/Team: fetch broadcast state of an official game. */
 export async function fetchOfficialBroadcastState(roundPk, gameKey, { signal } = {}) {
   if (!roundPk || !gameKey) return null;
   return await apiRequest(
@@ -151,10 +168,64 @@ export async function fetchOfficialGameViewer(roundPk, gameKey, afterSeq = 0, { 
   );
 }
 
+const extractErrorCode = (error, fallback) => {
+  if (typeof error?.code === 'string') return error.code;
+  if (typeof error?.code?.code === 'string') return error.code.code;
+  return fallback;
+};
+
+/** §7 Đội thi / Thành viên giải: Xem Bảng xếp hạng đã công bố (yêu cầu round freeze). */
+export async function fetchOfficialPublishedStandings(eventId, { signal } = {}) {
+  if (!eventId) return null;
+  try {
+    return await apiRequest(`/events/${encodeURIComponent(eventId)}/official/published/standings`, { signal });
+  } catch (error) {
+    if (error?.status === 409) return { published: false, error: extractErrorCode(error, 'round_not_published') };
+    if (error?.status === 404) return null;
+    throw error;
+  }
+}
+
+/** §7 Đội thi / Thành viên giải: Xem Nhánh Knockout đã công bố (yêu cầu round freeze). */
+export async function fetchOfficialPublishedBracket(eventId, { signal } = {}) {
+  if (!eventId) return null;
+  try {
+    return await apiRequest(`/events/${encodeURIComponent(eventId)}/official/published/bracket`, { signal });
+  } catch (error) {
+    if (error?.status === 409) return { published: false, error: extractErrorCode(error, 'round_not_published') };
+    if (error?.status === 404) return null;
+    throw error;
+  }
+}
+
+/** §7 Đội thi / Thành viên giải: Xem Vé chung kết đã công bố (yêu cầu knockout complete). */
+export async function fetchOfficialPublishedTickets(eventId, { signal } = {}) {
+  if (!eventId) return null;
+  try {
+    return await apiRequest(`/events/${encodeURIComponent(eventId)}/official/published/tickets`, { signal });
+  } catch (error) {
+    if (error?.status === 409) return { published: false, error: extractErrorCode(error, 'tickets_not_published') };
+    if (error?.status === 404) return null;
+    throw error;
+  }
+}
+
+/** §7 Đội thi / Thành viên giải: Danh sách ván official đã công bố hoặc đang phát sóng. */
+export async function fetchOfficialPublishedGames(eventId, { signal } = {}) {
+  if (!eventId) return null;
+  try {
+    return await apiRequest(`/events/${encodeURIComponent(eventId)}/official/published/games`, { signal });
+  } catch (error) {
+    if (error?.status === 404 || error?.status === 409) return null;
+    throw error;
+  }
+}
+
 export default {
   fetchOfficialRound,
   openOfficialRound,
   syncGithubCutoff,
+  fetchOfficialCutoffStatus,
   fetchOfficialProgress,
   fetchOfficialStandings,
   publishNextOfficialGame,
@@ -167,4 +238,8 @@ export default {
   fetchOfficialBroadcastState,
   scheduleOfficialBroadcast,
   fetchOfficialGameViewer,
+  fetchOfficialPublishedStandings,
+  fetchOfficialPublishedBracket,
+  fetchOfficialPublishedTickets,
+  fetchOfficialPublishedGames,
 };

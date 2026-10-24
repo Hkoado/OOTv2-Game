@@ -4,6 +4,7 @@ import {
   fetchOfficialRound,
   openOfficialRound,
   syncGithubCutoff,
+  fetchOfficialCutoffStatus,
   fetchOfficialProgress,
   fetchOfficialStandings,
   publishNextOfficialGame,
@@ -16,15 +17,24 @@ import {
   fetchOfficialBroadcastState,
   scheduleOfficialBroadcast,
   fetchOfficialGameViewer,
+  fetchOfficialPublishedStandings,
+  fetchOfficialPublishedBracket,
+  fetchOfficialPublishedTickets,
+  fetchOfficialPublishedGames,
 } from '../src/tournament/portal/officialRoundApi.js';
 
 test('officialRoundApi input validations', async () => {
   // Missing eventId returns null for fetch or throws for mutation
   assert.equal(await fetchOfficialRound(''), null);
+  assert.equal(await fetchOfficialCutoffStatus(''), null);
   assert.equal(await fetchOfficialProgress(''), null);
   assert.equal(await fetchOfficialStandings(''), null);
   assert.equal(await fetchOfficialBracket(''), null);
   assert.equal(await fetchOfficialTickets(''), null);
+  assert.equal(await fetchOfficialPublishedStandings(''), null);
+  assert.equal(await fetchOfficialPublishedBracket(''), null);
+  assert.equal(await fetchOfficialPublishedTickets(''), null);
+  assert.equal(await fetchOfficialPublishedGames(''), null);
   assert.equal(await fetchOfficialBroadcastState('', 'game-1'), null);
   assert.equal(await fetchOfficialBroadcastState('round-1', ''), null);
   assert.equal(await fetchOfficialGameViewer('', 'game-1'), null);
@@ -67,7 +77,7 @@ test('officialRoundApi mocked endpoints and error handling', async () => {
         ok: false,
         status: 409,
         headers: new Headers({ 'content-type': 'application/json' }),
-        text: async () => JSON.stringify({ error: { code: 'conflict', message: 'Incomplete' } }),
+        text: async () => JSON.stringify({ error: { code: 'round_not_published', message: 'Not published yet' } }),
       };
     }
     return {
@@ -158,6 +168,40 @@ test('officialRoundApi mocked endpoints and error handling', async () => {
     const bViewer = await fetchOfficialGameViewer('round-uuid', 'g1', 5);
     assert.equal(bViewer.ok, true);
     assert.match(calls.at(-1).url, /\/official\/rounds\/round-uuid\/games\/g1\/viewer\?after_seq=5$/);
+
+    // 10. Cutoff Status & Targeted Sync
+    const cutoffStat = await fetchOfficialCutoffStatus('evt-1');
+    assert.equal(cutoffStat.ok, true);
+    assert.match(calls.at(-1).url, /\/events\/evt-1\/github-cutoff-status$/);
+
+    const cutoffSync = await syncGithubCutoff('evt-1', { teamIds: ['team-1', 'team-2'], limit: 5 });
+    assert.equal(cutoffSync.ok, true);
+    assert.equal(calls.at(-1).options.method, 'POST');
+    const syncBody = JSON.parse(calls.at(-1).options.body);
+    assert.deepEqual(syncBody.team_ids, ['team-1', 'team-2']);
+    assert.equal(syncBody.limit, 5);
+    assert.match(calls.at(-1).url, /\/events\/evt-1\/github-cutoff-sync$/);
+
+    // 11. Published APIs for Team / Members
+    const pubStd = await fetchOfficialPublishedStandings('evt-1');
+    assert.equal(pubStd.ok, true);
+    assert.match(calls.at(-1).url, /\/events\/evt-1\/official\/published\/standings$/);
+
+    const pubStd409 = await fetchOfficialPublishedStandings('409');
+    assert.equal(pubStd409.published, false);
+    assert.equal(pubStd409.error, 'round_not_published');
+
+    const pubBrk = await fetchOfficialPublishedBracket('evt-1');
+    assert.equal(pubBrk.ok, true);
+    assert.match(calls.at(-1).url, /\/events\/evt-1\/official\/published\/bracket$/);
+
+    const pubTkt = await fetchOfficialPublishedTickets('evt-1');
+    assert.equal(pubTkt.ok, true);
+    assert.match(calls.at(-1).url, /\/events\/evt-1\/official\/published\/tickets$/);
+
+    const pubGames = await fetchOfficialPublishedGames('evt-1');
+    assert.equal(pubGames.ok, true);
+    assert.match(calls.at(-1).url, /\/events\/evt-1\/official\/published\/games$/);
   } finally {
     globalThis.fetch = originalFetch;
   }

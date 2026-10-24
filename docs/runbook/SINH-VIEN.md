@@ -85,3 +85,26 @@ Trong trường hợp mất kết nối Internet hoặc sự cố GitHub diện 
 3. Ban tổ chức sử dụng quyền Quản trị viên để nạp trực tiếp file `bot.py` qua cổng USB Fallback trên Cổng giải đấu.
 4. Giám thị và đội thi cùng ký biên bản xác nhận mốc thời gian và mã băm SHA256 của file nộp.
 
+---
+
+## 6. Theo dõi Kết Quả & Xem Trực Tiếp Vòng Đấu Chính Thức
+
+Sau khi Ban tổ chức kích hoạt vòng đấu chính thức, các đội thi có thể theo dõi tiến độ và kết quả trực tiếp từ giao diện:
+
+1. **Bảng xếp hạng (Standings)**:
+   - Hiển thị đầy đủ số trận thắng, hòa, thua, điểm số và hiệu số đối đầu theo từng bảng.
+   - Nếu vòng đấu đang diễn ra hoặc chưa công bố, hệ thống sẽ thông báo *"Bảng xếp hạng vòng đấu chưa được công bố"*.
+
+2. **Nhánh thi đấu Knockout & Vé Chung kết**:
+   - Thí sinh theo dõi các cặp đấu vòng loại trực tiếp và tiến trình từng trận.
+   - Thẻ Vé Chung kết (`Tickets`) phân định rõ:
+     - **Vé chính thức (`awarded`)**: Các đội đủ điều kiện vào vòng chung kết kèm hạt giống (`seed`).
+     - **Vé dự bị (`reserves`)**: Đội xếp thứ tự ưu tiên tiếp theo khi có đội bỏ cuộc hoặc phạm quy.
+     - **Suất trống (`vacant`)**: Số suất còn trống nếu vòng đấu chưa đủ điều kiện phân bổ.
+
+3. **Xem trực tiếp diễn biến ván đấu (Official Game Viewer)**:
+   - Tại tab *Trực tiếp & Phát sóng*, chọn nút **"Xem luồng"** tại ván đấu mong muốn.
+   - Hệ thống phát lại luồng trận đấu theo thời gian thực đồng bộ từ server (`server_time`), hiển thị từng nước đi (`plies`) theo nhịp phát sóng đã định.
+   - Kết quả ván đấu chỉ được hé lộ khi ván đấu hoàn tất chu kỳ phát sóng (`reveal_result = true`). Thí sinh không thể tải trước replay để biết trước kết quả.
+
+

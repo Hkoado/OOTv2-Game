@@ -2,11 +2,11 @@
 
 ## Trạng thái mới nhất
 
-- Trạng thái: **IN PROGRESS / CHECKPOINT 11** — Hoàn thành UI Viewer Publication ván official (OfficialGameViewer, OfficialBroadcastDialog) & Chuẩn hóa cấu trúc vé `{ awarded, reserves, vacant }` theo contract §7.
-- Phạm vi: B1–B4, Mục Chung kết thủ công, Viewer Replay & Live Broadcast Official theo [phân công Bảo](../assignments/Bao.md) & [docs/19 §7](../19-CONTRACT-TICH-HOP.md).
-- Checkpoint: branch `dev` (đồng bộ với commit `aaac3d9` của Huy & `96f6231` của Khoa trên `origin/dev`).
-- Tổng test suite hiện tại: **432/432 bài kiểm thử PASS** (100% thành công, 0 lỗi, 0 skip).
-- Build production: **Vite build sạch** (1656 modules transformed, bundle `dist/` sẵn sàng trong ~10.8s).
+- Trạng thái: **COMPLETE / CHECKPOINT 12** — Hoàn thành UI Đội thi xem kết quả đã công bố (`standings`, `bracket`, `tickets`, `games`), Viewer trực tiếp ván official, và Bảng điều khiển Tiến độ chốt GitHub (Cutoff Batch Status & Targeted Retry) cho Quản trị viên.
+- Phạm vi: B1–B4, Mục Chung kết thủ công, Viewer Replay & Live Broadcast Official, Cutoff Batch Management theo [phân công Bảo](../assignments/Bao.md), [docs/19 §7](../19-CONTRACT-TICH-HOP.md) & [docs/20](../20-RC-ONLINE-TOI-GIAN.md).
+- Checkpoint: branch `dev` (đồng bộ toàn diện với backend của Huy & worker của Khoa trên `origin/dev`).
+- Tổng test suite hiện tại: **481/481 bài kiểm thử PASS** (100% thành công, 0 lỗi, 0 skip).
+- Build production: **Vite build sạch** (1656 modules transformed, bundle `dist/` sẵn sàng).
 
 ---
 
@@ -45,6 +45,18 @@ Theo yêu cầu điều lệ bàn giao, các thành phần kỹ thuật được
 ---
 
 ## Lịch sử checkpoint
+
+- 25/10/2026 (Checkpoint 12): **Hoàn thiện UI Đội thi xem kết quả đã công bố, Viewer ván đấu official & Quản lý Cutoff Batch**:
+  - Mở rộng [`OfficialRoundPanel.jsx`](../../src/tournament/portal/OfficialRoundPanel.jsx):
+    - Hỗ trợ vai trò Đội thi (`!admin`): chuyển đổi linh hoạt giữa 4 sub-tab (Bảng xếp hạng, Nhánh Knockout, Vé chung kết, Trực tiếp & Phát sóng).
+    - Gọi API published an toàn: `/published/standings`, `/published/bracket`, `/published/tickets`, `/published/games`.
+    - Xử lý mã lỗi `409 round_not_published` và `tickets_not_published` bằng giao diện thông báo thân thiện, không làm sập component.
+    - Tích hợp nút **"Xem luồng"** trực tiếp tại danh sách ván đấu để mở `OfficialGameViewer`.
+    - Bổ sung panel **Tiến độ chốt GitHub (Cutoff Batch Status)** trong tab Tiến độ của Admin: hiển thị danh sách đội, trạng thái ghim SHA, và nút **Targeted Retry** cho các đội chưa ghim / lỗi.
+  - Nâng cấp API client [`officialRoundApi.js`](../../src/tournament/portal/officialRoundApi.js): thêm `fetchOfficialCutoffStatus`, `syncGithubCutoff` (hỗ trợ `teamIds`, `limit`), `fetchOfficialPublishedStandings`, `fetchOfficialPublishedBracket`, `fetchOfficialPublishedTickets`, `fetchOfficialPublishedGames`.
+  - Cập nhật [`docs/runbook/SINH-VIEN.md`](../runbook/SINH-VIEN.md) hướng dẫn thí sinh theo dõi kết quả, vé chung kết và xem trực tiếp ván đấu.
+  - Bổ sung test suite [`tests/portalOfficialResults.test.js`](../../tests/portalOfficialResults.test.js) (3/3 pass) và cập nhật [`tests/officialRoundApi.test.js`](../../tests/officialRoundApi.test.js).
+  - Kết quả kiểm thử: **481/481 tests PASS** (100%), Vite build sạch 1,656 modules.
 
 - 24/10/2026 (Checkpoint 11): **UI Viewer Publication ván official (OfficialGameViewer, OfficialBroadcastDialog) & Khớp DTO Vé `{ awarded, reserves, vacant }`**:
   - Tạo [`OfficialGameViewer.jsx`](../../src/tournament/portal/OfficialGameViewer.jsx):

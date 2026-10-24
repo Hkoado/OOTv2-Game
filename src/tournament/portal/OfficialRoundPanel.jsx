@@ -2,17 +2,21 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Award,
+  CheckCircle,
   CheckCircle2,
   ChevronRight,
+  Clock,
   Eye,
   GitCommit,
   Play,
   Radio,
+  RefreshCw,
   RotateCcw,
   ShieldAlert,
   Snowflake,
   Swords,
   Trophy,
+  Video,
   XCircle,
 } from 'lucide-react';
 import { Alert, Badge, ConfirmAction, DataTable, Field, Panel, Progress, Spinner } from './TournamentUi.jsx';
@@ -20,7 +24,12 @@ import { formatDateTime } from './tournamentView.js';
 import {
   cancelOfficialJob,
   fetchOfficialBracket,
+  fetchOfficialCutoffStatus,
   fetchOfficialProgress,
+  fetchOfficialPublishedBracket,
+  fetchOfficialPublishedGames,
+  fetchOfficialPublishedStandings,
+  fetchOfficialPublishedTickets,
   fetchOfficialRound,
   fetchOfficialStandings,
   fetchOfficialTickets,
@@ -47,13 +56,18 @@ const STAGE_LABELS = {
 export default function OfficialRoundPanel({ event, teams = [], admin, busy, actions }) {
   const [round, setRound] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('progress'); // 'progress' | 'standings' | 'bracket' | 'tickets'
+  const [activeTab, setActiveTab] = useState(() => (admin ? 'progress' : 'standings')); // 'progress' | 'standings' | 'bracket' | 'tickets' | 'games'
 
   // Sub-data states (§7)
   const [progress, setProgress] = useState(null);
   const [standings, setStandings] = useState(null);
   const [bracket, setBracket] = useState(null);
   const [tickets, setTickets] = useState(null);
+  const [publishedGames, setPublishedGames] = useState(null);
+
+  // Cutoff status state (Mục 2)
+  const [cutoffStatus, setCutoffStatus] = useState(null);
+  const [loadingCutoff, setLoadingCutoff] = useState(false);
 
   // Action states
   const [opening, setOpening] = useState(false);
@@ -80,7 +94,7 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
   // Map participantId -> name
   const teamNames = useMemo(() => {
     const map = new Map();
-    if (Array.isArray(event.entries)) {
+    if (Array.isArray(event?.entries)) {
       for (const entry of event.entries) {
         if (entry.participant_id) {
           map.set(entry.participant_id, entry.participant_name || entry.participant_id);
@@ -95,12 +109,13 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
       }
     }
     return map;
-  }, [event.entries, teams]);
+  }, [event?.entries, teams]);
 
   const getTeamName = (id) => (id ? teamNames.get(id) || `${id.slice(0, 8)}…` : '—');
 
-  // Load basic official round overview
+  // Load basic official round overview (admin only)
   const loadRoundOverview = async (signal) => {
+    if (!admin) return null;
     try {
       const data = await fetchOfficialRound(event.id, { signal });
       setRound(data);
@@ -111,22 +126,57 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
     }
   };
 
+  // Load cutoff status (admin only)
+  const loadCutoffStatus = async (signal) => {
+    if (!admin) return null;
+    setLoadingCutoff(true);
+    try {
+      const st = await fetchOfficialCutoffStatus(event.id, { signal });
+      setCutoffStatus(st);
+      return st;
+    } catch {
+      // Ignored if not found
+      return null;
+    } finally {
+      setLoadingCutoff(false);
+    }
+  };
+
   // Load detailed §7 data when tab changes or refreshed
   const loadSectionData = async (tab, signal) => {
     setError('');
     try {
-      if (tab === 'progress') {
-        const prog = await fetchOfficialProgress(event.id, { signal });
-        setProgress(prog);
-      } else if (tab === 'standings') {
-        const st = await fetchOfficialStandings(event.id, { signal });
-        setStandings(st);
-      } else if (tab === 'bracket') {
-        const br = await fetchOfficialBracket(event.id, { signal });
-        setBracket(br);
-      } else if (tab === 'tickets') {
-        const tk = await fetchOfficialTickets(event.id, { signal });
-        setTickets(tk);
+      if (admin) {
+        // Luồng Admin
+        if (tab === 'progress') {
+          const prog = await fetchOfficialProgress(event.id, { signal });
+          setProgress(prog);
+          await loadCutoffStatus(signal);
+        } else if (tab === 'standings') {
+          const st = await fetchOfficialStandings(event.id, { signal });
+          setStandings(st);
+        } else if (tab === 'bracket') {
+          const br = await fetchOfficialBracket(event.id, { signal });
+          setBracket(br);
+        } else if (tab === 'tickets') {
+          const tk = await fetchOfficialTickets(event.id, { signal });
+          setTickets(tk);
+        }
+      } else {
+        // Luồng Đội thi / Thành viên giải (kết quả đã công bố)
+        if (tab === 'standings') {
+          const st = await fetchOfficialPublishedStandings(event.id, { signal });
+          setStandings(st);
+        } else if (tab === 'bracket') {
+          const br = await fetchOfficialPublishedBracket(event.id, { signal });
+          setBracket(br);
+        } else if (tab === 'tickets') {
+          const tk = await fetchOfficialPublishedTickets(event.id, { signal });
+          setTickets(tk);
+        } else if (tab === 'games') {
+          const gms = await fetchOfficialPublishedGames(event.id, { signal });
+          setPublishedGames(gms);
+        }
       }
     } catch (err) {
       if (err?.status !== 404 && err?.status !== 409) {
@@ -137,7 +187,7 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
 
   useEffect(() => {
     let alive = true;
-    if (!admin || !event.competition) {
+    if (!event?.competition) {
       setLoading(false);
       return () => { alive = false; };
     }
@@ -145,38 +195,39 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
     setError('');
 
     const controller = new AbortController();
-    loadRoundOverview(controller.signal)
-      .then((data) => {
-        if (alive && data) {
-          return loadSectionData(activeTab, controller.signal);
-        }
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
+    const init = admin
+      ? loadRoundOverview(controller.signal).then(() => {
+          if (alive) return loadSectionData(activeTab, controller.signal);
+        })
+      : loadSectionData(activeTab, controller.signal);
+
+    Promise.resolve(init).finally(() => {
+      if (alive) setLoading(false);
+    });
 
     return () => {
       alive = false;
       controller.abort();
     };
-  }, [event.id, event.competition, admin, activeTab]);
+  }, [event?.id, event?.competition, admin, activeTab]);
 
-  if (!event.competition || !admin) return null;
+  if (!event?.competition) return null;
 
   const cutoff = event.competition.cutoff ? Date.parse(event.competition.cutoff) : NaN;
   const cutoffPassed = Number.isFinite(cutoff) && Date.now() >= cutoff;
   const canOpen = admin && event.status === 'draft' && event.competition.mapsPublished === true
     && cutoffPassed && !opening && !syncing && !busy?.event;
 
-  // Handler: Sync GitHub at cutoff
-  async function handleSync() {
+  // Handler: Sync GitHub at cutoff (All or targeted retry)
+  async function handleSync(teamIds = null) {
     setSyncing(true);
     setError('');
     setNotice('');
     try {
-      const summary = await syncGithubCutoff(event.id);
+      const summary = await syncGithubCutoff(event.id, { teamIds });
       setSyncSummary(summary);
-      setNotice(`Đã xếp ${summary.queued} job; bỏ qua ${summary.skipped}; lỗi ${summary.failed.length}.`);
+      setNotice(`Đã xếp ${summary.queued} job; bỏ qua ${summary.skipped}; lỗi ${summary.failed?.length || 0}.`);
+      await loadCutoffStatus();
     } catch (err) {
       setError(err.message || 'Không chốt được GitHub.');
     } finally {
@@ -252,44 +303,43 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
     try {
       const result = await openNextKnockoutSeries(event.id);
       if (result.status === 'opened') {
-        setNotice(`Đã mở series ${result.matchId} (${result.roundId}).`);
+        setNotice(`Đã mở series ${result.matchId} (${result.roundId || ''}) và phát ván đầu tiên.`);
       } else if (result.status === 'advanced') {
-        setNotice(`Đã chuyển tiếp series ${result.matchId}.`);
+        setNotice(`Đã phát ván kế tiếp cho series ${result.matchId}.`);
       } else if (result.status === 'bracket_complete') {
-        setNotice('Nhánh đấu Knockout đã hoàn tất.');
+        setNotice('Toàn bộ nhánh Knockout đã hoàn tất.');
       } else if (result.status === 'blocked') {
-        setNotice('Chưa thể mở series tiếp theo (đang chờ kết quả series trước).');
+        setNotice(`Chưa thể mở series kế tiếp: ${result.message || 'Đang chờ các cặp trước.'}`);
       }
       await loadSectionData('bracket');
     } catch (err) {
-      setError(err.message || 'Không mở được series knockout.');
+      setError(err.message || 'Không thể mở/tiến series knockout.');
     } finally {
       setOpeningBracket(false);
     }
   }
 
-  // Handler §7: Submit Job Cancel / Requeue with mandatory reason
+  // Handler §7: Confirm Job Action (Cancel or Requeue with mandatory reason)
   async function handleConfirmJobAction(e) {
     e.preventDefault();
-    const trimmed = jobReason.trim();
+    setJobReasonError('');
+    const trimmed = (jobReason || '').trim();
     if (trimmed.length < 5 || trimmed.length > 400) {
-      setJobReasonError('Lý do bắt buộc phải từ 5 đến 400 ký tự.');
+      setJobReasonError('Lý do thao tác phải từ 5 đến 400 ký tự.');
       return;
     }
 
     setSubmittingJobAction(true);
-    setJobReasonError('');
-    setError('');
     try {
       if (jobModal.type === 'cancel') {
         await cancelOfficialJob(jobModal.jobId, trimmed);
-        setNotice(`Đã hủy job cho ván ${jobModal.gameKey}.`);
-      } else {
+        setNotice(`Đã hủy job ${jobModal.gameKey} thành công (Lý do: "${trimmed}").`);
+      } else if (jobModal.type === 'requeue') {
         await requeueOfficialJob(jobModal.jobId, trimmed);
-        setNotice(`Đã xếp chấm lại (requeue) job cho ván ${jobModal.gameKey}.`);
+        setNotice(`Đã xếp lại job ${jobModal.gameKey} thành công (Lý do: "${trimmed}").`);
       }
       setJobModal(null);
-      setJobReason('');
+      await loadRoundOverview();
       await loadSectionData('progress');
     } catch (err) {
       setJobReasonError(err.message || 'Thao tác job thất bại.');
@@ -308,26 +358,32 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
 
   return (
     <Panel
-      title="Vòng đấu chính thức (K2 / K3)"
-      subtitle="Quản lý tiến độ vòng bảng, phát ván, bảng xếp hạng server và nhánh knockout chính thức."
+      title={admin ? 'Vòng đấu chính thức (K2 / K3)' : 'Kết quả thi đấu chính thức (Official Results)'}
+      subtitle={
+        admin
+          ? 'Quản lý tiến độ vòng bảng, phát ván, bảng xếp hạng server và nhánh knockout chính thức.'
+          : 'Bảng xếp hạng, nhánh knockout, vé chung kết và các luồng phát sóng trực tiếp từ Ban tổ chức.'
+      }
       actions={actionBadge}
     >
       {loading ? <Spinner label="Đang nạp dữ liệu vòng chính thức…" /> : null}
       {error && <Alert tone="danger" title="Lỗi thao tác">{error}</Alert>}
       {notice && <Alert tone="success" onClose={() => setNotice('')}>{notice}</Alert>}
 
-      {!loading && round ? (
+      {!loading ? (
         <div className="tt-stack">
           {/* Navigation Sub-Tabs */}
-          <div className="tt-tabs-nav" style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border, #333)', paddingBottom: '0.5rem' }}>
-            <button
-              type="button"
-              className={`tt-btn tt-btn--sm ${activeTab === 'progress' ? 'tt-btn--primary' : 'tt-btn--ghost'}`}
-              onClick={() => setActiveTab('progress')}
-            >
-              <Swords size={14} style={{ marginRight: '4px' }} />
-              Tiến độ & Điều hành
-            </button>
+          <div className="tt-tabs-nav" style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border, #333)', paddingBottom: '0.5rem', flexWrap: 'wrap' }}>
+            {admin && (
+              <button
+                type="button"
+                className={`tt-btn tt-btn--sm ${activeTab === 'progress' ? 'tt-btn--primary' : 'tt-btn--ghost'}`}
+                onClick={() => setActiveTab('progress')}
+              >
+                <Swords size={14} style={{ marginRight: '4px' }} />
+                Tiến độ & Điều hành
+              </button>
+            )}
             <button
               type="button"
               className={`tt-btn tt-btn--sm ${activeTab === 'standings' ? 'tt-btn--primary' : 'tt-btn--ghost'}`}
@@ -352,129 +408,246 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
               <Award size={14} style={{ marginRight: '4px' }} />
               Vé chung kết
             </button>
+            {!admin && (
+              <button
+                type="button"
+                className={`tt-btn tt-btn--sm ${activeTab === 'games' ? 'tt-btn--primary' : 'tt-btn--ghost'}`}
+                onClick={() => setActiveTab('games')}
+              >
+                <Video size={14} style={{ marginRight: '4px' }} />
+                Trực tiếp & Phát sóng
+              </button>
+            )}
           </div>
 
-          {/* TAB 1: PROGRESS & CONTROL */}
-          {activeTab === 'progress' && (
+          {/* TAB 1 (Admin-only): PROGRESS & CONTROL */}
+          {admin && activeTab === 'progress' && (
             <div className="tt-stack" style={{ gap: '1rem' }}>
-              <div className="tt-grid tt-grid--3">
-                <div>
-                  <span className="tt-muted">Tiến độ ván đấu</span>
-                  <strong>{round.games.finished}/{round.games.total} ván</strong>
-                </div>
-                <div>
-                  <span className="tt-muted">Thời điểm Cutoff</span>
-                  <strong>{formatDateTime(round.snapshot.cutoff)}</strong>
-                </div>
-                <div>
-                  <span className="tt-muted">Mã Snapshot</span>
-                  <code title={round.snapshot.contentHash}>{shortHash(round.snapshot.contentHash)}</code>
-                </div>
-              </div>
-
-              {/* Progress bar */}
-              <Progress
-                value={round.games.total > 0 ? Math.round((round.games.finished / round.games.total) * 100) : 0}
-                label="Tiến độ hoàn thành vòng bảng"
-              />
-
-              {/* Job Breakdown if loaded */}
-              {progress?.jobs && (
-                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span className="tt-muted">Hàng đợi Jobs:</span>
-                  <Badge tone="neutral">Tổng: {progress.jobs.total}</Badge>
-                  {Object.entries(progress.jobs.byStatus || {}).map(([st, cnt]) => (
-                    <Badge
-                      key={st}
-                      tone={st === 'finished' ? 'success' : st === 'failed' ? 'danger' : st === 'running' ? 'live' : 'info'}
-                    >
-                      {st}: {cnt}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-
-              {/* Next Game or Pending Game Alert */}
-              {progress?.pending ? (
-                <Alert tone="warning" title={`Ván đang chờ kết quả: ${progress.pending.gameKey}`}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+              {round ? (
+                <>
+                  <div className="tt-grid tt-grid--3">
                     <div>
-                      Bảng {progress.pending.groupName || '—'} · Ván {progress.pending.gameNo || '—'}:{' '}
-                      <strong>{getTeamName(progress.pending.redParticipantId)}</strong> (Đỏ) vs{' '}
-                      <strong>{getTeamName(progress.pending.blueParticipantId)}</strong> (Xanh) · Seed: {progress.pending.seed}
+                      <span className="tt-muted">Tiến độ ván đấu</span>
+                      <strong>{round.games?.finished || 0}/{round.games?.total || 0} ván</strong>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button
-                        type="button"
-                        className="tt-btn tt-btn--sm"
-                        onClick={() => setViewerModal({ roundPk: round.roundId, gameKey: progress.pending.gameKey, game: progress.pending })}
-                      >
-                        <Eye size={12} style={{ marginRight: '3px' }} />
-                        Xem phát sóng (Live)
-                      </button>
-                      <button
-                        type="button"
-                        className="tt-btn tt-btn--sm tt-btn--ghost"
-                        onClick={() => setBroadcastModal({ roundPk: round.roundId, gameKey: progress.pending.gameKey, game: progress.pending })}
-                      >
-                        <Radio size={12} style={{ marginRight: '3px' }} />
-                        Lịch phát
-                      </button>
+                    <div>
+                      <span className="tt-muted">Thời điểm Cutoff</span>
+                      <strong>{formatDateTime(round.snapshot?.cutoff)}</strong>
+                    </div>
+                    <div>
+                      <span className="tt-muted">Mã Snapshot</span>
+                      <code title={round.snapshot?.contentHash}>{shortHash(round.snapshot?.contentHash)}</code>
                     </div>
                   </div>
-                </Alert>
-              ) : round.next ? (
-                <Alert tone="info" title={`Ván kế tiếp trong lịch: ${round.next.gameKey}`}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                    <div>
-                      Bảng {round.next.groupName} · Ván {round.next.gameNo}:{' '}
-                      <strong>{round.next.red?.name || getTeamName(round.next.redParticipantId)}</strong> (Đỏ) vs{' '}
-                      <strong>{round.next.blue?.name || getTeamName(round.next.blueParticipantId)}</strong> (Xanh)
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button
-                        type="button"
-                        className="tt-btn tt-btn--sm"
-                        onClick={() => setViewerModal({ roundPk: round.roundId, gameKey: round.next.gameKey, game: round.next })}
-                      >
-                        <Eye size={12} style={{ marginRight: '3px' }} />
-                        Xem phát sóng (Live)
-                      </button>
-                      <button
-                        type="button"
-                        className="tt-btn tt-btn--sm tt-btn--ghost"
-                        onClick={() => setBroadcastModal({ roundPk: round.roundId, gameKey: round.next.gameKey, game: round.next })}
-                      >
-                        <Radio size={12} style={{ marginRight: '3px' }} />
-                        Lịch phát
-                      </button>
-                    </div>
-                  </div>
-                </Alert>
-              ) : (
-                <Alert tone="info">Không còn ván kế tiếp trong lịch hoặc vòng đấu đã kết thúc.</Alert>
-              )}
 
-              {/* BTC Operational Actions */}
-              <div className="tt-form__actions" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="tt-btn tt-btn--primary"
-                  onClick={handlePublishNext}
-                  disabled={publishing || round.frozen || busy?.event}
-                >
-                  <Play size={14} style={{ marginRight: '4px' }} />
-                  {publishing ? 'Đang phát ván…' : 'Phát ván kế tiếp (Publish)'}
-                </button>
-
-                {!round.frozen && (
-                  <ConfirmAction
-                    label="Đóng băng vòng bảng (Freeze)"
-                    confirmLabel="Chắc chắn đóng băng vòng bảng"
-                    tone="warning"
-                    busy={freezing}
-                    onConfirm={handleFreezeRound}
+                  {/* Progress bar */}
+                  <Progress
+                    value={round.games?.total > 0 ? Math.round(((round.games?.finished || 0) / round.games.total) * 100) : 0}
+                    label="Tiến độ hoàn thành vòng bảng"
                   />
+
+                  {/* Job Breakdown if loaded */}
+                  {progress?.jobs && (
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span className="tt-muted">Hàng đợi Jobs:</span>
+                      <Badge tone="neutral">Tổng: {progress.jobs.total}</Badge>
+                      {Object.entries(progress.jobs.byStatus || {}).map(([st, cnt]) => (
+                        <Badge
+                          key={st}
+                          tone={st === 'finished' ? 'success' : st === 'failed' ? 'danger' : st === 'running' ? 'live' : 'info'}
+                        >
+                          {st}: {cnt}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Pending Game Highlight with Live Broadcast action */}
+                  {progress?.pending ? (
+                    <Alert tone="live" title={`Ván đang phát / chờ chấm: ${progress.pending.gameKey}`}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div>
+                          Bảng {progress.pending.groupName || '—'} · Ván {progress.pending.gameNo || '—'}:{' '}
+                          <strong>{getTeamName(progress.pending.redParticipantId)}</strong> (Đỏ) vs{' '}
+                          <strong>{getTeamName(progress.pending.blueParticipantId)}</strong> (Xanh) · Seed: {progress.pending.seed}
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button
+                            type="button"
+                            className="tt-btn tt-btn--sm"
+                            onClick={() => setViewerModal({ roundPk: round.roundId, gameKey: progress.pending.gameKey, game: progress.pending })}
+                          >
+                            <Eye size={12} style={{ marginRight: '3px' }} />
+                            Xem phát sóng (Live)
+                          </button>
+                          <button
+                            type="button"
+                            className="tt-btn tt-btn--sm tt-btn--ghost"
+                            onClick={() => setBroadcastModal({ roundPk: round.roundId, gameKey: progress.pending.gameKey, game: progress.pending })}
+                          >
+                            <Radio size={12} style={{ marginRight: '3px' }} />
+                            Lịch phát
+                          </button>
+                        </div>
+                      </div>
+                    </Alert>
+                  ) : round.next ? (
+                    <Alert tone="info" title={`Ván kế tiếp trong lịch: ${round.next.gameKey}`}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div>
+                          Bảng {round.next.groupName} · Ván {round.next.gameNo}:{' '}
+                          <strong>{round.next.red?.name || getTeamName(round.next.redParticipantId)}</strong> (Đỏ) vs{' '}
+                          <strong>{round.next.blue?.name || getTeamName(round.next.blueParticipantId)}</strong> (Xanh)
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button
+                            type="button"
+                            className="tt-btn tt-btn--sm"
+                            onClick={() => setViewerModal({ roundPk: round.roundId, gameKey: round.next.gameKey, game: round.next })}
+                          >
+                            <Eye size={12} style={{ marginRight: '3px' }} />
+                            Xem phát sóng (Live)
+                          </button>
+                          <button
+                            type="button"
+                            className="tt-btn tt-btn--sm tt-btn--ghost"
+                            onClick={() => setBroadcastModal({ roundPk: round.roundId, gameKey: round.next.gameKey, game: round.next })}
+                          >
+                            <Radio size={12} style={{ marginRight: '3px' }} />
+                            Lịch phát
+                          </button>
+                        </div>
+                      </div>
+                    </Alert>
+                  ) : (
+                    <Alert tone="info">Không còn ván kế tiếp trong lịch hoặc vòng đấu đã kết thúc.</Alert>
+                  )}
+
+                  {/* BTC Operational Actions */}
+                  <div className="tt-form__actions" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="tt-btn tt-btn--primary"
+                      onClick={handlePublishNext}
+                      disabled={publishing || round.frozen || busy?.event}
+                    >
+                      <Play size={14} style={{ marginRight: '4px' }} />
+                      {publishing ? 'Đang phát ván…' : 'Phát ván kế tiếp (Publish)'}
+                    </button>
+
+                    {!round.frozen && (
+                      <ConfirmAction
+                        label="Đóng băng vòng bảng (Freeze)"
+                        confirmLabel="Chắc chắn đóng băng vòng bảng"
+                        tone="warning"
+                        busy={freezing}
+                        onConfirm={handleFreezeRound}
+                      />
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="tt-stack">
+                  <p className="tt-muted">
+                    Sau thời điểm cutoff ({formatDateTime(event.competition.cutoff)}), BTC thực hiện chốt GitHub một lần cho
+                    các đội đã được duyệt rồi mở vòng đấu chính thức.
+                  </p>
+                  <div className="tt-form__actions" style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      type="button"
+                      className="tt-btn"
+                      onClick={() => handleSync()}
+                      disabled={!cutoffPassed || syncing || opening}
+                    >
+                      <Clock size={14} style={{ marginRight: '4px' }} />
+                      {syncing ? 'Đang chốt GitHub…' : 'Chốt GitHub toàn bộ đội (Cutoff Sync)'}
+                    </button>
+                    <button
+                      type="button"
+                      className="tt-btn tt-btn--primary"
+                      onClick={handleOpen}
+                      disabled={!canOpen}
+                    >
+                      <Swords size={14} style={{ marginRight: '4px' }} />
+                      {opening ? 'Đang mở vòng…' : 'Chốt bài & Mở vòng bảng (Open Round)'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Cutoff Batch Progress Widget (Mục 2) */}
+              <div className="tt-stack" style={{ marginTop: '0.5rem', borderTop: '1px solid var(--border, #333)', paddingTop: '0.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <h3 style={{ fontSize: '0.95rem', fontWeight: 600 }}>
+                    Tiến độ chốt GitHub (Cutoff Batch Status)
+                  </h3>
+                  <button
+                    type="button"
+                    className="tt-btn tt-btn--sm tt-btn--ghost"
+                    onClick={() => loadCutoffStatus()}
+                    disabled={loadingCutoff}
+                  >
+                    <RefreshCw size={12} style={{ marginRight: '3px' }} />
+                    Làm mới tiến độ
+                  </button>
+                </div>
+
+                {cutoffStatus ? (
+                  <div className="tt-stack" style={{ gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <Badge tone={cutoffStatus.complete ? 'success' : 'warning'}>
+                        {cutoffStatus.complete ? 'Đã ghim toàn bộ' : 'Chưa hoàn tất'}
+                      </Badge>
+                      <Badge tone="success">Đã ghim: {cutoffStatus.pinned_count} / {cutoffStatus.total_approved}</Badge>
+                      {cutoffStatus.busy_count > 0 && <Badge tone="live">Đang xử lý: {cutoffStatus.busy_count}</Badge>}
+                      {cutoffStatus.pending_count > 0 && <Badge tone="neutral">Chưa ghim: {cutoffStatus.pending_count}</Badge>}
+                    </div>
+
+                    {/* Retry button for pending/failed teams */}
+                    {cutoffStatus.pending_count > 0 && cutoffPassed && (
+                      <div style={{ marginTop: '0.25rem' }}>
+                        <button
+                          type="button"
+                          className="tt-btn tt-btn--sm"
+                          onClick={() => {
+                            const pendingTeamIds = (cutoffStatus.teams || [])
+                              .filter((t) => t.status === 'pending')
+                              .map((t) => t.team_id);
+                            handleSync(pendingTeamIds);
+                          }}
+                          disabled={syncing}
+                        >
+                          <RotateCcw size={12} style={{ marginRight: '4px' }} />
+                          {syncing ? 'Đang đồng bộ lại…' : `Đồng bộ lại ${cutoffStatus.pending_count} đội chưa ghim (Targeted Retry)`}
+                        </button>
+                      </div>
+                    )}
+
+                    <DataTable
+                      columns={['Đội thi', 'Kho GitHub (Repo)', 'Branch', 'Trạng thái', 'Commit SHA']}
+                      label="Danh sách cutoff các đội"
+                    >
+                      {(cutoffStatus.teams || []).map((t) => (
+                        <tr key={t.team_id}>
+                          <td><strong>{getTeamName(t.team_id)}</strong></td>
+                          <td><code>{t.repository}</code></td>
+                          <td>{t.branch}</td>
+                          <td>
+                            <Badge tone={t.status === 'pinned' ? 'success' : t.status === 'busy' ? 'live' : 'neutral'}>
+                              {t.status === 'pinned' ? 'Đã ghim' : t.status === 'busy' ? 'Đang xử lý' : 'Chờ chốt'}
+                            </Badge>
+                          </td>
+                          <td>
+                            {t.commit_sha ? <code title={t.commit_sha}>{t.commit_sha.slice(0, 10)}…</code> : <span className="tt-muted">—</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </DataTable>
+                  </div>
+                ) : (
+                  <p className="tt-muted" style={{ fontSize: '0.85rem' }}>
+                    Chưa có dữ liệu tiến độ cutoff. Nhấn "Làm mới tiến độ" để kiểm tra.
+                  </p>
                 )}
               </div>
 
@@ -538,6 +711,11 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
             <div className="tt-stack">
               {!standings ? (
                 <Spinner label="Đang tải bảng xếp hạng chính thức từ máy chủ…" />
+              ) : standings.published === false ? (
+                <Alert tone="info" title="Vòng bảng đang diễn ra kín">
+                  Bảng xếp hạng vòng bảng hiện đang được lưu kín theo đúng quy chế thi đấu. Điểm số và danh sách hạt giống
+                  vượt qua vòng bảng sẽ được công bố chính thức ngay sau khi kết thúc và đóng băng vòng bảng.
+                </Alert>
               ) : (
                 <>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -602,8 +780,10 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
           {activeTab === 'bracket' && (
             <div className="tt-stack">
               {!bracket ? (
-                <Alert tone="info" title="Chưa có dữ liệu nhánh Knockout">
-                  Vòng bảng chưa hoàn thành hoặc chưa đủ điều kiện để khởi tạo nhánh đấu Knockout.
+                <Spinner label="Đang nạp nhánh đấu knockout…" />
+              ) : bracket.published === false ? (
+                <Alert tone="info" title="Nhánh đấu Knockout chưa bắt đầu">
+                  Nhánh đấu Knockout sẽ được khởi tạo và công bố chính thức sau khi vòng bảng hoàn tất.
                 </Alert>
               ) : (
                 <>
@@ -641,17 +821,19 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                     <Alert tone="warning">Đang chờ giải quyết series điều kiện trước khi mở cặp đấu mới.</Alert>
                   )}
 
-                  <div className="tt-form__actions">
-                    <button
-                      type="button"
-                      className="tt-btn tt-btn--primary"
-                      onClick={handleOpenBracketNext}
-                      disabled={openingBracket || bracket.complete || !!bracket.waiting || busy?.event}
-                    >
-                      <ChevronRight size={14} style={{ marginRight: '4px' }} />
-                      {openingBracket ? 'Đang mở…' : 'Mở / Tiến series kế tiếp'}
-                    </button>
-                  </div>
+                  {admin && (
+                    <div className="tt-form__actions">
+                      <button
+                        type="button"
+                        className="tt-btn tt-btn--primary"
+                        onClick={handleOpenBracketNext}
+                        disabled={openingBracket || bracket.complete || !!bracket.waiting || busy?.event}
+                      >
+                        <ChevronRight size={14} style={{ marginRight: '4px' }} />
+                        {openingBracket ? 'Đang mở…' : 'Mở / Tiến series kế tiếp'}
+                      </button>
+                    </div>
+                  )}
 
                   <h3 style={{ fontSize: '1rem', fontWeight: 600, marginTop: '0.5rem' }}>Các trận đấu Knockout</h3>
                   <DataTable
@@ -690,14 +872,16 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                               >
                                 <Eye size={12} />
                               </button>
-                              <button
-                                type="button"
-                                className="tt-btn tt-btn--sm tt-btn--ghost"
-                                onClick={() => setBroadcastModal({ roundPk: s.round_id, gameKey: `${s.match_id}:main:1`, game: s })}
-                                title="Đặt lịch phát sóng"
-                              >
-                                <Radio size={12} />
-                              </button>
+                              {admin && (
+                                <button
+                                  type="button"
+                                  className="tt-btn tt-btn--sm tt-btn--ghost"
+                                  onClick={() => setBroadcastModal({ roundPk: s.round_id, gameKey: `${s.match_id}:main:1`, game: s })}
+                                  title="Đặt lịch phát sóng"
+                                >
+                                  <Radio size={12} />
+                                </button>
+                              )}
                             </div>
                           ) : (
                             <span className="tt-muted">—</span>
@@ -715,8 +899,10 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
           {activeTab === 'tickets' && (
             <div className="tt-stack" style={{ gap: '1rem' }}>
               {!tickets ? (
-                <Alert tone="info" title="Chưa có phân bổ vé chung kết">
-                  Nhánh knockout chưa hoàn tất để phân bổ vé theo điều lệ giải.
+                <Spinner label="Đang kiểm tra phân bổ vé chung kết…" />
+              ) : tickets.published === false ? (
+                <Alert tone="info" title="Vé chung kết chưa công bố">
+                  Vé chung kết chỉ được xác nhận và công bố chính thức sau khi vòng knockout kết thúc hoàn toàn.
                 </Alert>
               ) : (
                 <>
@@ -748,34 +934,32 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                   {/* Reserves Table */}
                   {Array.isArray(tickets?.tickets?.reserves) && tickets.tickets.reserves.length > 0 && (
                     <div className="tt-stack" style={{ gap: '0.5rem', marginTop: '0.5rem' }}>
-                      <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-primary, #3182ce)' }}>
-                        Danh sách suất dự bị ({tickets.tickets.reserves.length} đội)
+                      <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-warning, #d69e2e)' }}>
+                        Suất dự bị ({tickets.tickets.reserves.length} đội)
                       </h3>
-                      <DataTable columns={['Thứ hạng', 'Đội dự bị', 'Hạt giống', 'Trạng thái']} label="Bảng suất dự bị">
+                      <DataTable columns={['Thứ hạng', 'Đội dự bị', 'Hạt giống', 'Ghi chú']} label="Bảng vé dự bị">
                         {tickets.tickets.reserves.map((r, idx) => (
                           <tr key={r.participantId || idx}>
-                            <td>#{r.rank}</td>
+                            <td>#{r.rank || idx + 1}</td>
                             <td>{getTeamName(r.participantId)}</td>
                             <td>#{r.seed ?? '—'}</td>
-                            <td><Badge tone="neutral">Dự bị ưu tiên {idx + 1}</Badge></td>
+                            <td><Badge tone="neutral">Dự bị</Badge></td>
                           </tr>
                         ))}
                       </DataTable>
                     </div>
                   )}
 
-                  {/* Full Ranking Table if available */}
+                  {/* Overall Ranking if available */}
                   {Array.isArray(tickets?.ranking) && tickets.ranking.length > 0 && (
                     <div className="tt-stack" style={{ gap: '0.5rem', marginTop: '0.5rem' }}>
-                      <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>
-                        Bảng xếp hạng Knockout đầy đủ ({tickets.ranking.length} đội)
-                      </h3>
-                      <DataTable columns={['Thứ hạng', 'Đội thi', 'Hạt giống ban đầu']} label="Bảng xếp hạng đầy đủ">
-                        {tickets.ranking.map((row) => (
-                          <tr key={row.participantId}>
-                            <td><strong>#{row.rank}</strong></td>
-                            <td>{getTeamName(row.participantId)}</td>
-                            <td>#{row.seed ?? '—'}</td>
+                      <h3 style={{ fontSize: '0.95rem', fontWeight: 600 }}>Bảng xếp hạng chung cuộc</h3>
+                      <DataTable columns={['Hạng', 'Đội thi', 'Giai đoạn dừng bước']} label="Bảng xếp hạng giải">
+                        {tickets.ranking.map((rnk) => (
+                          <tr key={rnk.participantId}>
+                            <td><strong>#{rnk.rank}</strong></td>
+                            <td>{getTeamName(rnk.participantId)}</td>
+                            <td>{STAGE_LABELS[rnk.stage] || rnk.stage || 'Vòng bảng'}</td>
                           </tr>
                         ))}
                       </DataTable>
@@ -785,107 +969,113 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
               )}
             </div>
           )}
-        </div>
-      ) : null}
 
-      {/* When Round is NOT opened yet */}
-      {!loading && !round ? (
-        <div className="tt-stack">
-          <p className="tt-muted">
-            Bước 1: Sau khi tới thời điểm Cutoff, nhấn &ldquo;1. Chốt GitHub lúc cutoff&rdquo; để hệ thống chốt snapshot mã nguồn của các đội.
-            Bước 2: Nhấn &ldquo;2. Mở vòng bảng&rdquo; để chính thức khóa snapshot và tạo lịch thi đấu vòng bảng.
-          </p>
-          {!event.competition.mapsPublished && <Alert tone="warning">Cần công bố map pack trước khi mở vòng bảng.</Alert>}
-          {!cutoffPassed && <Alert tone="warning">Chưa tới thời điểm cutoff; chưa thể chốt bài thi.</Alert>}
-          {admin ? (
-            <div className="tt-form__actions">
-              <button
-                type="button"
-                className="tt-btn"
-                onClick={handleSync}
-                disabled={!canOpen || syncing || busy?.event}
-              >
-                {syncing ? 'Đang chốt GitHub…' : '1. Chốt GitHub lúc cutoff'}
-              </button>
-              <button
-                type="button"
-                className="tt-btn tt-btn--primary"
-                onClick={handleOpen}
-                disabled={!canOpen || opening || busy?.event}
-              >
-                {opening ? 'Đang mở…' : '2. Mở vòng bảng'}
-              </button>
+          {/* TAB 5 (Team-only): PUBLISHED GAMES & LIVE STREAMS */}
+          {!admin && activeTab === 'games' && (
+            <div className="tt-stack" style={{ gap: '1rem' }}>
+              {!publishedGames ? (
+                <Spinner label="Đang nạp danh sách ván đấu đã công bố…" />
+              ) : !publishedGames.games || publishedGames.games.length === 0 ? (
+                <Alert tone="info" title="Chưa có ván đấu nào được công bố">
+                  Các ván đấu chính thức sẽ xuất hiện tại đây khi Ban tổ chức lên lịch và phát sóng.
+                </Alert>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span className="tt-muted">Danh sách các ván đấu chính thức được công bố ({publishedGames.games.length} ván)</span>
+                    <button
+                      type="button"
+                      className="tt-btn tt-btn--sm tt-btn--ghost"
+                      onClick={() => loadSectionData('games')}
+                    >
+                      <RefreshCw size={12} style={{ marginRight: '3px' }} />
+                      Làm mới
+                    </button>
+                  </div>
+
+                  <DataTable
+                    columns={['Mã ván', 'Giai đoạn', 'Đội Đỏ', 'Đội Xanh', 'Lịch phát sóng', 'Xem trực tiếp']}
+                    label="Danh sách ván official đã công bố"
+                  >
+                    {publishedGames.games.map((g) => {
+                      const bc = g.broadcast || {};
+                      const isLive = bc.phase === 'broadcasting';
+                      const isWaiting = bc.phase === 'waiting';
+                      const isEnded = bc.phase === 'ended';
+                      return (
+                        <tr key={g.game_key}>
+                          <td><strong>{g.game_key}</strong></td>
+                          <td>{STAGE_LABELS[g.stage] || g.stage || 'Vòng bảng'}</td>
+                          <td><span className="tt-side tt-side--red">{getTeamName(g.red_participant_id)}</span></td>
+                          <td><span className="tt-side tt-side--blue">{getTeamName(g.blue_participant_id)}</span></td>
+                          <td>
+                            <Badge tone={isLive ? 'live' : isEnded ? 'success' : isWaiting ? 'warning' : 'neutral'} dot={isLive}>
+                              {isLive ? 'Đang chiếu' : isEnded ? 'Đã kết thúc' : isWaiting ? 'Sắp phát' : bc.phase}
+                            </Badge>
+                            {bc.starts_at && (
+                              <span className="tt-cell-sub">
+                                {new Date(bc.starts_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="tt-btn tt-btn--sm"
+                              onClick={() =>
+                                setViewerModal({
+                                  roundPk: publishedGames.round_pk,
+                                  gameKey: g.game_key,
+                                  game: g,
+                                })
+                              }
+                              title="Xem trực tiếp trên bàn cờ"
+                            >
+                              <Eye size={12} style={{ marginRight: '3px' }} />
+                              Xem luồng
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </DataTable>
+                </>
+              )}
             </div>
-          ) : (
-            <p className="tt-muted">Chỉ Ban tổ chức mới có quyền mở vòng bảng.</p>
-          )}
-          {syncSummary && (
-            <Alert tone={syncSummary.failed.length ? 'warning' : 'success'}>
-              Đã xếp {syncSummary.queued} job, bỏ qua {syncSummary.skipped}, lỗi {syncSummary.failed.length}.
-            </Alert>
           )}
         </div>
       ) : null}
 
-      {/* MODAL: Mandatory Reason for Job Cancel / Requeue */}
+      {/* MODAL: Mandatory Reason for Job Cancel or Requeue */}
       {jobModal && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="job-action-title"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0,0,0,0.65)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '1rem',
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape' && !submittingJobAction) setJobModal(null);
-          }}
-        >
-          <div
-            className="tt-panel"
-            style={{
-              maxWidth: '480px',
-              width: '100%',
-              backgroundColor: 'var(--bg-panel, #1e1e1e)',
-              border: '1px solid var(--border, #444)',
-              borderRadius: '8px',
-              padding: '1.25rem',
-            }}
-          >
-            <h3 id="job-action-title" style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.5rem' }}>
-              {jobModal.type === 'cancel' ? 'Xác nhận hủy Job' : 'Xác nhận Chấm lại Job (Requeue)'}
+        <div className="tt-modal-backdrop" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="tt-modal" style={{ backgroundColor: 'var(--bg-panel, #1a202c)', padding: '1.5rem', borderRadius: '8px', maxWidth: '480px', width: '90%', border: '1px solid var(--border, #333)' }}>
+            <h3 style={{ marginTop: 0, fontSize: '1.1rem', fontWeight: 600 }}>
+              {jobModal.type === 'cancel' ? 'Hủy ván đấu chính thức' : 'Chấm lại ván đấu chính thức'}
             </h3>
-            <p className="tt-muted" style={{ fontSize: '0.875rem', marginBottom: '1rem' }}>
-              Ván đấu: <strong>{jobModal.gameKey}</strong>. Thao tác này sẽ được ghi vào sổ kiểm toán (Audit Trail) của ban tổ chức.
+            <p className="tt-muted" style={{ fontSize: '0.875rem' }}>
+              Ván: <strong>{jobModal.gameKey}</strong>. Thao tác này sẽ được ghi vào nhật ký kiểm toán (audit log) của hệ thống.
             </p>
 
             <form onSubmit={handleConfirmJobAction}>
               <Field
                 label="Lý do thao tác (bắt buộc, từ 5 đến 400 ký tự)"
                 error={jobReasonError}
-                hint="Ví dụ: Worker gặp sự cố timeout hạ tầng mạng, cần chạy lại."
+                hint="Ví dụ: Worker node quá tải / timeout mạng ngoại vi / lỗi phân bổ tài nguyên"
               >
                 <textarea
                   className="tt-input"
                   rows={3}
                   value={jobReason}
-                  onChange={(e) => {
-                    setJobReason(e.target.value);
-                    if (jobReasonError) setJobReasonError('');
-                  }}
-                  placeholder="Nhập lý do chi tiết…"
+                  onChange={(e) => setJobReason(e.target.value)}
+                  placeholder="Nhập lý do chi tiết..."
                   disabled={submittingJobAction}
-                  autoFocus
+                  style={{ width: '100%', resize: 'vertical' }}
+                  required
                 />
               </Field>
 
-              <div className="tt-form__actions" style={{ marginTop: '1rem', justifyContent: 'flex-end', display: 'flex', gap: '0.5rem' }}>
+              <div className="tt-form__actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
                 <button
                   type="button"
                   className="tt-btn tt-btn--ghost"
