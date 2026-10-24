@@ -26,6 +26,10 @@
   ],
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "/api?__ootv2_path=:path*"
+    },
+    {
       "source": "/((?!api(?:/|$)).*)",
       "destination": "/index.html"
     }
