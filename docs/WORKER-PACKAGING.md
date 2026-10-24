@@ -10,11 +10,13 @@ bộ script. Tài liệu này nói rõ phần nào chạy được hôm nay và 
 | Worker GitHub intake (`server/githubWorker.js`) | **Có**, chạy dài hạn, chấm dứt êm |
 | Kiểm tra tĩnh + cú pháp Python, upload Storage private | **Có** (không chạy bot) |
 | Release swap có rollback, systemd, health gate | **Có code**, chưa chạy trên VM thật |
-| Chấm trận Campus/Firewall sandbox qua worker | **Chưa có** worker loop + claim/lease cho `mvp_official_games` |
-| Service `ootv2-official-worker` | **Không tồn tại** — không được tạo cho đủ bộ |
+| Worker chấm trận Campus | **Có** `server/officialWorker.js` (queue `official`), sandbox fail-closed lúc khởi động |
+| Worker Chung kết thủ công | **Có** cùng file với `--manual` / `--all` (`server/services/manualFinalExecution.js`) |
+| Service `ootv2-official-worker` / `ootv2-manual-worker` | **Chưa đóng gói systemd**; chạy trực tiếp bằng `node server/officialWorker.js [--manual]` |
 
 Gói này **không** biến worker intake thành trọng tài. Nó chỉ chốt source đội
-(GitHub → SHA → Storage) để BTC mở vòng. Chấm trận là milestone riêng.
+(GitHub → SHA → Storage) để BTC mở vòng. Chấm trận dùng worker Campus ở trên; drill 2 worker
+và runbook VM nằm ở `docs/DRILL-MANUAL-WORKER.md`.
 
 `server/worker.js` (MVP) **không** được cài, không được enable, không phải fallback.
 
@@ -131,6 +133,9 @@ máy Windows thật**. Chỉ tuyên bố hỗ trợ nhiều máy sau khi drill �
 | PowerShell parser cho `tools/vm/*.ps1` | PASS |
 | `bash -n` + chạy guard cho `tools/provision/*.sh` | PASS (`staging_missing`, `wsl_is_not_a_judge_vm`) |
 | `npm run build` | PASS |
+| `npm run drill:manual-worker` | **9/9 PASS** (2 worker, lease/generation/attempt in-memory; 24/10/2026) |
+| 2 process `--manual --once` trên G5 (queue rỗng) | **PASS**, cả hai `processed=0`, không ghi dòng nào |
+| `worker-health.js --env-file=.envdev` | PASS 3 bảng/RPC manual; FAIL bucket `ootv2-bots` + `mvp_github_claim` |
 
 Đã sửa hai lỗi thật trong quá trình kiểm thử: gán `$code = Invoke-Doctor`/`Invoke-Guest`
 nuốt output ra console, và `VirtualizationFirmwareEnabled` trả rỗng khi hypervisor
@@ -140,7 +145,8 @@ nuốt output ra console, và `VirtualizationFirmwareEnabled` trả rỗng khi h
 
 - Chưa boot guest, chưa chạy `install-judge.sh`, `deploy-release.sh` trên VM thật.
 - Chưa kiểm systemd restart/rollback/attestation timer trong guest.
-- Chưa có worker chấm trận; Start/`ootv2-official-worker` vẫn đóng.
+- Chưa đóng gói systemd cho worker Campus/manual (`node server/officialWorker.js --manual`
+  mới chạy trực tiếp); chưa có drill VM cho 2 worker (xem `docs/DRILL-MANUAL-WORKER.md`).
 - Chưa chạy hai máy Windows thật tranh cùng job.
 - Chưa commit/push/deploy.
 

@@ -141,7 +141,14 @@ API không chạy Python; `storage_path`/lease token không nằm trong DTO; int
 
   Ghi chú còn mở: (a) `finish` yêu cầu `ply_count >= 1` nên ván bot lỗi setup (0 ply) được ghi
   `bot_fault` + `setup_bot_fault`; (b) queue manual **chưa có RPC heartbeat**, consumer dùng lease
-  300 s (trần claim 900 s). Hai điểm này cần Huy quyết định nếu muốn đổi contract.
+  300 s (trần claim 900 s); (c) `mvp_manual_final_claim` requeue job hết lease **mà không kiểm
+  `attempt`/`max_attempts`**, nên worker bị kill lặp có thể đẩy `attempt` vượt CHECK 10 và làm
+  hỏng cả transaction claim — cần migration additive (đề xuất trong
+  [drill manual worker](../DRILL-MANUAL-WORKER.md) §7). Ba điểm này cần Huy quyết định.
+
+  Drill/kiểm chứng: `npm run drill:manual-worker` (9 kịch bản 2 worker, không DB/Python),
+  `node tools/cli/worker-health.js` (đã probe 2 bảng manual + `mvp_manual_final_claim`).
+  Nhật ký và giới hạn: [DRILL-MANUAL-WORKER](../DRILL-MANUAL-WORKER.md).
 - Bảo: mọi route admin-only; chỉ hiển thị trạng thái/lý do; nạp file bằng multipart + `x-csrf-token`; không có form nhập điểm tay; không mở upload online cho đội.
 - Migration **đã apply** ngày 24/10/2026 trên project `wsyfcgurnrowcuefwynx` (OTTv2-G5) cùng
   `20261025100000_cutoff_capture.sql`; `npm run db:manual` chạy drill trên schema đã apply (ROLLBACK).

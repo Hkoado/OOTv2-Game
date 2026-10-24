@@ -13,6 +13,8 @@ import * as officialRounds from '../services/officialRounds.js';
 import * as publication from './publication.js';
 import { rows, uuid } from './client.js';
 import { isAllowedOrigin } from '../lib/origin.js';
+import { isSecureRequest } from '../lib/cookieSecurity.js';
+import { createLoginThrottle } from '../lib/loginThrottle.js';
 import config from '../config.js';
 import { onlineUploadDecision } from './uploadPolicy.js';
 import { manualFinalRouter } from '../routes/manualFinal.js';
@@ -27,9 +29,9 @@ const forbidden=()=>new HttpError(403,'scope_denied','Không có quyền truy c�
  */
 const COOKIE_PATH='/api';
 const LEGACY_COOKIE_PATH='/api/local';
-const cookieOptions=(req,maxAge=accounts.SESSION_MS)=>({httpOnly:true,sameSite:'strict',path:COOKIE_PATH,maxAge,secure:req.secure});
-const clearCookieOptions=(req)=>({httpOnly:true,sameSite:'strict',path:COOKIE_PATH,secure:req.secure});
-const legacyClearCookieOptions=(req)=>({httpOnly:true,sameSite:'strict',path:LEGACY_COOKIE_PATH,secure:req.secure});
+const cookieOptions=(req,maxAge=accounts.SESSION_MS)=>({httpOnly:true,sameSite:'strict',path:COOKIE_PATH,maxAge,secure:isSecureRequest(req)});
+const clearCookieOptions=(req)=>({httpOnly:true,sameSite:'strict',path:COOKIE_PATH,secure:isSecureRequest(req)});
+const legacyClearCookieOptions=(req)=>({httpOnly:true,sameSite:'strict',path:LEGACY_COOKIE_PATH,secure:isSecureRequest(req)});
 export async function checkStage(account,id,stage=null) {
   uuid(id);
   if (account.role==='admin') return;
@@ -59,7 +61,7 @@ export function bracketFromData(tournaments, data) {
 }
 
 export function sharedRouter() {
-  const router=Router(),attempts=new Map();
+  const router=Router(),loginThrottle=createLoginThrottle();
   router.use((req,res,next)=>{
     res.set('Cache-Control','no-store');
     const origin=req.get('origin');
@@ -67,12 +69,15 @@ export function sharedRouter() {
     next();
   });
   router.post('/login',async(req,res)=>{
-    const now=Date.now();for (const [k,v] of attempts) if (v.until<now) attempts.delete(k);
-    // `req.ip` là IP thật sau `trust proxy`; dùng socket làm fallback khi proxy tắt.
-    const key=req.ip||req.socket.remoteAddress;
-    const entry=attempts.get(key)||{count:0,until:now+60000};attempts.set(key,entry);
-    if (++entry.count>15) throw new HttpError(429,'login_rate_limit','Thử lại sau một phút.');
-    const result=await accounts.login(req.body?.username,req.body?.password,{remember:req.body?.remember===true});attempts.delete(key);
+    // Chặn brute-force theo cặp IP+tài khoản (trần riêng theo IP đủ rộng cho lớp sau NAT).
+    const ip=req.ip||req.socket?.remoteAddress;
+    const gate=loginThrottle.check({ip,username:req.body?.username});
+    if (!gate.allowed) {
+      res.set('Retry-After',String(gate.retryAfter));
+      throw new HttpError(429,'login_rate_limit','Thử lại sau một phút.');
+    }
+    const result=await accounts.login(req.body?.username,req.body?.password,{remember:req.body?.remember===true});
+    loginThrottle.reset({ip,username:req.body?.username});
     // Đặt cookie mới trước, rồi xoá cookie path cũ (client cũ có thể còn gửi kèm).
     res.cookie(accounts.COOKIE_NAME,result.token,cookieOptions(req,accounts.sessionTtlMs(result.remember)));
     res.clearCookie(accounts.COOKIE_NAME,legacyClearCookieOptions(req));

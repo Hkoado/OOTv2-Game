@@ -1,5 +1,60 @@
 # Kết quả Khoa — Scheduler / worker / runtime
 
+## 24/10/2026 (sau khi pull) — Tích hợp gate sandbox của Huy + drill 2 worker
+
+- **Tôn trọng thay đổi của Huy:** `campusSandboxFactory` nay bắt opt-in `trusted-dev`
+  (`OOTV2_ALLOW_TRUSTED_DEV=1`) và worker chạy `assertCampusSandboxReady()` lúc khởi động.
+  Adapter manual đã dùng `trusted: factory.trustedDev === true` nên không thể vô tình chạy bot
+  trên host khi factory chưa opt-in.
+- **Thêm script chạy worker manual** (`package.json`, chỉ thêm dòng, không đổi script cũ):
+  `worker:manual`, `worker:manual:once`, `worker:manual:drain`, `worker:manual:dev-db`,
+  `drill:manual-worker`.
+- **Drill 2 worker** `tools/cli/manual-worker-drill.js` (+ `tests/manualWorkerDrill.test.js`):
+  chạy **đúng** `runOfficialWorker` → `processManualFinalJob` → `executeManualFinalJob`, chỉ thay
+  DB/Storage/Python bằng queue in-memory mô phỏng lease token + `generation` + `attempt` +
+  backoff + `already_finished` của `20261026100000_manual_final.sql`.
+  Kết quả **9/9 PASS**: 2 worker tranh 1 job (1 lần chấm), lease bị lấy (worker cũ `lease_lost`),
+  retry cùng snapshot, hết lượt → `infra_fault`, finish lặp → `already_finished`,
+  2 job/2 worker, validate nhị phân không chạy bot, validate hợp lệ, bot lỗi setup 0 ply.
+  Artifact: `data/khoa-manual/drill-local.json`.
+- **Preflight mở rộng** `tools/cli/worker-health.js`: thêm `mvp_manual_final_jobs`,
+  `mvp_manual_final_matches` và probe `mvp_manual_final_claim` với `p_worker=''`
+  (hàm trả `bad_worker` trước khi truy vấn job nên **không lease/ghi** gì).
+- **Smoke 2 process trên DB thật** (G5 `wsyfcgurnrowcuefwynx`, queue rỗng): hai process
+  `node --env-file=.envdev server/officialWorker.js --manual --once` chạy song song, cả hai
+  `exit 0` với `RESULT processed=0 recorded=0 failures=0`, log preflight `sandbox: trusted-dev`.
+  Không tạo/không ghi dòng nào. Artifact: `data/khoa-manual/live-2worker-smoke.json`.
+- **Phát hiện môi trường (quan trọng cho cả nhóm):** `.env` trong workspace trỏ
+  `ftzockzolisecnyhlwej` — project **không có** schema `mvp_*` (mọi bảng/RPC trả 404), nên
+  worker ở đó chỉ ra `shared_db_error`. Schema manual chỉ có trên G5 qua `.envdev`
+  (`mvp_manual_final_jobs`, `mvp_manual_final_matches`, `mvp_manual_final_claim` PASS).
+  Trên G5, `worker-health` còn FAIL `storage_bucket` (bucket `ootv2-bots` chưa private/262144)
+  và `mvp_github_claim` (khác subsystem) → chưa chạy được job thật.
+- Tài liệu runbook: `docs/DRILL-MANUAL-WORKER.md` (drill local, smoke DB thật, E2E job thật,
+  drill VM + acceptance checklist).
+
+### Bằng chứng sau pull (24/10/2026)
+
+| Lệnh | Kết quả |
+| --- | --- |
+| `node --test tests/manualFinalExecution.test.js tests/manualFinalWorker.test.js tests/manualWorkerDrill.test.js tests/manualFinalApi.test.js tests/officialWorker.test.js` | **35/35 PASS**, exit 0 (`data/khoa-manual/contract-tests.log`) |
+| `npm.cmd run drill:manual-worker` | **9/9 PASS** (`data/khoa-manual/drill-local.json`) |
+| 2 process `--manual --once` trên G5 (queue rỗng) | **PASS**, cả hai `exit 0`, `processed=0`, không ghi dòng (`data/khoa-manual/live-2worker-smoke.json`) |
+| `node tools/cli/worker-health.js --json` (`.env`) | BLOCKED: mọi bảng/RPC 404 (project `ftzock...` không có schema) |
+| `node --env-file=.envdev tools/cli/worker-health.js --json` | manual jobs/matches/claim **PASS**; bucket `ootv2-bots` FAIL |
+| `npm test` toàn bộ | **406/406 PASS**, 0 fail (`data/khoa-manual/full-test.log`) |
+| `npm run build` | **PASS**, 1654 modules, 6.65 s (`data/khoa-manual/build.json`) |
+| `git diff --check` | sạch |
+
+### NOT RUN (giữ trung thực)
+
+- Chưa có job thật end-to-end: cần bucket `ootv2-bots` đúng cấu hình + BTC tạo cặp đấu
+  (hoặc cho phép drill ghi dữ liệu vào G5). Schema không có DELETE policy cho `service_role`.
+- Chưa drill VM Linux: máy này `Get-VM` bị từ chối quyền Hyper-V, không có `tools/vm/worker.local.json`,
+  không có `D:\OOTv2-VM`. Không có `linux-sandbox` + attestation thật.
+- Chưa thử kill worker đang chấm trên DB thật để kiểm lease-expiry (đã kiểm ở drill hợp đồng).
+- Chưa commit/push (để người dùng review RC).
+
 ## 24/10/2026 — Consumer queue Chung kết thủ công đã có code (gỡ blocker E2E manual)
 
 - **Đính chính handoff cũ:** câu "manual-final source/provenance chưa có producer" **không còn đúng**.

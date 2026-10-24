@@ -102,7 +102,7 @@ function startSessionAdapter({ factory, budget }) {
   return async (side) => factory({ ...side,
     allowedRoot: side.allowedRoot ?? config.artifactCacheDir,
     responseTotalMs: budget.responseTotalMs, cpuTotalMs: budget.cpuTotalMs,
-    trusted: factory.mode === 'trusted-dev' });
+    trusted: factory.trustedDev === true });
 }
 
 /** Protocol smoke Campus v2: Đỏ xếp kín → Xanh xếp khi đã thấy Đỏ → một nước Đỏ hợp lệ. */
@@ -257,7 +257,8 @@ async function runMatchJob(job, { runMatch, startSessionFactory, identity, budge
       map: snapshot.map, seed: match.seed, signal,
       red: { name: snapshot.red.teamId, filePath: redLocal.file, allowedRoot: config.artifactCacheDir },
       blue: { name: snapshot.blue.teamId, filePath: blueLocal.file, allowedRoot: config.artifactCacheDir },
-      trusted: factory.mode === 'trusted-dev',
+      // Cùng gate với worker chính thức: factory đã fail-closed nếu chưa opt-in trusted-dev.
+      trusted: factory.trustedDev === true,
       startSession,
       setupWallMs: budget.setupWallMs, moveWallMs: budget.moveWallMs,
       responseTotalMs: budget.responseTotalMs,

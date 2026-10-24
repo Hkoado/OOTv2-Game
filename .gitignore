@@ -14,7 +14,9 @@ dist-ssr
 
 # Dữ liệu private của MVP tournament: DB SQLite + bot upload
 data/
+# .env = DB chính thức; .envdev = DB dev/drill (không tự nạp, cần --env-file).
 .env
+.envdev
 .env.*
 !.env.example
 *.pem
@@ -30,6 +32,8 @@ tests-local/
 *.local.test.js
 tests-*.log
 manual-final-*.txt
+# File nháp tạm của agent/công cụ (từng bị track nhầm)
+.tmp_*
 
 # Editor directories and files
 .vscode/*

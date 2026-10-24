@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { ATTESTATION_PROFILE, createCampusSessionFactory, validateAttestation }
+import { ATTESTATION_PROFILE, assertCampusSandboxReady, createCampusSessionFactory, validateAttestation }
   from '../server/judge/campusSandboxFactory.js';
 
 const sha = 'a'.repeat(64);
@@ -49,12 +49,24 @@ test('attestation must be fresh, non-WSL and prove the seccomp profile', () => {
     { code: 'invalid_attestation' });
 });
 
-test('trusted-dev remains the default and still requires explicit trust', async () => {
-  const factory = createCampusSessionFactory({ env: {}, createTrusted: async (options) => ({ options }) });
+test('trusted-dev vẫn là mode mặc định nhưng phải opt-in tường minh (fail-closed)', async () => {
+  const createTrusted = async (options) => ({ options });
+  // Thiếu OOTV2_ALLOW_TRUSTED_DEV: không được dựng factory, không chạy bot trên host.
+  assert.throws(() => createCampusSessionFactory({ env: {}, createTrusted }),
+    { code: 'trusted_dev_not_enabled' });
+  assert.throws(() => createCampusSessionFactory({ env: { OOTV2_ALLOW_TRUSTED_DEV: '0' }, createTrusted }),
+    { code: 'trusted_dev_not_enabled' });
+  assert.throws(() => assertCampusSandboxReady({ env: {}, createTrusted }),
+    { code: 'trusted_dev_not_enabled' });
+
+  const factory = createCampusSessionFactory({ env: { OOTV2_ALLOW_TRUSTED_DEV: '1' }, createTrusted });
   assert.equal(factory.mode, 'trusted-dev');
+  assert.equal(factory.trustedDev, true, 'worker chỉ bật cờ trusted khi đã opt-in');
   await assert.rejects(factory({ filePath: '/x/bot.py' }), { code: 'trusted_dev_required' });
   const session = await factory({ filePath: '/x/bot.py', trusted: true });
   assert.equal(session.options.trusted, true);
+  assert.deepEqual(assertCampusSandboxReady({ env: { OOTV2_ALLOW_TRUSTED_DEV: '1' }, createTrusted }),
+    { mode: 'trusted-dev', trustedDev: true });
 });
 
 test('linux-sandbox factory fails closed without platform, seccomp, runner or receipt', async (t) => {
@@ -81,6 +93,7 @@ test('linux-sandbox factory passes artifact, runner, cgroup and seccomp to the a
   const factory = createCampusSessionFactory({ env: envFor(file), platform: 'linux',
     createSandbox: async (options) => { calls.push(options); return { profile: 'linux-sandbox.v2' }; } });
   assert.equal(factory.mode, 'linux-sandbox');
+  assert.equal(factory.trustedDev, false, 'linux-sandbox không bao giờ bật cờ trusted-dev');
   assert.equal(factory.attestation.seccomp.sha256, sha);
   const session = await factory({ filePath: '/bots/a.py', allowedRoot: '/bots', responseTotalMs: 1234, cpuTotalMs: 5000 });
   assert.equal(session.profile, 'linux-sandbox.v2');

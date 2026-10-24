@@ -79,6 +79,31 @@ if (base && key) {
   } catch {
     record('storage_bucket', false, 'network');
   }
+  // Manual final (worker Khoa): bảng phải tồn tại và claim phải trả `bad_worker` cho tên rỗng.
+  for (const [table, label] of [['mvp_manual_final_jobs', 'manual job table'],
+    ['mvp_manual_final_matches', 'manual match table']]) {
+    try {
+      const result = await get(`/rest/v1/${table}?select=id&limit=1`);
+      record(table, result.status === 200, result.status === 200 ? label : `HTTP ${result.status}`);
+    } catch {
+      record(table, false, 'network');
+    }
+  }
+  try {
+    // `bad_worker` được trả trước mọi truy vấn job nên probe này không lease/ghi gì.
+    const response = await fetch(`${base}/rest/v1/rpc/mvp_manual_final_claim`, {
+      method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_worker: '', p_limit: 1, p_lease_seconds: 10 }),
+      signal: AbortSignal.timeout(15000),
+    });
+    let body = null;
+    try { body = await response.json(); } catch { body = null; }
+    const ok = response.status === 200 && body?.ok === false && body?.error === 'bad_worker';
+    record('mvp_manual_final_claim', ok,
+      ok ? 'bad_worker guard reachable' : `HTTP ${response.status} ${body?.error || body?.code || ''}`.trim());
+  } catch {
+    record('mvp_manual_final_claim', false, 'network');
+  }
 }
 
 const ok = checks.every((item) => item.ok);

@@ -16,6 +16,7 @@ import { claimOfficialJob, reapOfficialJobs } from './shared/officialJobs.js';
 import { claimManualFinalJobs } from './shared/manualFinalJobs.js';
 import { executeOfficialJob } from './services/officialExecution.js';
 import { MANUAL_WORKER_LEASE_SECONDS, executeManualFinalJob } from './services/manualFinalExecution.js';
+import { assertCampusSandboxReady } from './judge/campusSandboxFactory.js';
 
 /** Queue một tiến trình worker có thể xử lý; cùng sandbox/budget, khác nguồn job. */
 export const WORKER_QUEUES = Object.freeze(['official', 'manual']);
@@ -182,6 +183,14 @@ export async function runOfficialWorker({
 export async function runOfficialWorkerEntry({ argv = process.argv.slice(2), ...options } = {}) {
   const args = new Set(argv);
   assertSharedConfig();
+  // Fail fast: thiếu sandbox/attestation thì dừng ngay, không claim job rồi retry vô hạn
+  // và không bao giờ tự hạ xuống chạy bot Python trực tiếp trên host.
+  const sandbox = assertCampusSandboxReady();
+  if (sandbox.trustedDev) {
+    console.warn('[official-worker] CẢNH BÁO: trusted-dev — bot chạy trực tiếp trên host, '
+      + 'chỉ dùng cho máy dev tin cậy; KHÔNG dùng cho bài nộp công khai.');
+  }
+  console.log(JSON.stringify({ at: 'official-worker', sandbox: sandbox.mode }));
   const queues = parseWorkerQueues({ argv });
   const controller = new AbortController();
   const shutdown = () => controller.abort();

@@ -150,7 +150,8 @@ export async function executeOfficialJob(job, {
       map: map.map, seed: game.seed, signal: abort.signal,
       red: { name: redBot.participantId, filePath: redLocal.file, allowedRoot: config.artifactCacheDir },
       blue: { name: blueBot.participantId, filePath: blueLocal.file, allowedRoot: config.artifactCacheDir },
-      trusted: factory.mode === 'trusted-dev',
+      // Chỉ adapter trusted-dev đã opt-in tường minh mới được bật cờ này (factory fail-closed).
+      trusted: factory.trustedDev === true,
       startSession,
       setupWallMs: budget.setupWallMs, moveWallMs: budget.moveWallMs,
       responseTotalMs: budget.responseTotalMs,

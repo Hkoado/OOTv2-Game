@@ -59,8 +59,10 @@ Từ 23/10/2026 driver SQLite đã bị **bỏ hoàn toàn**: API, worker và c�
 Supabase (Postgres + Storage). Không còn `better-sqlite3`, `OOTV2_DB_DRIVER`, `OOTV2_DB_PATH`
 hay file `*.sqlite`; thiếu `SUPABASE_*` thì API/worker **dừng ngay** thay vì chạy DB khác.
 Đọc [hướng dẫn DB và migration](docs/12-SUPABASE-DATABASE.md) trước khi chạy.
-Sao chép `.env.example` thành `.env` và điền credential **backend-only** trên máy BTC
-tin cậy; tuyệt đối không đặt service-role key trong biến `VITE_*` hoặc gửi cho bot.
+Sao chép `.env.example` thành `.env` (**DB chính thức**) và điền credential **backend-only**
+trên máy BTC tin cậy; tuyệt đối không đặt service-role key trong biến `VITE_*` hoặc gửi cho bot.
+Drill/kiểm thử trên DB dev thì tạo `.envdev` riêng rồi chạy `npm run dev:api:dev-db`,
+`npm run dev:worker:dev-db`, `npm run worker:official:dev-db`; `.env` luôn là cấu hình chính thức.
 
 Từ thư mục repository, chạy ba terminal: `npm run dev`, `npm run dev:api`,
 `npm run dev:worker`. Có thể chạy nhiều worker trên các máy tin cậy với cùng DB;
@@ -340,7 +342,7 @@ npm run build          # kiểm tra UI build được (Vite)
 
 ### 7.5 Biến môi trường (tuỳ chọn)
 
-Server tự nạp file `.env` ở thư mục gốc nếu có (`process.loadEnvFile`, không cần dependency). Toàn bộ biến đều có default an toàn:
+Server tự nạp `.env` ở thư mục gốc theo kiểu **không ghi đè**: biến đã có trong môi trường (shell, `node --env-file=…`, Vercel) thắng giá trị trong file, nên `node --env-file=.envdev server/index.js` chạy DB dev mà không bị `.env` đè; `OOTV2_ENV_FILE` cho phép chọn file khác `.env`. Toàn bộ biến đều có default an toàn:
 
 | Biến (`server/config.js`) | Mặc định | Ý nghĩa |
 | --- | --- | --- |
@@ -348,6 +350,8 @@ Server tự nạp file `.env` ở thư mục gốc nếu có (`process.loadEnvFi
 | `OOTV2_API_PORT` | `3001` | Cổng API. |
 | `SUPABASE_URL` | (bắt buộc) | Project URL của Supabase (HTTPS). Thiếu → API/worker dừng ngay. |
 | `SUPABASE_SERVICE_ROLE_KEY` | (bắt buộc) | Service-role key, **chỉ** ở backend. Thiếu → API/worker dừng ngay. |
+| `OOTV2_EXPECTED_PROJECT_REF` | (trống) | Pin project ref: API/worker/tool dừng ngay nếu `SUPABASE_URL` trỏ project khác (guard chỉ áp cho URL `*.supabase.co` hoặc `*.supabase.in`). |
+| `OOTV2_ENV_FILE` | `.env` | File env được nạp; đặt `.envdev` để chạy trên DB dev/drill. |
 | `OOTV2_DATA_DIR` | `<repo>/data` | Thư mục cache tạm cho bot tải từ Storage + file log; ngoài `public/`, `src/`, `dist/`. |
 | `OOTV2_PYTHON_BIN` | (trống) | Lệnh Python; để trống thì tự dò `python` / `py -3` / `python3`. |
 | `OOTV2_PUBLIC_ORIGIN` | (trống) | Origin HTTPS của web khi chạy sau reverse proxy, phân tách bằng dấu phẩy (guard same-origin). Same-origin qua proxy vẫn được chấp nhận nếu không khai báo. |

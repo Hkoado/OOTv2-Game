@@ -244,6 +244,28 @@ test('match: snapshot pin + hai bài đã khóa → accepted result có replay',
   assert.equal(outcome.replay.schemaVersion, 'campus-replay.v1');
 });
 
+test('match: cờ trusted chỉ bật khi factory đã opt-in trusted-dev', async () => {
+  const { download } = downloads();
+  const capture = [];
+  const runMatch = async (input) => {
+    capture.push(input.trusted);
+    return { result: 'red_win', reason: 'BASE_REACHED', plyCount: 5,
+      replay: { schemaVersion: 'campus-replay.v1', actions: [] } };
+  };
+  const deps = {
+    download, identity: RUNTIME, runMatch,
+    finish: async () => ({ applied: true }),
+    loadSubmission: async ({ id }) => (id === RED_SUB
+      ? submissionRow(RED_SUB, RED_TEAM) : submissionRow(BLUE_SUB, BLUE_TEAM)),
+  };
+  // `mode` một mình không đủ (đây là kiểu fake cũ) — worker chỉ tin cờ trustedDev.
+  await executeManualFinalJob(matchJob(), { ...deps, startSessionFactory: fakeFactory });
+  const trustedFactory = fakeFactory();
+  trustedFactory.trustedDev = true;
+  await executeManualFinalJob(matchJob(), { ...deps, startSessionFactory: () => trustedFactory });
+  assert.deepEqual(capture, [false, true]);
+});
+
 test('match: bot lỗi ngay setup (0 ply) ghi bot_fault, không bịa kết quả', async () => {
   const { download } = downloads();
   const rec = recorder();

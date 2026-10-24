@@ -14,7 +14,7 @@ import { asyncHandler } from '../lib/asyncHandler.js';
 import { createRateLimiter } from '../lib/rateLimit.js';
 import { getLiveMatchSnapshot, getLiveOverview, listLiveEvents } from '../shared/live.js';
 import { rows, uuid } from '../shared/client.js';
-import { requireSession } from '../shared/accounts.js';
+import { requireSession, COOKIE_NAME } from '../shared/accounts.js';
 import {
   assertEventMember,
   broadcastStateForMatch,
@@ -44,18 +44,44 @@ export function liveRouter() {
     next();
   });
 
-  // Chặn poll quá dày từ một IP (mở public qua tunnel nên cần giới hạn cơ bản).
+  /**
+   * Rate limit hai tầng (Map trong RAM, một tiến trình — không thêm Redis):
+   * 1. Theo IP với trần rộng hơn cho request có cookie phiên: 100 khán giả sau cùng
+   *    một NAT/proxy (hoặc cùng IP Vercel edge) không còn bị 429 hàng loạt, nhưng vẫn
+   *    có trần để không bị lách bằng cookie giả.
+   * 2. Theo **tài khoản** sau khi xác thực: mỗi người xem có quota riêng.
+   * (Trên serverless nhiều instance, mỗi instance đếm riêng; đây là mức bảo vệ cơ bản,
+   * cần đo tải thật trước khi mở công khai rộng.)
+   */
+  const clientIp = (req) => req.ip || req.socket?.remoteAddress || 'unknown';
+  const hasSessionCookie = (req) => String(req.headers?.cookie || '')
+    .split(';').some((part) => part.trim().startsWith(`${COOKIE_NAME}=`));
+  const limitMessage = 'Bạn tải dữ liệu trực tiếp quá nhanh. Vui lòng thử lại sau.';
+  const perAccount = config.live.publicRequestsPerMinute;
+
   router.use(
     createRateLimiter({
       windowMs: 60_000,
-      max: config.live.publicRequestsPerMinute,
+      // 100 viewer × 30 lượt/phút ≈ 3000; trần theo IP cho phiên là 20× mức cơ bản.
+      max: (req) => (hasSessionCookie(req) ? perAccount * 20 : perAccount),
       maxKeys: config.live.rateLimitKeys,
-      message: 'Bạn tải dữ liệu trực tiếp quá nhanh. Vui lòng thử lại sau.',
+      keyGenerator: (req) => `ip:${clientIp(req)}`,
+      message: limitMessage,
     })
   );
 
   // H3: không còn xem ẩn danh. Phiên + membership giải được kiểm ở từng route.
   router.use(requireSession);
+
+  router.use(
+    createRateLimiter({
+      windowMs: 60_000,
+      max: perAccount,
+      maxKeys: config.live.rateLimitKeys,
+      keyGenerator: (req) => (req.account?.id ? `account:${req.account.id}` : `ip:${clientIp(req)}`),
+      message: limitMessage,
+    })
+  );
 
   router.get(
     '/overview',

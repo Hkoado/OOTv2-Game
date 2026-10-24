@@ -1,4 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { parseEnv } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -6,12 +8,53 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 /** Thư mục gốc repo (server/ nằm ngay dưới). */
 export const ROOT_DIR = path.resolve(here, '..');
 
-// Nạp .env nếu có (Node >= 21 có process.loadEnvFile, không cần dependency).
-try {
-  process.loadEnvFile(path.join(ROOT_DIR, '.env'));
-} catch {
-  // Không có .env là bình thường; toàn bộ giá trị đều có default an toàn.
+/** Fallback tối thiểu khi `node:util.parseEnv` không có (Node < 20.12). */
+function parseEnvText(text) {
+  if (typeof parseEnv === 'function') return parseEnv(text);
+  const result = {};
+  for (const line of text.split(/\r?\n/u)) {
+    const match = /^\s*(?:export\s+)?([A-Za-z0-9_.]+)\s*=\s*(.*)$/u.exec(line);
+    if (match) result[match[1]] = match[2].replace(/^(['"])([\s\S]*)\1$/u, '$2');
+  }
+  return result;
 }
+
+/**
+ * Nạp file env theo kiểu **không ghi đè**: biến đã có trong môi trường (shell,
+ * `node --env-file=...`, Vercel, service manager) luôn thắng file.
+ *
+ * Nhờ vậy `.env` (DB chính thức) không đè lên `.envdev` khi chạy
+ * `node --env-file=.envdev server/index.js`, và `OOTV2_ENV_FILE` cho phép chọn
+ * hẳn file khác. Thiếu file không phải lỗi: mọi giá trị đều có default an toàn,
+ * riêng `SUPABASE_*` thiếu thì API/worker dừng ngay khi kiểm tra cấu hình.
+ *
+ * @param {string} [envFile] File env, mặc định `OOTV2_ENV_FILE` hoặc `.env`.
+ * @param {Record<string, string|undefined>} [env] Đích ghi, mặc định `process.env`.
+ * @returns {{ file: string, loaded: number }}
+ */
+export function loadEnvFile(envFile = process.env.OOTV2_ENV_FILE || '.env', env = process.env) {
+  const file = path.isAbsolute(envFile) ? envFile : path.join(ROOT_DIR, envFile);
+  if (!existsSync(file)) {
+    // Chỉ cảnh báo khi người dùng chỉ định rõ file: thiếu `.env` là bình thường.
+    if (process.env.OOTV2_ENV_FILE) {
+      console.warn(`[config] Không thấy file env "${envFile}" (OOTV2_ENV_FILE); bỏ qua.`);
+    }
+    return { file, loaded: 0 };
+  }
+  let parsed;
+  try {
+    parsed = parseEnvText(readFileSync(file, 'utf8'));
+  } catch {
+    return { file, loaded: 0 };
+  }
+  let loaded = 0;
+  for (const [key, value] of Object.entries(parsed)) {
+    if (env[key] === undefined) { env[key] = value; loaded += 1; }
+  }
+  return { file, loaded };
+}
+
+loadEnvFile();
 
 function resolveFromRoot(value, fallback) {
   if (!value) return fallback;
@@ -45,13 +88,25 @@ function parsePublicOrigins(raw) {
  * Cấu hình `trust proxy` của Express cho `X-Forwarded-For`/`X-Forwarded-Proto`.
  * Mặc định `loopback`: chỉ tin proxy chạy cùng máy (Caddy/Nginx), không tin header
  * từ client ở xa. Đặt `0` để tắt hoàn toàn, hoặc số hop nếu proxy ở máy khác.
+ * Trên Vercel (`VERCEL=1`) edge proxy không phải loopback: mặc định 1 hop để `req.ip`
+ * là IP người xem và cookie phiên nhận đúng `Secure`.
  */
-function parseTrustProxy(raw) {
+export function parseTrustProxy(raw, env = process.env) {
   const value = (raw || '').trim();
-  if (!value) return 'loopback';
+  if (!value) return env.VERCEL === '1' ? 1 : 'loopback';
   if (['0', 'false', 'off', 'no'].includes(value.toLowerCase())) return false;
   if (/^\d+$/.test(value)) return Number(value);
   return value;
+}
+
+/**
+ * Cho phép `Origin` localhost ở mọi chế độ (dev). Production tắt mặc định để không
+ * nhận request thay đổi state từ một trang localhost (malware/extension trên máy người
+ * dùng). Same-origin sau proxy vẫn được chấp nhận bằng so `Host`.
+ */
+export function parseAllowLocalOrigins(raw, env = process.env) {
+  if (raw === undefined || raw === '') return env.NODE_ENV !== 'production';
+  return ['1', 'true', 'on', 'yes'].includes(String(raw).trim().toLowerCase());
 }
 
 /** Bật/tắt phục vụ `dist/` từ chính Express (mặc định bật, tắt bằng `OOTV2_SERVE_DIST=0`). */
@@ -98,6 +153,9 @@ export const config = {
 
   /** Số hop proxy tin cậy cho `req.ip` (rate limit) và `req.secure` (cookie Secure). */
   trustProxy: parseTrustProxy(process.env.OOTV2_TRUST_PROXY),
+
+  /** Nhận `Origin` localhost (dev). Production mặc định tắt; bật lại bằng `OOTV2_ALLOW_LOCAL_ORIGIN=1`. */
+  allowLocalOrigins: parseAllowLocalOrigins(process.env.OOTV2_ALLOW_LOCAL_ORIGIN),
 
   /** Đường dẫn Python tuỳ chọn; để trống thì tự dò `python` / `py -3` / `python3`. */
   pythonBin: process.env.OOTV2_PYTHON_BIN || '',

@@ -1,6 +1,11 @@
 /** Selects the campus session implementation. Fails closed: the Linux sandbox
  * requires a fresh host attestation, an explicit runner path and seccomp on.
- * Default stays the trusted-dev adapter; nothing here enables public intake.
+ *
+ * `trusted-dev` (bot Python chạy trực tiếp trên host) là chế độ **phải opt-in tường minh**
+ * bằng `OOTV2_ALLOW_TRUSTED_DEV=1` hoặc `allowTrustedDev: true`. Trước đây nó là mặc
+ * định im lặng, nên quên đặt `OOTV2_CAMPUS_SANDBOX` là worker chạy bot học sinh trên máy
+ * host với toàn bộ quyền đọc file/mạng của tiến trình Node. Không có opt-in thì throw
+ * `trusted_dev_not_enabled`; worker chính thức/manual vì thế dừng ngay khi thiếu sandbox.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -8,7 +13,10 @@ import { createLinuxSandboxSession } from './linuxSandboxSession.js';
 import { createTrustedCampusSession, CampusInfrastructureError } from './campusTrustedSession.js';
 
 export const ATTESTATION_PROFILE = 'ootv2-sandbox-attestation.v1';
+/** Cờ opt-in cho `trusted-dev`; chỉ đặt trên máy dev tin cậy, không đặt trên server công khai. */
+export const TRUSTED_DEV_ENV = 'OOTV2_ALLOW_TRUSTED_DEV';
 const fail = (code) => new CampusInfrastructureError(code);
+
 
 export function validateAttestation(text, { now = Date.now(), allowWsl = false } = {}) {
   let doc;
@@ -25,15 +33,18 @@ export function validateAttestation(text, { now = Date.now(), allowWsl = false }
 }
 
 export function createCampusSessionFactory({ env = process.env, now = Date.now(), platform = process.platform,
-  allowWsl = false, createSandbox = createLinuxSandboxSession,
+  allowWsl = false, allowTrustedDev = false, createSandbox = createLinuxSandboxSession,
   createTrusted = createTrustedCampusSession } = {}) {
   const mode = env.OOTV2_CAMPUS_SANDBOX ?? 'trusted-dev';
   if (mode === 'trusted-dev') {
+    // Không tự bật: thiếu opt-in tường minh thì dừng (fail-closed), không chạy bot trên host.
+    if (allowTrustedDev !== true && env[TRUSTED_DEV_ENV] !== '1') throw fail('trusted_dev_not_enabled');
     const factory = async ({ trusted, ...side } = {}) => {
       if (trusted !== true) throw fail('trusted_dev_required');
       return createTrusted({ ...side, trusted: true });
     };
     factory.mode = mode;
+    factory.trustedDev = true;
     return factory;
   }
   if (mode !== 'linux-sandbox') throw fail('invalid_sandbox_mode');
@@ -57,6 +68,16 @@ export function createCampusSessionFactory({ env = process.env, now = Date.now()
     return session;
   };
   factory.mode = mode;
+  factory.trustedDev = false;
   factory.attestation = attestation;
   return factory;
+}
+
+/**
+ * Preflight lúc khởi động worker: cấu hình sandbox phải dùng được NGAY (Linux + attestation
+ * còn hạn, hoặc opt-in trusted-dev), không đợi tới job đầu tiên mới lỗi rồi retry vô hạn.
+ */
+export function assertCampusSandboxReady(options = {}) {
+  const factory = createCampusSessionFactory(options);
+  return { mode: factory.mode, trustedDev: factory.trustedDev === true };
 }

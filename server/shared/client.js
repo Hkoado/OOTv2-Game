@@ -1,7 +1,28 @@
 import config from '../config.js';
 import { HttpError } from '../lib/httpError.js';
 
-/** Kiểm tra cấu hình Supabase mà không gọi mạng (dùng lúc boot để fail fast). */
+/** Project ref đích mà môi trường này được phép ghi (`OOTV2_EXPECTED_PROJECT_REF`). */
+const EXPECTED_PROJECT_REF = (process.env.OOTV2_EXPECTED_PROJECT_REF || '').trim().toLowerCase();
+/** Chỉ áp cho URL Supabase thật; test double/PostgREST tự dựng (example.invalid) được bỏ qua. */
+const SUPABASE_HOST_RE = /\.supabase\.(co|in)$/u;
+
+/** Rút project ref từ `https://<ref>.supabase.co` (null nếu không phải URL Supabase). */
+export function projectRefOf(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  return parsed.hostname.match(/^([a-z0-9]{20})\.supabase\.(co|in)$/u)?.[1] ?? null;
+}
+
+/**
+ * Kiểm tra cấu hình Supabase mà không gọi mạng (dùng lúc boot để fail fast).
+ * Nếu `OOTV2_EXPECTED_PROJECT_REF` được đặt, project trong `SUPABASE_URL` phải khớp:
+ * chặn trường hợp `.env` bị trộn key/URL của hai project (dễ ghi drill vào DB chính thức).
+ * Guard chỉ áp cho host `*.supabase.co|in`; test double dùng host khác không bị chặn.
+ */
 export function assertSharedConfig() {
   connection();
 }
@@ -19,6 +40,13 @@ function connection() {
     throw new Error('SUPABASE_URL không phải URL hợp lệ.');
   }
   if (parsed.protocol !== 'https:') throw new Error('Supabase URL phải dùng HTTPS.');
+  if (EXPECTED_PROJECT_REF && SUPABASE_HOST_RE.test(parsed.hostname)) {
+    const ref = projectRefOf(url);
+    if (ref !== EXPECTED_PROJECT_REF) {
+      throw new Error(`SUPABASE_URL trỏ project "${ref ?? 'unknown'}" nhưng OOTV2_EXPECTED_PROJECT_REF=`
+        + `"${EXPECTED_PROJECT_REF}". Sửa .env trước khi chạy để không ghi nhầm DB.`);
+    }
+  }
   return { url: parsed.origin, key };
 }
 

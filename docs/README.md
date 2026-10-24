@@ -10,6 +10,7 @@ chỉ làm Chung kết thủ công BTC nạp/chọn/khóa/chấm qua hệ thốn
 **Trạng thái nghiệm thu hiện hành:** [Production readiness](PRODUCTION-READINESS.md).
 **DB mới / bộ dựng Hyper-V đang triển khai:** [Production bootstrap](PRODUCTION-BOOTSTRAP.md).
 **Máy Windows khác pull repo chạy worker:** [Đóng gói worker](WORKER-PACKAGING.md).
+**Worker manual + drill 2 worker/VM:** [Drill worker Chung kết thủ công](DRILL-MANUAL-WORKER.md).
 Phân biệt code/test local, migration remote và sandbox thật; các handoff/drill cũ
 không phải tuyên bố hệ thống đã production-ready.
 

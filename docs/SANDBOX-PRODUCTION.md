@@ -105,7 +105,10 @@ node server/worker.js
 
 Factory từ chối khi: không phải Linux, `OOTV2_SANDBOX_SECCOMP=off`, thiếu runner
 tuyệt đối, thiếu/hết hạn attestation, attestation WSL, seccomp probe sai hoặc hash sai.
-Mặc định vẫn là `trusted-dev` và cần `trusted:true`.
+`trusted-dev` (bot chạy trực tiếp trên host) **không còn là mặc định im lặng**: phải
+opt-in tường minh bằng `OOTV2_ALLOW_TRUSTED_DEV=1`, nếu không factory throw
+`trusted_dev_not_enabled`. Worker `server/officialWorker.js` chạy preflight lúc khởi
+động nên thiếu sandbox là dừng ngay, không claim job rồi retry vô hạn.
 
 systemd (VM riêng, runner cần root cho cgroup):
 
