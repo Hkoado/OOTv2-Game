@@ -46,6 +46,7 @@ export default function TournamentWorkspace({
   onDismissToast,
   replay,
   onOpenReplay,
+  onOpenReplayPayload,
   onCloseReplay,
   actions,
 }) {
@@ -192,7 +193,7 @@ export default function TournamentWorkspace({
           {route.page === 'teams' && isAdmin && <TeamsPage {...pageProps} />}
           {route.page === 'bot' && <SubmissionsPage {...pageProps} />}
           {route.page === 'events' && (route.eventId
-            ? <EventDetailPage {...pageProps} eventId={route.eventId} onOpenReplay={onOpenReplay} />
+            ? <EventDetailPage {...pageProps} eventId={route.eventId} onOpenReplay={onOpenReplay} onOpenReplayPayload={onOpenReplayPayload} />
             : <EventsPage {...pageProps} />)}
           {route.page === 'judge' && isAdmin && <JudgePage actions={actions} onOpenReplay={onOpenReplay} />}
           {route.page === 'guide' && <GuidePage account={account} />}

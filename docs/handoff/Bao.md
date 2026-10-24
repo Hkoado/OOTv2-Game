@@ -2,11 +2,11 @@
 
 ## Trạng thái mới nhất
 
-- Trạng thái: **IN PROGRESS / CHECKPOINT 8** — Nối hoàn chỉnh API backend thật cho **Chung kết thủ công (Manual Finals Panel)**, mở rộng phạm vi cookie phiên sang `/api`, đồng bộ sạch sẽ với `origin/dev`.
-- Phạm vi: B1–B4 và Mục Chung kết thủ công theo quyết định 24/10/2026 trong [phân công Bảo](../assignments/Bao.md).
-- Checkpoint: branch `dev` (đã hợp nhất commit mới nhất từ `origin/dev`).
-- Tổng test suite hiện tại: **372/372 bài kiểm thử PASS** (100% thành công, 0 lỗi, 0 skip).
-- Build production: **Vite build sạch** (1654 modules transformed, bundle `dist/` sẵn sàng trong 2.90s).
+- Trạng thái: **IN PROGRESS / CHECKPOINT 9** — Khắc phục P1 (Replay manual payload type error & viewer Campus format), tách callback payload khỏi id, nâng cấp ReplayBoard hỗ trợ Campus v2.
+- Phạm vi: B1–B4, Mục Chung kết thủ công và Viewer Replay theo [phân công Bảo](../assignments/Bao.md).
+- Checkpoint: branch `dev` (đồng bộ với commit mới nhất từ Khoa/Huy trên `origin/dev`).
+- Tổng test suite hiện tại: **381/381 bài kiểm thử PASS** (100% thành công, 0 lỗi, 0 skip).
+- Build production: **Vite build sạch** (1654 modules transformed, bundle `dist/` sẵn sàng trong 2.86s).
 
 ---
 
@@ -89,6 +89,14 @@ NOT RUN + lý do:
 ---
 
 ## Lịch sử checkpoint
+
+- 24/10/2026 (Checkpoint 9): **Khắc phục P1 — Tách callback mở Replay payload & Hỗ trợ Replay Campus Engine v2**:
+  - Tách bạch hai luồng mở replay trong [LocalCore.jsx](../../src/tournament/portal/LocalCore.jsx): `onOpenReplay(matchId)` dùng cho ván đấu thường (gọi API `/matches/:id/replay`), và `onOpenReplayPayload(data)` dùng cho ván đã có sẵn payload `{ match, replay }` (tránh lỗi dùng object replay làm matchId). Bổ sung phòng thủ tự động chuyển luồng nếu `openReplay` nhận object.
+  - Truyền `onOpenReplayPayload` xuyên suốt từ `LocalCore` -> `TournamentWorkspace` -> `EventDetailPage` -> [ManualFinalsPanel.jsx](../../src/tournament/portal/ManualFinalsPanel.jsx).
+  - Nâng cấp [src/tournament/replay.js](../../src/tournament/replay.js) (`buildReplayFrames`): hỗ trợ phân giải toàn diện cấu trúc Replay Campus v2 (`campus-engine-replay.v1`), gộp 2 sự kiện setup kín (đủ 18 quân) thành frame 0 khởi đầu, diễn hoạt nước đi với địa hình map v2 và bắt sự kiện `bot_fault`. Chuẩn hóa tọa độ ô chữ hoa/thường an toàn.
+  - Cập nhật [ReplayBoard.jsx](../../src/tournament/ReplayBoard.jsx): nhận map địa hình Campus từ `replay.map || replay.config?.map`, hiển thị tên đội và seed an toàn khi mở replay thủ công.
+  - Thêm bài test mới [tests/replayViewerCampus.test.js](../../tests/replayViewerCampus.test.js) (4 tests: MVP v1, Campus v2 terrain/setup, bot fault, empty replay).
+  - Kết quả kiểm thử: **381/381 tests PASS** (100%), Vite build sạch trong 2.86s.
 
 - 24/10/2026 (Checkpoint 8): **Nối API thật cho Chung kết thủ công & Mở rộng phạm vi Cookie Session**:
   - Tạo client API [`manualFinalApi.js`](../../src/tournament/portal/manualFinalApi.js) (10 hàm gọi API `/api/local/manual-finals/*` có CSRF & same-origin credentials).

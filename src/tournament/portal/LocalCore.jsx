@@ -359,7 +359,20 @@ export default function LocalCore({ theme, onToggleTheme }) {
     setDetail(data);
   }, 'Giải đã bắt đầu. Bài nộp của các đội tham gia đã bị khóa.'), [loadRoleData, runAction]);
 
-  const openReplay = useCallback(async (matchId) => {
+  const openReplayPayload = useCallback((data) => {
+    if (!data || !data.replay) {
+      setReplay({ open: true, state: 'error', data: null, error: 'Dữ liệu replay không hợp lệ.' });
+      return;
+    }
+    setReplay({ open: true, state: 'ready', data, error: '' });
+  }, []);
+
+  const openReplay = useCallback(async (target) => {
+    if (typeof target === 'object' && target !== null && target.replay) {
+      openReplayPayload(target);
+      return;
+    }
+    const matchId = target;
     setReplay({ open: true, state: 'loading', data: null, error: '' });
     try {
       const data = await apiRequest(`/matches/${encodeURIComponent(matchId)}/replay`);
@@ -372,7 +385,7 @@ export default function LocalCore({ theme, onToggleTheme }) {
       }
       setReplay({ open: true, state: 'error', data: null, error: error.message || 'Không tải được replay.' });
     }
-  }, [expireSession]);
+  }, [expireSession, openReplayPayload]);
 
   const closeReplay = useCallback(() => setReplay(CLOSED_REPLAY), []);
 
@@ -428,6 +441,7 @@ export default function LocalCore({ theme, onToggleTheme }) {
       onDismissToast={() => setToast(null)}
       replay={replay}
       onOpenReplay={openReplay}
+      onOpenReplayPayload={openReplayPayload}
       onCloseReplay={closeReplay}
       actions={{ refresh, saveProfile, createTeam, resetPassword, uploadBot, createEvent, saveEvent, startEvent, onSessionExpired: expireSession }}
     />
