@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { ATTESTATION_PROFILE, assertCampusSandboxReady, createCampusSessionFactory, validateAttestation }
+import { ATTESTATION_PROFILE, assertCampusSandboxReady, createCampusSessionFactory, validateAttestation, verifyAttestedArtifacts }
   from '../server/judge/campusSandboxFactory.js';
 
 const sha = 'a'.repeat(64);
@@ -102,4 +102,56 @@ test('linux-sandbox factory passes artifact, runner, cgroup and seccomp to the a
     runnerPath: '/srv/ootv2/run-bot.sh', cgroupRoot: '/sys/fs/cgroup/ootv2', seccompMode: 'deny-list.v1',
     responseTotalMs: 1234, cpuTotalMs: 5000 });
   await assert.rejects(factory({ filePath: '/bots/a.py' }), { code: 'invalid_artifact' });
+  await factory({ filePath: '/bots/a.py', allowedRoot: '/bots', memoryBytes: 268435456, pids: 32 });
+  assert.equal(calls[1].memoryBytes, 268435456);
+  assert.equal(calls[1].pids, 32);
+});
+
+test('production artifact verification fails closed when receipt or architecture is invalid', () => {
+  assert.throws(() => verifyAttestedArtifacts(attestation({ host: { arch: '../../etc' } }),
+    { runnerPath: '/srv/ootv2/run-bot.sh', attestationPath: '/missing' }), { code: 'invalid_attestation' });
+  assert.throws(() => verifyAttestedArtifacts(attestation(),
+    { runnerPath: '/missing/run-bot.sh', attestationPath: '/missing/receipt' }), { code: 'sandbox_artifact_unavailable' });
+});
+
+test('production cannot opt into host Python or WSL, including explicit API overrides', () => {
+  for (const env of [{ NODE_ENV: 'production' }, { VERCEL: '1' }]) {
+    assert.throws(() => createCampusSessionFactory({ env, allowTrustedDev: true }), { code: 'trusted_dev_forbidden' });
+    assert.throws(() => createCampusSessionFactory({ env: { ...env, OOTV2_ALLOW_TRUSTED_DEV: '1' } }),
+      { code: 'production_unsafe_config' });
+    assert.throws(() => createCampusSessionFactory({ env: { ...env, OOTV2_SANDBOX_ALLOW_WSL: '1' } }),
+      { code: 'production_unsafe_config' });
+  }
+});
+
+test('production requires full successful acceptance, bounded receipt age and no future receipt', () => {
+  for (const selftest of [undefined, { full: false, result: 'not_run' },
+    { full: true, result: 'RESULT pass=14 fail=1' }, { full: true, result: 'RESULT pass=0 fail=0' }]) {
+    assert.throws(() => validateAttestation(JSON.stringify(attestation({ selftest })), { requireFull: true }),
+      { code: 'sandbox_selftest_required' });
+  }
+  assert.throws(() => validateAttestation(JSON.stringify(attestation({ createdAt: iso(Date.now() + 10000) }))),
+    { code: 'invalid_attestation' });
+  assert.throws(() => validateAttestation(JSON.stringify(attestation({ expiresAt: iso(Date.now() + 172800000) }))),
+    { code: 'invalid_attestation' });
+  assert.doesNotThrow(() => validateAttestation(JSON.stringify(attestation()), { requireFull: true }));
+});
+
+test('a long-lived factory re-reads receipts and checks expiry before every bot spawn', async (t) => {
+  let now = Date.now();
+  const doc = attestation({ createdAt: iso(now - 1000), expiresAt: iso(now + 1000) });
+  const { file } = withFile(t, doc);
+  let spawned = 0;
+  const factory = createCampusSessionFactory({ env: envFor(file), platform: 'linux', now: () => now,
+    createSandbox: async () => { spawned += 1; return {}; } });
+  const side = { filePath: '/bots/bot.py', allowedRoot: '/bots' };
+  await factory(side);
+  now += 2000;
+  await assert.rejects(factory(side), { code: 'attestation_expired' });
+  assert.equal(spawned, 1);
+  writeFileSync(file, JSON.stringify({ ...doc, createdAt: iso(now), expiresAt: iso(now + 10000) }));
+  await factory(side);
+  assert.equal(spawned, 2);
+  writeFileSync(file, 'broken');
+  await assert.rejects(factory(side), { code: 'invalid_attestation' });
 });

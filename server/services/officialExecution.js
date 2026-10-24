@@ -148,7 +148,8 @@ export async function executeOfficialJob(job, {
     const factory = startSessionFactory();
     const startSession = async (side) => factory({ ...side,
       allowedRoot: side.allowedRoot ?? config.artifactCacheDir,
-      responseTotalMs: budget.responseTotalMs, cpuTotalMs: budget.cpuTotalMs });
+      responseTotalMs: budget.responseTotalMs, cpuTotalMs: budget.cpuTotalMs,
+      memoryBytes: budget.memoryBytes, pids: budget.pids });
     const outcome = await runMatch({
       id: `${job.roundId}:${job.gameKey}`,
       map: map.map, seed: game.seed, signal: abort.signal,

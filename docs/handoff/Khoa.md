@@ -1,5 +1,56 @@
 # Kết quả Khoa — Scheduler / worker / runtime
 
+## 25/10/2026 — RC online tối giản: hardening local + runbook
+
+Base checkout: `be8d17fd0bc5def03d75f4c589117b4eabde382c` (`dev`); working tree ban đầu sạch.
+Không push/deploy/apply migration, không đổi VM/service. VM kiểm tra chỉ đọc qua SSH với
+`StrictHostKeyChecking=yes` và `D:/OOTv2-VM/known_hosts`:
+`OOTv2-Judge` Running, `ootv2-official-worker` active, release cũ
+`20261024T162131Z-fc5c364044fc`, attestation full cũ `RESULT pass=14 fail=0`.
+Đây không phải evidence cho source mới và không chứng minh 2-worker/recovery.
+
+### Thay đổi trong working tree
+
+- Production guard mới `server/lib/productionSafety.js`: không tự nạp `.env` trong production;
+  fail-fast cho trusted-dev, WSL override, localhost origin, upload compatibility và seccomp off.
+- `campusSandboxFactory.js`: production yêu cầu Linux sandbox, receipt full selftest trong hạn tối đa
+  24h, đọc/kiểm receipt mỗi lần mở session; kiểm owner/mode/hash runner + seccomp generator + BPF.
+  Bump version receipt giữ nguyên v1 schema nhưng bổ sung `artifacts`; installer phải tạo receipt mới.
+- `attest.sh` ghi hash runner/generator, ghi receipt atomic; `run-bot.sh` fail-closed khi không tắt swap
+  và ưu tiên `cgroup.kill` để cleanup tiến trình con. RAM/PIDs từ budget đã pin được truyền tới session.
+- Cấm gọi legacy runner/worker và trusted session trong production. Official runtime đổi
+  `campus-runtime.v2`, hash thêm safety guard, launcher và seccomp generator; snapshot v1 không tự nâng.
+- `/api/health` thành liveness nhẹ; `/api/ready` session+admin, chỉ báo DB, ghi rõ worker chưa được kiểm.
+  Header no-store/security, CORS/proxy hiện có giữ nguyên. `worker-health --scope=judge` fail-closed
+  nếu sandbox không sẵn sàng; `workerctl health` đặt env Linux production.
+- Nâng Multer 2.4.0 → 2.5.0; khai báo Node `>=22.12.0`. Cập nhật env example, runbook vận hành,
+  thứ tự deploy/rollback/backup/restore và checklist `docs/WORKER-UNTRUSTED-READINESS.md`.
+
+### Kiểm thử / bằng chứng
+
+- Baseline build: PASS. Targeted hardening: **18/18 PASS**.
+- Full test ban đầu bắt đúng 2 assertion đang hard-code runtime v1; cập nhật test đọc version export
+  thay vì thay đổi behavior. Full suite sau đó: **460/460 PASS**, 0 skip.
+- `npm run build`: PASS (chạy lại cuối sau bản cập nhật runtime đang chờ xác nhận).
+- `npm install --ignore-scripts`: PASS; `npm audit --json` trước: 1 high (Multer), sau: **0**.
+- `git diff --check`: PASS. Bash syntax guest scripts cần ghi exit/evidence ở bước kiểm cuối.
+- Test là local Windows/mock; **không phải** sandbox acceptance VM. VM release chưa cập nhật.
+- Benchmark simulation nhạy tải host: lượt full `final2` đạt 50/50/200 view simulation (chạy đồng thời
+  với build/audit), lượt isolated cũng fail 100/200 do host throughput; suite `final3` đạt 460/460.
+  Đây không phải benchmark hạ tầng deploy; counts/worker capacity production vẫn NOT RUN.
+
+### Chưa chạy / blocker mở chấm bot lạ
+
+- Full fixture acceptance trên release mới, quyền/mode/hash thật sau provisioning.
+- Hai worker tranh job, expired lease, duplicate finish, kill giữa ván, mất DB/Storage, reboot.
+- Update hỏng/rollback trên VM; backup DB+Storage/artifact và restore disposable.
+- Browser/production smoke sau deploy; Huy/Bảo ký và tích hợp RC.
+- `trusted-dev` vẫn có thể dùng ở development với bot tin cậy; không dùng bot người lạ.
+- Deny-list seccomp và root supervisor có giới hạn threat model; chưa đủ căn cứ tuyên bố an toàn public.
+
+**Kết luận:** chặn bot lạ vẫn giữ nguyên. Chỉ mở sau khi cài đúng RC lên VM, tạo attestation mới,
+chạy mọi gate runtime/recovery ở `docs/WORKER-UNTRUSTED-READINESS.md` và ghi evidence PASS.
+
 ## 24/10/2026 (lượt 2) — dựng VM thật trên Hyper-V, chặn ở host key console
 
 Đã làm trong lượt này (chỉ trong phạm vi đã được duyệt: image/key/VM; **chưa** chuyển `.env`,

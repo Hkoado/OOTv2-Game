@@ -14,7 +14,7 @@ import { contentHash } from '../contracts/canonical.js';
 import { ROOT_DIR } from '../config.js';
 import { TERRAIN_RULES_VERSION } from '../../src/game/terrain.js';
 
-export const OFFICIAL_RUNTIME_VERSION = 'campus-runtime.v1';
+export const OFFICIAL_RUNTIME_VERSION = 'campus-runtime.v2';
 export const OFFICIAL_PROTOCOL_VERSION = 'bot.v1';
 
 /** Danh sách đóng băng; thêm/bớt file phải bump runtimeVersion và review lại. */
@@ -33,6 +33,9 @@ export const OFFICIAL_RUNTIME_FILES = Object.freeze([
   'server/judge/campusTrustedSession.js',
   'server/judge/campusSandboxFactory.js',
   'server/judge/linuxSandboxSession.js',
+  'server/lib/productionSafety.js',
+  'sandbox/linux/run-bot.sh',
+  'sandbox/linux/seccomp-profile.py',
 ]);
 
 /** Giá trị mặc định cho mùa đầu; BTC có thể đổi nhưng phải tạo budgetHash mới. */

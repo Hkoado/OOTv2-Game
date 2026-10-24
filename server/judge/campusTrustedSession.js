@@ -8,12 +8,14 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { resolveBotPath, resolvePython } from './botRunner.js';
 import { BOT_WIRE_LIMITS, BotProtocolError, parseBotJson, validateBotResponse } from '../contracts/botProtocol.js';
+import { isProduction } from '../lib/productionSafety.js';
 
 export class CampusInfrastructureError extends Error {
   constructor(code) { super(code); this.name = 'CampusInfrastructureError'; this.code = code; }
 }
 
 export async function createTrustedCampusSession({ filePath, allowedRoot, trusted = false, responseTotalMs = 45000 }) {
+  if (isProduction()) throw new CampusInfrastructureError('trusted_dev_forbidden');
   if (trusted !== true) throw new CampusInfrastructureError('trusted_dev_required');
   if (!Number.isSafeInteger(responseTotalMs) || responseTotalMs < 1) throw new CampusInfrastructureError('invalid_budget');
   let resolved;

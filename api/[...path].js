@@ -3,8 +3,8 @@
  *
  * Vì Vercel Functions có giới hạn thời gian và không có tiến trình nền:
  * - KHÔNG chạy worker, KHÔNG chạy Python, KHÔNG git clone trong function này.
- * - Worker chấm bài vẫn chạy trên máy BTC (`server/worker.js`) và ghi vào Supabase.
- * - Upload bot chỉ kiểm tra tĩnh; worker chấm thử rồi chuyển `uploaded` → `valid/invalid`.
+ * - Worker Campus chạy trên VM riêng (`server/officialWorker.js`), không dùng runner MVP.
+ * - Online nộp GitHub; intake syntax validation không đồng nghĩa sandbox acceptance.
  *
  * Vercel ưu tiên file trong `api/` trước rewrite SPA, nên `/api/health` vẫn vào đây.
  */

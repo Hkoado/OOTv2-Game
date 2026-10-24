@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import { randomUUID, scryptSync } from 'node:crypto';
 
 import { SAMPLE_MAPS } from '../src/game/sampleMaps.js';
+import { OFFICIAL_RUNTIME_VERSION } from '../server/judge/officialRuntime.js';
 
 process.env.SUPABASE_URL = 'https://example.invalid';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-only';
@@ -211,7 +212,7 @@ test('tạo đợt: bắt buộc map v2, đủ 2..56 đội tồn tại, runtime
   assert.equal(event.name, event.event.name);
   assert.equal(event.status, 'draft');
   assert.equal(event.event.map_hash.length, 64);
-  assert.equal(event.event.runtime.runtimeVersion, 'campus-runtime.v1');
+  assert.equal(event.event.runtime.runtimeVersion, OFFICIAL_RUNTIME_VERSION);
   assert.equal(event.event.rulesVersion, undefined, 'runtime chỉ nằm trong event.runtime');
   assert.equal(event.event.runtime.rulesVersion, 'ott-campus.v2');
   assert.match(event.event.runtime.runtimeHash, /^[a-f0-9]{64}$/u);

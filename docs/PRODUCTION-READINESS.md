@@ -1,5 +1,14 @@
 # Production readiness — 24/10/2026
 
+## Ưu tiên 25/10/2026 — hardening local, chưa mở bot lạ
+
+Xem [gate bot không tin cậy](WORKER-UNTRUSTED-READINESS.md) và
+[runbook hiện hành](runbook/BAN-TO-CHUC.md#6-cấu-hình-triển-khai-và-health--25102026).
+Production guard/env/health và sandbox receipt đã siết trong checkout; runtime mới
+`campus-runtime.v2`. Chưa deploy VM/Vercel, chưa apply migration. VM đọc qua SSH strict
+vẫn active trên release cũ; không coi là nghiệm thu patch mới. RC chung còn cần evidence
+Huy/Bảo và rehearsal runtime/recovery. Manual E2E tiếp tục hoãn theo docs/20.
+
 ## Phạm vi RC mới (đặc tả được duyệt, chưa nghiệm thu)
 
 [Docs/18](18-CHOT-HOAN-THIEN-VA-NGHIEM-THU.md) và [contract](19-CONTRACT-TICH-HOP.md)

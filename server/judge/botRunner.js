@@ -18,6 +18,7 @@ import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 
 import config from '../config.js';
+import { isProduction } from '../lib/productionSafety.js';
 
 export const BOT_ERROR_CODES = {
   BAD_PATH: 'bad_path',
@@ -206,6 +207,7 @@ export function parseSingleLineJson(stdout) {
  * @returns {Promise<{ ok: true, response: object } | { ok: false, errorCode: string, message: string }>}
  */
 export async function runBotRequest({ filePath, payload, timeoutMs, allowedRoot, onOutput }) {
+  if (isProduction()) throw Object.assign(new Error('legacy_runner_forbidden'), { code: 'legacy_runner_forbidden' });
   let resolvedPath;
   try {
     resolvedPath = resolveBotPath(filePath, allowedRoot);

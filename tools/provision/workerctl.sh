@@ -30,6 +30,12 @@ health_scope() {
     . "$env_file"
     set +a
   fi
+  export NODE_ENV=production
+  if [ "$queue" = judge ]; then
+    export OOTV2_CAMPUS_SANDBOX=linux-sandbox
+    export OOTV2_SANDBOX_RUNNER=/srv/ootv2/current/sandbox/linux/run-bot.sh
+    export OOTV2_SANDBOX_ATTESTATION=/run/ootv2-sandbox-attestation.json
+  fi
   "$node" tools/cli/worker-health.js --scope="$queue"
 }
 # A judge must never consume work without a fresh host attestation. The timer is what

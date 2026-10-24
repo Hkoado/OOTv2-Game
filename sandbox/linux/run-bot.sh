@@ -84,7 +84,7 @@ printf '+cpu +memory +pids' > "$CGROUP_ROOT/cgroup.subtree_control" 2>/dev/null 
 CG="$CGROUP_ROOT/$run_id"
 mkdir "$CG" || die "cgroup_create_failed"
 printf '%s' "$memory_bytes" > "$CG/memory.max" || die "cgroup_memory_failed"
-printf '0' > "$CG/memory.swap.max" 2>/dev/null || true
+printf '0' > "$CG/memory.swap.max" || die "cgroup_swap_failed"
 printf '%s' "$pids_max" > "$CG/pids.max" || die "cgroup_pids_failed"
 printf '%s' "$cpu_max" > "$CG/cpu.max" || die "cgroup_cpu_failed"
 metrics_file="$metrics"; timed_out=0; watch_pid=""; bwrap_pid=""; final_status=0; metrics_written=0
@@ -104,6 +104,7 @@ write_metrics() {
 cleanup() {
   write_metrics
   for _ in 1 2 3 4 5 6 7 8; do
+    if [ -f "$CG/cgroup.kill" ]; then printf '1' > "$CG/cgroup.kill" 2>/dev/null || true; fi
     if [ -r "$CG/cgroup.procs" ]; then
       while read -r pid; do
         [ -n "$pid" ] || continue

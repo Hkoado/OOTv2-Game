@@ -32,12 +32,14 @@ if [ "$full" = 1 ]; then
   selftest_result="$(tail -n 1 "$tmp/selftest.txt")"
 fi
 
-TMPDIR_ATTEST="$tmp" OUT="$out" SHA="$sha" FULL="$full" SELFTEST="$selftest_result" \
+TMPDIR_ATTEST="$tmp" OUT="$out" SHA="$sha" FULL="$full" SELFTEST="$selftest_result" RUNNER="$runner" \
 /usr/bin/python3 - <<'PY'
 import datetime
 import json
 import os
 import platform
+import hashlib
+import tempfile
 
 def read(name):
     with open(os.path.join(os.environ["TMPDIR_ATTEST"], name), encoding="utf-8") as handle:
@@ -71,6 +73,13 @@ attestation = {
         "probe": report.get("blocked") is True and report.get("seccomp") == "2",
     },
     "selftest": {"full": os.environ["FULL"] == "1", "result": os.environ["SELFTEST"]},
+    "artifacts": {
+        name: hashlib.sha256(open(filename, "rb").read()).hexdigest()
+        for name, filename in {
+            "runner": os.environ["RUNNER"],
+            "generator": os.path.join(os.path.dirname(os.environ["RUNNER"]), "seccomp-profile.py"),
+        }.items()
+    },
     "limitations": [
         "Deny-list seccomp, not an allowlist",
         "No protection against kernel vulnerabilities",
@@ -81,9 +90,18 @@ assert attestation["seccomp"]["probe"] is True, report
 assert attestation["seccomp"]["mode"] == "deny-list.v1", metrics
 if attestation["host"]["wsl"]:
     attestation["result"] = "dev-only"
-with open(os.environ["OUT"], "w", encoding="utf-8") as handle:
-    json.dump(attestation, handle, indent=2, sort_keys=True)
-    handle.write("\n")
+output = os.environ["OUT"]
+fd, pending = tempfile.mkstemp(prefix=".ootv2-attest-", dir=os.path.dirname(output))
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        json.dump(attestation, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(pending, output)
+finally:
+    if os.path.exists(pending):
+        os.unlink(pending)
 print(json.dumps({"result": attestation["result"], "output": os.environ["OUT"],
                   "wsl": attestation["host"]["wsl"], "seccomp": attestation["seccomp"]}))
 PY

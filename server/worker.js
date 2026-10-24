@@ -9,8 +9,10 @@ import { pathToFileURL } from 'node:url';
 
 import { assertSharedConfig } from './shared/client.js';
 import { runSharedWorker } from './shared/worker.js';
+import { isProduction } from './lib/productionSafety.js';
 
 export async function runWorker({ once = false, drain = false } = {}) {
+  if (isProduction()) throw Object.assign(new Error('legacy_worker_forbidden'), { code: 'legacy_worker_forbidden' });
   // Thiếu SUPABASE_* thì dừng ngay: không tự chuyển sang DB khác.
   assertSharedConfig();
   return runSharedWorker({ once, drain });

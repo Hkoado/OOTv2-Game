@@ -15,30 +15,44 @@ import { badRequest, sendError } from './lib/httpError.js';
 import { liveRouter } from './routes/live.js';
 import { health } from './shared/client.js';
 import { sharedRouter } from './shared/router.js';
+import { requireSession, requireLocalAdmin } from './shared/accounts.js';
+import { assertProductionSafety } from './lib/productionSafety.js';
 
 /** Nội dung `examples/sample_bot.py` cho UI hướng dẫn (không phải input của bot). */
 function readSampleBot() {
   const samplePath = path.join(ROOT_DIR, 'examples', 'sample_bot.py');
   return fs.readFileSync(samplePath, 'utf8');
 }
-export function createApp() {
+export function createApp({ checkHealth = health, sessionGuard = requireSession, adminGuard = requireLocalAdmin } = {}) {
+  assertProductionSafety();
   const app = express();
 
   app.disable('x-powered-by');
   // Reverse proxy cùng máy (Caddy/Nginx) gửi `X-Forwarded-For`/`X-Forwarded-Proto`:
   // cần biết IP thật cho rate limit và biết request là HTTPS để đặt cookie `Secure`.
   app.set('trust proxy', config.trustProxy);
-  app.use(express.json({ limit: '64kb' }));
   // Header an toàn tối thiểu cho cả web tĩnh và API (không cần CSP ở MVP).
   app.use((req, res, next) => {
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.set('X-Frame-Options', 'SAMEORIGIN');
+    if (req.path.startsWith('/api/')) res.set('Cache-Control', 'no-store');
+    if (req.secure) res.set('Strict-Transport-Security', 'max-age=31536000');
     next();
   });
+  app.use(express.json({ limit: '64kb' }));
 
-  app.get('/api/health', async (req, res) => {
-    res.json({ ok: true, service: 'ootv2-tournament-api', ...(await health()) });
+  app.get('/api/health', (req, res) => {
+    res.json({ ok: true, service: 'ootv2-tournament-api' });
+  });
+  // Liveness is public and cheap; DB readiness is admin-only and does not attest workers.
+  app.get('/api/ready', sessionGuard, adminGuard, async (req, res) => {
+    try {
+      await checkHealth();
+      res.json({ ok: true, database: 'ready', workerReadiness: 'not_checked' });
+    } catch {
+      res.status(503).json({ ok: false, error: 'database_unavailable' });
+    }
   });
 
   // Công khai, ẩn danh: chỉ dữ liệu L1 (bàn cờ + nước đi), có rate limit riêng.

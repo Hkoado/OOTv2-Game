@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { EMPTY_TERRAIN_MAP } from '../src/game/maps.js';
 import { buildGroupSnapshot } from '../server/services/officialRounds.js';
+import { OFFICIAL_RUNTIME_VERSION } from '../server/judge/officialRuntime.js';
 
 process.env.SUPABASE_URL = 'https://example.invalid';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-only';
@@ -70,7 +71,7 @@ test('buildGroupSnapshot pins only authoritative receipts completed after cutoff
   assert.equal(snapshot.bots[2].sourceKind, 'github');
   assert.equal(snapshot.bots[0].receiptId, 'receipt-0');
   assert.match(snapshot.contentHash, /^[a-f0-9]{64}$/);
-  assert.equal(snapshot.runtime.runtimeVersion, 'campus-runtime.v1');
+  assert.equal(snapshot.runtime.runtimeVersion, OFFICIAL_RUNTIME_VERSION);
 });
 
 for (const state of ['missing', 'resolving', 'invalid', 'infrastructure', 'wrong_hash', 'wrong_receipt', 'wrong_sha', 'wrong_repo', 'early_capture']) {

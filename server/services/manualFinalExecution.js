@@ -98,6 +98,7 @@ function startSessionAdapter({ factory, budget }) {
   return async (side) => factory({ ...side,
     allowedRoot: side.allowedRoot ?? config.artifactCacheDir,
     responseTotalMs: budget.responseTotalMs, cpuTotalMs: budget.cpuTotalMs,
+    memoryBytes: budget.memoryBytes, pids: budget.pids,
     trusted: factory.trustedDev === true });
 }
 

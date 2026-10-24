@@ -11,7 +11,6 @@
  * Chạy: `node tools/cli/worker-health.js [--scope=github|judge|all] [--json]`.
  * Exit 0 = dùng được, 1 = thiếu điều kiện, 64 = tham số sai.
  */
-import { readFileSync } from 'node:fs';
 import { githubClaimHealthy, jsonbClaimHealthy, jsonbGuardHealthy } from './workerHealthProbes.js';
 import '../../server/config.js';
 
@@ -163,17 +162,16 @@ if (base && key && wants('judge')) {
   }
 }
 
-if (wants('judge') && process.platform === 'linux') {
+if (wants('judge')) {
   // Chỉ trên guest Linux: attestation phải còn hạn NGAY BÂY GIỜ, không chỉ lúc cài.
   // `workerctl start` gọi probe này nên VM hết hạn chứng nhận sẽ từ chối nhận việc mới.
-  const attestationPath = process.env.OOTV2_SANDBOX_ATTESTATION || '/run/ootv2-sandbox-attestation.json';
   try {
-    const { validateAttestation } = await import('../../server/judge/campusSandboxFactory.js');
-    const attestation = validateAttestation(readFileSync(attestationPath, 'utf8'), {});
-    record('judge', 'sandbox_attestation', true, `${attestation.profile} expires ${attestation.expiresAt}`);
+    const { assertCampusSandboxReady } = await import('../../server/judge/campusSandboxFactory.js');
+    const ready = assertCampusSandboxReady();
+    const ok = ready.mode === 'linux-sandbox' && !ready.trustedDev;
+    record('judge', 'sandbox_attestation', ok, ok ? 'Linux sandbox preflight passed' : 'trusted-dev is not production readiness');
   } catch (error) {
-    record('judge', 'sandbox_attestation', false,
-      `${error?.code || error?.message || 'invalid_attestation'} (${attestationPath})`);
+    record('judge', 'sandbox_attestation', false, error?.code || 'sandbox_preflight_failed');
   }
 }
 

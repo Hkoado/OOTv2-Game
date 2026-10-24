@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { assertProductionSafety, isProduction } from './lib/productionSafety.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -32,7 +33,11 @@ function parseEnvText(text) {
  * @param {Record<string, string|undefined>} [env] Đích ghi, mặc định `process.env`.
  * @returns {{ file: string, loaded: number }}
  */
-export function loadEnvFile(envFile = process.env.OOTV2_ENV_FILE || '.env', env = process.env) {
+export function loadEnvFile(envFile, env = process.env) {
+  envFile ??= env.OOTV2_ENV_FILE;
+  // Production consumes service/platform env only, unless an operator explicitly selects a file.
+  if (!envFile && isProduction(env)) return { file: null, loaded: 0 };
+  envFile ||= '.env';
   const file = path.isAbsolute(envFile) ? envFile : path.join(ROOT_DIR, envFile);
   if (!existsSync(file)) {
     // Chỉ cảnh báo khi người dùng chỉ định rõ file: thiếu `.env` là bình thường.
@@ -55,6 +60,7 @@ export function loadEnvFile(envFile = process.env.OOTV2_ENV_FILE || '.env', env 
 }
 
 loadEnvFile();
+assertProductionSafety();
 
 function resolveFromRoot(value, fallback) {
   if (!value) return fallback;
