@@ -30,6 +30,7 @@
     "replay:verify": "node tools/cli/verify-replay.js",
     "offline:bundle": "node tools/cli/offline-bundle.js",
     "demo:campus": "node tools/cli/demo-campus.js",
+    "bots:drill": "node tools/cli/campus-bots-drill.js",
     "smoke:ui": "node tools/cli/smoke-ui.js",
     "db:verify": "node tools/cli/verify-shared-db.js",
     "worker:github": "node server/githubWorker.js",
