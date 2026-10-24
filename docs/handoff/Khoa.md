@@ -1,5 +1,37 @@
 # Kết quả Khoa — Scheduler / worker / runtime
 
+## 25/10/2026 — Gate chính, sau commit a137f63
+
+- Phạm vi assignment 25/10: code/config/health/runbook hoàn thiện; **chưa ký RC tổng thể**
+  hoặc mở intake bot lạ. Hoãn edge/operational rehearsal, không bỏ guard runtime.
+- VM fixture acceptance thật tại `/srv/ootv2-test/main-gates-a137f63`, root-owned/non-writable;
+  private mount namespace + tmpfs `/run`, env rỗng allowlist và cgroup UUID riêng.
+  Có chép source test/chạy fixtures trên VM; **không** deploy service, đổi current,
+  nạp credential DB, claim queue, push hay apply migration.
+- Full attestation PASS và **8/8 gate PASS**: production preflight, expired receipt,
+  runner hash mismatch, 2 session song song với RAM/PIDs/swap đúng budget, trận Campus v2
+  + replay verify, abort giữa trận + recovery, stdout bounded, cleanup cgroup.
+- Drill bắt lỗi thật `cleanup_not_confirmed`: watchdog sleep giữ protocol pipe mở.
+  Đã redirect watchdog stdio và trap kill/wait sleep; chạy lại VM PASS. Có regression local.
+- Runtime vẫn `campus-runtime.v2`; launcher đổi nên hash mới
+  `8887cd2531b20c12e1824adfbf1a924f410c515e79006a5e95cd9893c70337c1`.
+  Hash Windows/Linux khớp; không sửa snapshot cũ. Service vẫn active trên release
+  `20261024T162131Z-fc5c364044fc`, không phải source vừa nghiệm thu trong thư mục test.
+- Full regression **462/462 PASS**, 0 skip (`data/khoa-main-gates/tests-final2.log`).
+  Evidence VM: `data/khoa-main-gates/vm-final.log`; lần lỗi giữ tại `debug.log`.
+- Build PASS (4.82s, còn cảnh báo chunk >500 kB); manual-worker drill **9/9 PASS**
+  với DB/Storage/Python mô phỏng, không phải PostgreSQL acceptance. Bash syntax,
+  Node syntax và `git diff --check` PASS. Evidence tại `data/khoa-main-gates/`.
+- **NOT RUN/hoãn:** 2 consumer DB thật/lease reclaim/stale finish/duplicate finish trên release này,
+  DB/Storage outage thật, reboot, failed update/rollback, disposable restore, production smoke
+  và chữ ký Huy/Bảo. Hai sandbox session KHÔNG phải hai worker tranh queue PostgreSQL.
+- Deny-list/root supervisor còn giới hạn threat model. Sandbox fixture PASS không đồng nghĩa
+  public untrusted readiness; không ký thay owner khác hoặc coi hoãn là PASS.
+
+Chạy lại fixture (chỉ trên thư mục test Linux riêng, root-owned):
+`sudo bash tools/provision/test-main-gates.sh --fixtures-only`.
+Không chạy trên API host hoặc trong maintenance window không cho phép tải fixture.
+
 ## 25/10/2026 — RC online tối giản: hardening local + runbook
 
 Base checkout: `be8d17fd0bc5def03d75f4c589117b4eabde382c` (`dev`); working tree ban đầu sạch.
@@ -31,12 +63,12 @@ Không push/deploy/apply migration, không đổi VM/service. VM kiểm tra ch�
 - Baseline build: PASS. Targeted hardening: **18/18 PASS**.
 - Full test ban đầu bắt đúng 2 assertion đang hard-code runtime v1; cập nhật test đọc version export
   thay vì thay đổi behavior. Full suite sau đó: **460/460 PASS**, 0 skip.
-- `npm run build`: PASS (chạy lại cuối sau bản cập nhật runtime đang chờ xác nhận).
+- `npm run build`: PASS (`data/khoa-hardening/final2-build.status`).
 - `npm install --ignore-scripts`: PASS; `npm audit --json` trước: 1 high (Multer), sau: **0**.
-- `git diff --check`: PASS. Bash syntax guest scripts cần ghi exit/evidence ở bước kiểm cuối.
+- `git diff --check`: PASS. Bash syntax PASS (`data/khoa-hardening/bash-final2.status`).
 - Test là local Windows/mock; **không phải** sandbox acceptance VM. VM release chưa cập nhật.
-- Benchmark simulation nhạy tải host: lượt full `final2` đạt 50/50/200 view simulation (chạy đồng thời
-  với build/audit), lượt isolated cũng fail 100/200 do host throughput; suite `final3` đạt 460/460.
+- Benchmark simulation nhạy tải host: lượt full `final2` FAIL 200 viewers ở 188.5 RPS (<200),
+  lượt isolated cũng fail 100/200 do host throughput; suite `final3` đạt 460/460.
   Đây không phải benchmark hạ tầng deploy; counts/worker capacity production vẫn NOT RUN.
 
 ### Chưa chạy / blocker mở chấm bot lạ

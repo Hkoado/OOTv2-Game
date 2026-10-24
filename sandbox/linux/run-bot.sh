@@ -144,12 +144,16 @@ if [ -n "$seccomp_fd" ]; then mount_args+=(--seccomp "$seccomp_fd"); fi
 [ -f /etc/ld.so.cache ] && mount_args+=(--ro-bind /etc/ld.so.cache /etc/ld.so.cache)
 [ -f /etc/localtime ] && mount_args+=(--ro-bind /etc/localtime /etc/localtime)
 watchdog() {
-  sleep "$(awk -v ms="$timeout_ms" 'BEGIN { printf "%.3f", ms / 1000 }')"
+  local sleeper
+  sleep "$(awk -v ms="$timeout_ms" 'BEGIN { printf "%.3f", ms / 1000 }')" &
+  sleeper=$!
+  trap 'kill "$sleeper" 2>/dev/null || true; wait "$sleeper" 2>/dev/null || true; exit 0' TERM INT
+  wait "$sleeper"
   printf '1' > "$TIMEOUT_FLAG" 2>/dev/null || true
   kill -TERM "$$" 2>/dev/null || true
 }
 TIMEOUT_FLAG="${TMPDIR:-/tmp}/ootv2-sandbox-${run_id}.timeout"
-watchdog &
+watchdog </dev/null >/dev/null 2>&1 &
 watch_pid=$!
 exec 3<&0
 set +e

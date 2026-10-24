@@ -15,6 +15,24 @@ function findBash() {
   return probe.status === 0 ? 'bash' : null;
 }
 
+test('sandbox watchdog is reaped without inheriting bot protocol pipes', () => {
+  const script = read('sandbox/linux/run-bot.sh');
+  assert.match(script, /watchdog <\/dev\/null >\/dev\/null 2>&1 &/);
+  assert.match(script, /sleeper=\$!/);
+  assert.ok(script.includes('kill "$sleeper"'));
+  assert.ok(script.includes('wait "$sleeper"'));
+});
+
+test('main-gate drill isolates mounts, environment and cgroups without deploying services', () => {
+  const script = read('tools/provision/test-main-gates.sh');
+  assert.match(script, /env -i/);
+  assert.match(script, /unshare --mount --propagation private/);
+  assert.match(script, /mount -t tmpfs .* \/run/);
+  assert.match(script, /ootv2-drill-/);
+  assert.doesNotMatch(script, /systemctl|SUPABASE_SERVICE_ROLE_KEY|ln -s/);
+  assert.match(read('sandbox/linux/selftest.sh'), /ls -A "\$cgroup_root"/);
+});
+
 test('Windows VM provisioning verifies an empty SSH key passphrase without a prompt', () => {
   const script = read('tools/vm/New-JudgeVM.ps1');
   assert.match(script, /Diagnostics\.ProcessStartInfo/);
