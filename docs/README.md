@@ -1,6 +1,7 @@
 # OTTv2 — Bộ tài liệu giải đấu và giao diện
 
 **Trạng thái nghiệm thu hiện hành:** [Production readiness](PRODUCTION-READINESS.md).
+**DB mới / bộ dựng Hyper-V đang triển khai:** [Production bootstrap](PRODUCTION-BOOTSTRAP.md).
 Phân biệt code/test local, migration remote và sandbox thật; các handoff/drill cũ
 không phải tuyên bố hệ thống đã production-ready.
 

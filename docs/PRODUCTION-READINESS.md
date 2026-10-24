@@ -5,6 +5,16 @@ dịch vụ nhận code không tin cậy là hai mốc riêng biệt. Không b�
 
 ## Mốc đã kiểm tra trong đợt rà soát
 
+### Checkpoint bootstrap tiếp theo — 24/10/2026
+
+Đích `.env` đã đổi sang project mới `ftzockzolisecnyhlwej`. Đã apply **chỉ
+foundation** và đọc lại 13 bảng RLS; không được hiểu các kết quả remote project
+cũ bên dưới là nghiệm thu project mới. Bộ script DB/Hyper-V đã thêm nhưng VM
+chưa tạo, official worker chưa nối, migration runtime/capture còn thiếu.
+Chi tiết và lệnh: [Production bootstrap](PRODUCTION-BOOTSTRAP.md).
+Audit mới trong checkpoint báo **1 high (multer)**; kết quả 0 vulnerabilities
+bên dưới là lịch sử, không còn là trạng thái hiện tại.
+
 - Baseline: 326/326 tests, không skip; build exit 0.
 - `npm audit` ban đầu báo 3 dependency high. `npm audit fix --ignore-scripts`
   (không force) cập nhật body-parser 2.4.0, qs 6.16.1, source-map-js 1.2.2,

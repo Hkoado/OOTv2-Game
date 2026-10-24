@@ -21,6 +21,7 @@
     "demo:campus": "node tools/cli/demo-campus.js",
     "smoke:ui": "node tools/cli/smoke-ui.js",
     "db:verify": "node tools/cli/verify-shared-db.js",
+    "db:production": "node tools/cli/production-db.js",
     "db:admin": "node tools/cli/create-admin.js",
     "db:check-github": "node tools/cli/check-github-db.js",
     "db:apply-migrations": "node tools/cli/apply-migrations.js",

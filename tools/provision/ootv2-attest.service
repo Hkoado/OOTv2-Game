@@ -1,0 +1,11 @@
+[Unit]
+Description=OOTv2 sandbox full acceptance and short-lived attestation
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/srv/ootv2
+ExecStart=/bin/bash /srv/ootv2/sandbox/linux/attest.sh /run/ootv2-sandbox-attestation.json --full
+TimeoutStartSec=180
+UMask=0077
