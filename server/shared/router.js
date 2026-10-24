@@ -16,6 +16,7 @@ import { isAllowedOrigin } from '../lib/origin.js';
 import config from '../config.js';
 import { onlineUploadDecision } from './uploadPolicy.js';
 import { manualFinalRouter } from '../routes/manualFinal.js';
+import { officialRouter } from '../routes/official.js';
 import { EMPTY_MAP } from '../../src/game/maps.js';
 
 const forbidden=()=>new HttpError(403,'scope_denied','Không có quyền truy cập dữ liệu này.');
@@ -83,6 +84,8 @@ export function sharedRouter() {
   router.post('/logout',async(req,res)=>{await accounts.logout(req.session);res.clearCookie(accounts.COOKIE_NAME,clearCookieOptions(req));res.clearCookie(accounts.COOKIE_NAME,legacyClearCookieOptions(req));res.json({ok:true});});
   // Chung kết thủ công (BTC-only): module riêng, không mở cổng upload online của đội.
   router.use('/manual-finals', manualFinalRouter());
+  // Vòng chính thức K3 (BTC-only): publish/progress/standings/freeze/knockout/tickets + cancel-requeue job.
+  router.use(officialRouter());
   router.put('/profile',async(req,res)=>res.json({account:await accounts.updateProfile(req.account.id,req.body||{})}));
   router.get('/teams',requireLocalAdmin,async(req,res)=>{
     const [a,p]=await Promise.all([accounts.listAccounts(),participants.listParticipants()]);res.json({accounts:a,participants:p});
