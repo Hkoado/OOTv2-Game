@@ -121,31 +121,29 @@
 - `npm test` **399/399 pass**, `npm run build` pass (route test nằm ngoài `tests/` nên không đổi con số).
 - Bảo: nối UI theo docs/19 §7; Khoa: không cần đổi service, route chỉ gọi export hiện có.
 
-### E2E online trên DB dev + đánh giá RC (24/10/2026)
+### E2E online + bootstrap DB thật (24/10/2026)
 
-- Đọc lại 2 file env theo yêu cầu: `.env` → **DB thật** `ftzockzolisecnyhlwej` (**chưa có schema**:
-  mọi bảng runtime 404); `.envdev` → **DB dev** `wsyfcgurnrowcuefwynx` (đã có đủ schema).
-- Token `SUPABASE_ACCESS_TOKEN` trong `.env` bị **thiếu tiền tố `sb`** (dài 42, không bắt đầu `sbp_`) ⇒ mọi
-  lệnh Management API trả 401. Đã bổ sung tiền tố (không in token); sau đó xác nhận token chỉ thấy
-  **project dev** `wsyfcgurnrowcuefwynx` (SQL 201), còn `ftzockzolisecnyhlwej` trả **403** (không đủ quyền).
-- Đã apply `20261026120000_ko_round_roster_guard.sql` trên **DB dev** (Kiểm `prosrc` = patched) — trigger
-  cho phép round knockout pin 2 đội, giữ nguyên mọi kiểm capture/receipt/submission.
-- `tools/cli/e2e-online-drill.js`: repo → intake → cutoff → snapshot vòng bảng → chấm engine thật
-  (trusted-dev + Python) → standings → freeze → knockout → vé; GitHub API là test double tại `fetch`.
-- **Kết quả (log `data/e2e-online-ko2.txt`/`ko3.txt`)**: intake 4/4 valid; cutoff 4/4 pin; vòng bảng 12/12
-  ván accepted; standings complete (4 qualifiers); freeze PASS; **knockout mở + tiến series PASS**;
-  nhưng series **toàn hòa** ⇒ `resolveOfficialKnockoutSeries` ném `series_invalid` sau extra game ⇒
-  chưa tới vé. Cần chốt tie-break (seed/administrative) — không tự bịa kết quả.
-- Replay: `mvp_official_games` chỉ có `replay_hash`; payload replay ở `mvp_official_job_attempts.replay`
-  (12/12 ván của drill có đủ).
-- **Publication official CHƯA hỗ trợ**: `mvp_match_broadcasts` chỉ tham chiếu `mvp_matches`.
-- Đã xuất bundle khởi tạo cho DB thật: `data/production/fresh-database.sql` (18 migration, gitignored).
-- **RC: CHƯA ĐẠT.** Blocker:
-  1. DB thật chưa có schema; token hiện tại **không có quyền** trên project thật ⇒ phải dùng SQL Editor
-     dán bundle (hoặc cấp token của project đó) rồi mới deploy được.
-  2. Series knockout toàn hòa chưa có tie-break ⇒ có thể chặn giải thật (cần BTC/Khoa chốt luật).
-  3. Publication/replay cho official games chưa có (chỉ MVP).
-  4. VM/2-worker thật + browser E2E + restore rehearsal vẫn NOT RUN.
+- Token mới (có `sbp_`) **chỉ thấy project thật** `ftzockzolisecnyhlwej`; dev `wsyfcgurnrowcuefwynx` không
+  còn quyền Management API (REST/service key vẫn dùng được).
+- **DB thật đã bootstrap**: `node tools/cli/apply-migrations.js --bootstrap --apply --smoke` → 19 migration
+  (gồm `shared runtime` 125205/125322 vừa thêm vào PLAN), heartbeat manual
+  `20261026130000` (đổi tên từ `…120000` vì trùng version; file chưa từng apply remote) và
+  `20261026140000_official_broadcast` (mới). Smoke PASS, dữ liệu rỗng. `db:verify`, `db:check-github`,
+  `db:manual` PASS trên project thật; `mvp_official_*`/`mvp_manual_final_*` prosrc đã vá đúng.
+- **Bug knockout (root cause)**: `nextSeriesGame` truyền cả kết quả ván phụ vào lần pin ván chính ⇒
+  `assignNextOfficialGameColor` ném `Invalid color result` ⇒ `series_invalid` sau ván phụ đầu tiên.
+  Đã lọc theo `mainGames`; test hồi quy `tests/officialKnockoutResolve.test.js`.
+- **E2E dev**: `PASS 13/13` — intake 4/4, cutoff 4/4, vòng bảng 12/12, standings, freeze, knockout
+  `bracket_complete` 4/4 (mọi series toàn hòa → thắng theo seed), vé `awarded=2/vacant=0`, replay 12/12.
+- **Publication official**: migration + `server/services/officialBroadcasts.js` + 3 route
+  (`PUT/GET …/broadcast`, `GET …/viewer`) + 8 unit test; rehearsal SQL trên DB thật (2 guard) và
+  **E2E trên DB thật** bằng fixture tạm (window không lộ kết quả → `full` mở 12/12 replay → đội ngoài giải
+  `scope_denied` → dọn sạch, đếm lại 0). Trên dev drill tự `SKIP` vì dev chưa có bảng này.
+- **Còn NOT RUN**: browser E2E (Bảo), VM/2-worker thật (Khoa), restore rehearsal, và **UI viewer** cho
+  publication official — Bảo nối theo contract `docs/19` §7.
+- `npm test` **430/430**, `npm run build` pass, `git diff --check` sạch.
+- **RC: chưa ký.** Các gate còn lại thuộc Bảo (browser/UI) và Khoa (VM, restore); phần DB/API/E2E của Huy
+  đã xong và có log.
 
 
 ### Việc của người khác (không tự làm thay)

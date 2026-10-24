@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { validateManualOutcome } from '../server/shared/manualFinalJobs.js';
 
 test('additive manual migration fences expired leases, bounds reclaim attempts and restricts heartbeat grants', () => {
-  const sql = readFileSync(new URL('../supabase/migrations/20261026120000_manual_worker_heartbeat.sql', import.meta.url), 'utf8');
+  const sql = readFileSync(new URL('../supabase/migrations/20261026130000_manual_worker_heartbeat.sql', import.meta.url), 'utf8');
   assert.match(sql, /lease_until > clock_timestamp\(\)/);
   assert.match(sql, /j\.lease_until <= clock_timestamp\(\)/);
   assert.match(sql, /j\.attempt >= j\.max_attempts/);

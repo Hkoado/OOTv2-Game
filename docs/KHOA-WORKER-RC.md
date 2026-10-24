@@ -14,7 +14,9 @@
 
 ## Schema/code deployment order
 
-Migration mới `20261026120000_manual_worker_heartbeat.sql` **CHƯA APPLY REMOTE**.
+Migration mới `20261026130000_manual_worker_heartbeat.sql` (đổi tên từ `20261026120000_…` vì trùng version
+với `ko_round_roster_guard`; file chưa từng apply remote nên đổi tên an toàn). **Huy đã apply trên DB thật
+`ftzockzolisecnyhlwej` ngày 24/10** (prosrc `claim`/`finish`/`release` đã vá, RPC heartbeat chỉ service_role).
 Apply theo migration history, trước consumer mới. Không sửa migration manual gốc.
 RPC heartbeat `mvp_manual_final_heartbeat(uuid,uuid,integer,integer)` chỉ service_role,
 kiểm running/token/generation/expiry; false `lease_lost` không hồi sinh lease hết hạn.

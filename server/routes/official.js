@@ -12,11 +12,12 @@
 import { Router } from 'express';
 
 import { HttpError } from '../lib/httpError.js';
-import { requireLocalAdmin } from '../shared/accounts.js';
+import { requireLocalAdmin, requireSession } from '../shared/accounts.js';
 import { findOfficialRound } from '../shared/officialSchedule.js';
 import { setupFor } from '../shared/officialSetup.js';
 import * as orchestration from '../services/officialOrchestration.js';
 import * as knockout from '../services/officialKnockout.js';
+import * as broadcasts from '../services/officialBroadcasts.js';
 
 const LEVELS = Object.freeze(['weekly', 'monthly', 'semester']);
 const fail = (status, code, message) => new HttpError(status, code, message);
@@ -34,6 +35,9 @@ export const liveOfficialApi = Object.freeze({
   bracketProgress: knockout.bracketProgress,
   openNextKnockoutSeries: knockout.openNextKnockoutSeries,
   knockoutTickets: knockout.knockoutTickets,
+  scheduleBroadcast: broadcasts.scheduleOfficialGameBroadcast,
+  broadcastState: broadcasts.officialBroadcastState,
+  broadcastViewer: broadcasts.officialGameViewerPackage,
 });
 
 export function requireReason(value) {
@@ -151,6 +155,27 @@ export function officialRouter({ api = liveOfficialApi } = {}) {
     const level = await eventLevel(req.params.id, api);
     const result = await api.knockoutTickets({ groupRoundId: roundId, level });
     res.json({ event_id: req.params.id, round_id: roundId, ...result });
+  });
+
+  // ---- Publication ván official: chấm xong mới đặt lịch; viewer chỉ thấy ply đã phát ----
+  router.put('/official/rounds/:roundPk/games/:gameKey/broadcast', requireLocalAdmin, async (req, res) => {
+    const result = await api.scheduleBroadcast({ roundPk: req.params.roundPk,
+      gameKey: req.params.gameKey, account: req.account, body: req.body ?? {} });
+    res.json({ round_pk: req.params.roundPk, game_key: req.params.gameKey, ...result });
+  });
+
+  router.get('/official/rounds/:roundPk/games/:gameKey/broadcast', requireLocalAdmin, async (req, res) => {
+    const result = await api.broadcastState({ roundPk: req.params.roundPk,
+      gameKey: req.params.gameKey, account: req.account });
+    res.json({ round_pk: req.params.roundPk, game_key: req.params.gameKey, ...result });
+  });
+
+  /** Viewer: cần phiên đăng nhập + thuộc giải; chỉ dữ liệu đã tới hạn phát. */
+  router.get('/official/rounds/:roundPk/games/:gameKey/viewer', requireSession, async (req, res) => {
+    const afterSeq = req.query?.after_seq ?? req.query?.afterSeq ?? 0;
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await api.broadcastViewer({ roundPk: req.params.roundPk,
+      gameKey: req.params.gameKey, account: req.account, afterSeq }));
   });
 
   // ---- Hủy / chấm lại job (bắt buộc lý do, giữ audit ở DB) ----
