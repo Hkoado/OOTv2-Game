@@ -24,7 +24,7 @@ const LIMITS = Object.freeze({
   worker_poll_ms: config.limits.workerPollMs,
 });
 
-const MATCH_FIELDS = 'id,stage,series_id,game_no,status,result,reason,ply_count,started_at,finished_at,red_entry_id,blue_entry_id,worker_id,lease_until';
+const MATCH_FIELDS = 'id,tournament_id,stage,series_id,game_no,status,result,reason,ply_count,started_at,finished_at,red_entry_id,blue_entry_id,worker_id,lease_until';
 
 async function namesByEntry(eventId) {
   const [entries, participants] = await Promise.all([
