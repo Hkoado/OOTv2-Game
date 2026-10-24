@@ -188,8 +188,12 @@ Nguồn: `server/routes/official.js` (mount trong `server/shared/router.js`), b�
 | `POST /api/local/official/jobs/:jobId/cancel` | `{reason}` (5..400) | `{job_id, alreadyCancelled, reason}` |
 | `POST /api/local/official/jobs/:jobId/requeue` | `{reason}` (5..400) | `{job_id, status, reason}` |
 | `PUT /api/local/official/rounds/:roundPk/games/:gameKey/broadcast` | `{starts_at, ply_interval_ms?, release_mode?, state?}` | `{broadcast, game}` (admin) |
-| `GET /api/local/official/rounds/:roundPk/games/:gameKey/broadcast` | — | `{broadcast:{phase,visible_plies,total_plies,reveal_result,...}, round_id, game}` (admin) |
+| `GET /api/local/official/rounds/:roundPk/games/:gameKey/broadcast` | — | `{broadcast:{phase,visible_plies,total_plies,reveal_result,...}, round_id, game}` (admin & thành viên giải khi published) |
 | `GET /api/local/official/rounds/:roundPk/games/:gameKey/viewer?after_seq=` | — | `{schema_version:'official-broadcast.v1', phase, events[], reveal_result, ...}` (thành viên giải) |
+| `GET /api/local/events/:id/official/published/standings` | — | `{published:true, event_id, round_id, complete, games, groups, ...}` (thành viên giải khi round đã freeze; 409 `round_not_published` nếu chưa) |
+| `GET /api/local/events/:id/official/published/bracket` | — | `{published:true, event_id, round_id, series, qualifiers, ...}` (thành viên giải khi round đã freeze; 409 `round_not_published` nếu chưa) |
+| `GET /api/local/events/:id/official/published/tickets` | — | `{published:true, event_id, round_id, ranking, tickets}` (thành viên giải khi knockout xong; 409 `tickets_not_published` nếu chưa) |
+| `GET /api/local/events/:id/official/published/games` | — | `{published:true, event_id, round_id, games:[{game_key, stage, broadcast:{phase, ...}}]}` (danh sách ván đã công bố) |
 
 Quy tắc publication official (`server/services/officialBroadcasts.js`, migration `20261026140000`):
 

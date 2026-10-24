@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { computeBroadcast } from '../server/shared/publication.js';
 import { officialViewerPackage, scheduleOfficialGameBroadcast, officialBroadcastState,
-  trimOfficialReplay, replayPlyCount, officialBroadcastView } from '../server/services/officialBroadcasts.js';
+  trimOfficialReplay, replayPlyCount, officialBroadcastView, listPublishedOfficialGames } from '../server/services/officialBroadcasts.js';
 
 const ROUND = '11111111-1111-4111-8111-111111111111';
 const GAME = 'semifinal:1:main:1';
@@ -116,4 +116,40 @@ test('đội chưa được công bố thì không xem được trạng thái, a
   { load: async () => frozen({ broadcast: row() }), member: async () => {} });
   assert.equal(admin.broadcast.phase, 'ended');
   assert.equal(admin.round_id, 'ko:semifinal:1');
+});
+
+test('listPublishedOfficialGames chỉ trả ván đã công bố cho đội thi, admin thấy cả ván canceled/hidden', async () => {
+  const round = { id: ROUND, event_id: EVENT, round_id: 'group', frozen: true };
+  const bCanceled = row({ game_key: 'g_canceled', state: 'canceled', canceled_at: '2026-10-24T09:30:00.000Z' });
+  const bLive = row({ game_key: 'g_live', starts_at: '2026-10-24T09:00:00.000Z' });
+  const gameRows = [
+    { round_pk: ROUND, game_key: 'g_canceled', stage: 'group', ply_count: 5 },
+    { round_pk: ROUND, game_key: 'g_live', stage: 'group', ply_count: 5 },
+  ];
+
+  const deps = {
+    loadRound: async () => round,
+    member: async () => {},
+    loadBroadcasts: async () => [bLive, bCanceled],
+    loadGames: async () => gameRows,
+  };
+
+  const now = Date.parse('2026-10-24T10:00:00.000Z');
+
+  // Đội thi: chỉ thấy g_live (đã công bố/phát), g_canceled là hidden nên bị loại
+  const forTeam = await listPublishedOfficialGames({
+    roundPk: ROUND,
+    account: { role: 'team', participant_id: PLAYER_B },
+    now,
+  }, deps);
+  assert.equal(forTeam.games.length, 1);
+  assert.equal(forTeam.games[0].game_key, 'g_live');
+
+  // Admin: thấy cả 2 ván (gồm cả ván canceled)
+  const forAdmin = await listPublishedOfficialGames({
+    roundPk: ROUND,
+    account: { role: 'admin' },
+    now,
+  }, deps);
+  assert.equal(forAdmin.games.length, 2);
 });

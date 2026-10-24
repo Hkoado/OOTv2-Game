@@ -59,6 +59,7 @@ export async function login(username,password,{ remember = false } = {}) {
   };
 }
 export async function requireSession(req,res,next) {
+  if (req.account) return next();
   try {
     const token = (req.headers.cookie || '').split(';').map((p)=>p.trim()).find((p)=>p.startsWith(`${COOKIE_NAME}=`))?.slice(COOKIE_NAME.length+1);
     if (!token || !/^[a-f0-9]{64}$/.test(token)) throw fail(401,'login_required','Vui lòng đăng nhập.');

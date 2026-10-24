@@ -1,9 +1,11 @@
 /**
- * official.js (routes) — API vòng chính thức K3 (BTC/admin).
+ * official.js (routes) — API vòng chính thức K3 (BTC/admin & Đội thi).
  *
  * Bọc service của Khoa (`officialOrchestration`, `officialKnockout`) thành route + DTO ổn định
  * cho UI Bảo. Nguyên tắc:
- * - Admin-only: kết quả/standings/bracket còn kín trước công bố, không mở cho đội/anonymous.
+ * - Admin-only cho các route điều hành/kết quả chưa công bố (`/events/:id/official/*`).
+ * - Route công bố cho thành viên giải (`/events/:id/official/published/*`): yêu cầu phiên (`requireSession`)
+ *   và membership giải (`assertMember`); chỉ trả standings/bracket/tickets khi giai đoạn tương ứng đã công bố/kết thúc.
  * - Mỗi request chỉ resolve `group` round của đúng event; không nhận roundId tuỳ ý từ client.
  * - Không trả snapshot private, artifact key hay cấu trúc bracket nội bộ; chỉ DTO whitelist.
  * - Không tự tạo ván/kết quả: mọi thay đổi đi qua service + RPC có fence của Khoa.
@@ -15,6 +17,7 @@ import { HttpError } from '../lib/httpError.js';
 import { requireLocalAdmin, requireSession } from '../shared/accounts.js';
 import { findOfficialRound } from '../shared/officialSchedule.js';
 import { setupFor } from '../shared/officialSetup.js';
+import { assertEventMember } from '../shared/publication.js';
 import * as orchestration from '../services/officialOrchestration.js';
 import * as knockout from '../services/officialKnockout.js';
 import * as broadcasts from '../services/officialBroadcasts.js';
@@ -26,6 +29,7 @@ const fail = (status, code, message) => new HttpError(status, code, message);
 export const liveOfficialApi = Object.freeze({
   findRound: findOfficialRound,
   setup: setupFor,
+  assertMember: assertEventMember,
   publishNextGame: orchestration.publishNextGame,
   roundProgress: orchestration.roundProgress,
   groupStandings: orchestration.groupStandings,
@@ -38,6 +42,7 @@ export const liveOfficialApi = Object.freeze({
   scheduleBroadcast: broadcasts.scheduleOfficialGameBroadcast,
   broadcastState: broadcasts.officialBroadcastState,
   broadcastViewer: broadcasts.officialGameViewerPackage,
+  listPublishedGames: broadcasts.listPublishedOfficialGames,
 });
 
 export function requireReason(value) {
@@ -108,7 +113,7 @@ export function bracketView({ eventId, groupRoundId: roundId, progress }) {
 export function officialRouter({ api = liveOfficialApi } = {}) {
   const router = Router();
 
-  // ---- Vòng bảng: tiến độ, bảng xếp hạng, phát ván kế tiếp, khóa vòng ----
+  // ---- Vòng bảng (Admin-only): tiến độ, bảng xếp hạng kín, phát ván kế tiếp, khóa vòng ----
   router.get('/events/:id/official/progress', requireLocalAdmin, async (req, res) => {
     const roundId = await groupRoundId(req.params.id, api);
     const progress = await api.roundProgress({ roundId });
@@ -135,7 +140,7 @@ export function officialRouter({ api = liveOfficialApi } = {}) {
     res.json({ round_id: roundId, ...await api.freezeGroupRound({ roundId, expectedGames: expected }) });
   });
 
-  // ---- Knockout: bracket, mở/tiến series, vé ----
+  // ---- Knockout (Admin-only): bracket, mở/tiến series, vé ----
   router.get('/events/:id/official/bracket', requireLocalAdmin, async (req, res) => {
     const roundId = await groupRoundId(req.params.id, api);
     const level = await eventLevel(req.params.id, api);
@@ -157,6 +162,52 @@ export function officialRouter({ api = liveOfficialApi } = {}) {
     res.json({ event_id: req.params.id, round_id: roundId, ...result });
   });
 
+  // ---- Kết quả ĐÃ CÔNG BỐ (Thành viên giải / Đội thi): standings, bracket, vé, danh sách ván ----
+  router.get('/events/:id/official/published/standings', requireSession, async (req, res) => {
+    await api.assertMember(req.params.id, req.account);
+    const roundId = await groupRoundId(req.params.id, api);
+    const progress = await api.roundProgress({ roundId });
+    if (!progress?.frozen) {
+      throw fail(409, 'round_not_published', 'Bảng xếp hạng chỉ được công bố khi vòng bảng đã kết thúc và được khóa.');
+    }
+    const standings = await api.groupStandings({ roundId });
+    res.json({ published: true, event_id: req.params.id, round_id: roundId, ...standings });
+  });
+
+  router.get('/events/:id/official/published/bracket', requireSession, async (req, res) => {
+    await api.assertMember(req.params.id, req.account);
+    const roundId = await groupRoundId(req.params.id, api);
+    const progress = await api.roundProgress({ roundId });
+    if (!progress?.frozen) {
+      throw fail(409, 'round_not_published', 'Nhánh đấu knockout chưa được công bố.');
+    }
+    const level = await eventLevel(req.params.id, api);
+    const bracketProg = await api.bracketProgress({ groupRoundId: roundId, level });
+    res.json({ published: true, ...bracketView({ eventId: req.params.id, groupRoundId: roundId, progress: bracketProg }) });
+  });
+
+  router.get('/events/:id/official/published/tickets', requireSession, async (req, res) => {
+    await api.assertMember(req.params.id, req.account);
+    const roundId = await groupRoundId(req.params.id, api);
+    const level = await eventLevel(req.params.id, api);
+    try {
+      const result = await api.knockoutTickets({ groupRoundId: roundId, level });
+      res.json({ published: true, event_id: req.params.id, round_id: roundId, ...result });
+    } catch (error) {
+      if (error?.code === 'bracket_incomplete' || error?.status === 409) {
+        throw fail(409, 'tickets_not_published', 'Vé chung kết chỉ được công bố khi toàn bộ nhánh knockout đã hoàn tất.');
+      }
+      throw error;
+    }
+  });
+
+  router.get('/events/:id/official/published/games', requireSession, async (req, res) => {
+    await api.assertMember(req.params.id, req.account);
+    const roundId = await groupRoundId(req.params.id, api);
+    const result = await api.listPublishedGames({ roundPk: roundId, account: req.account });
+    res.json({ published: true, ...result });
+  });
+
   // ---- Publication ván official: chấm xong mới đặt lịch; viewer chỉ thấy ply đã phát ----
   router.put('/official/rounds/:roundPk/games/:gameKey/broadcast', requireLocalAdmin, async (req, res) => {
     const result = await api.scheduleBroadcast({ roundPk: req.params.roundPk,
@@ -164,7 +215,7 @@ export function officialRouter({ api = liveOfficialApi } = {}) {
     res.json({ round_pk: req.params.roundPk, game_key: req.params.gameKey, ...result });
   });
 
-  router.get('/official/rounds/:roundPk/games/:gameKey/broadcast', requireLocalAdmin, async (req, res) => {
+  router.get('/official/rounds/:roundPk/games/:gameKey/broadcast', requireSession, async (req, res) => {
     const result = await api.broadcastState({ roundPk: req.params.roundPk,
       gameKey: req.params.gameKey, account: req.account });
     res.json({ round_pk: req.params.roundPk, game_key: req.params.gameKey, ...result });
@@ -195,4 +246,3 @@ export function officialRouter({ api = liveOfficialApi } = {}) {
 }
 
 export default officialRouter;
-

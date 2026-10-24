@@ -212,3 +212,51 @@ export async function officialGameViewerPackage({ roundPk, gameKey, account, aft
   return officialViewerPackage({ roundPk, gameKey, game: context.game,
     replay: context.replay, info, afterSeq });
 }
+
+/** Danh sách các ván đã công bố hoặc đang phát của vòng official. */
+export async function listPublishedOfficialGames({ roundPk, account, now = Date.now() } = {}, deps = {}) {
+  requireRoundPk(roundPk);
+  const loadRound = deps.loadRound || (async (id) => {
+    const [round] = await rows('official_rounds', `id=eq.${id}&select=id,event_id,round_id,frozen`);
+    return round || null;
+  });
+  const member = deps.member || assertEventMember;
+  const round = await loadRound(roundPk);
+  if (!round) throw fail(404, 'round_not_found', 'Không tìm thấy vòng official.');
+  await member(round.event_id, account);
+
+  const loadBroadcasts = deps.loadBroadcasts || (async (id) => {
+    return rows('official_broadcasts', `round_pk=eq.${id}&order=starts_at.asc`);
+  });
+  const loadGames = deps.loadGames || (async (id) => {
+    return rows('official_games',
+      `round_pk=eq.${id}&select=round_pk,game_key,stage,series_id,game_no,red_participant_id,blue_participant_id,result,reason,ply_count`);
+  });
+
+  const [broadcastRows, gameRows] = await Promise.all([
+    loadBroadcasts(roundPk),
+    loadGames(roundPk),
+  ]);
+
+  const gamesByKey = new Map((gameRows || []).map((g) => [g.game_key, g]));
+  const published = [];
+
+  for (const bRow of (broadcastRows || [])) {
+    const game = gamesByKey.get(bRow.game_key);
+    const totalPlies = game?.ply_count ? Number(game.ply_count) : 0;
+    const info = computeBroadcast(bRow, { now, totalPlies });
+    if (account?.role === 'admin' || isPublished(info)) {
+      published.push({
+        game_key: bRow.game_key,
+        stage: game?.stage ?? null,
+        series_id: game?.series_id ?? null,
+        game_no: game?.game_no ?? null,
+        red_participant_id: game?.red_participant_id ?? null,
+        blue_participant_id: game?.blue_participant_id ?? null,
+        broadcast: officialBroadcastView(bRow, info),
+      });
+    }
+  }
+
+  return { round_id: round.round_id, round_pk: roundPk, event_id: round.event_id, games: published };
+}
