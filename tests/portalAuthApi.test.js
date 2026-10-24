@@ -196,7 +196,7 @@ test('login: whitelist account, cookie HttpOnly/SameSite=Strict, không lộ pas
   assert.ok(!JSON.stringify(body).includes('salt'), 'không được trả salt');
   assert.match(setCookie, /HttpOnly/iu);
   assert.match(setCookie, /SameSite=Strict/iu);
-  assert.match(setCookie, /Path=\/api\/local/iu);
+  assert.match(setCookie, /Path=\/api(;|$)/iu);
   assert.ok(!/Secure/iu.test(setCookie), 'HTTP loopback không được đặt Secure');
 
   // Session lưu dạng hash, không lưu token thô.

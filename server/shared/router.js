@@ -20,8 +20,8 @@ import { EMPTY_MAP } from '../../src/game/maps.js';
 
 const forbidden=()=>new HttpError(403,'scope_denied','Không có quyền truy cập dữ liệu này.');
 /** Cookie session: HttpOnly + SameSite=strict, thêm `Secure` khi request đi qua HTTPS. */
-const cookieOptions=(req,maxAge=accounts.SESSION_MS)=>({httpOnly:true,sameSite:'strict',path:'/api/local',maxAge,secure:req.secure});
-const clearCookieOptions=(req)=>({httpOnly:true,sameSite:'strict',path:'/api/local',secure:req.secure});
+const cookieOptions=(req,maxAge=accounts.SESSION_MS)=>({httpOnly:true,sameSite:'strict',path:'/api',maxAge,secure:req.secure});
+const clearCookieOptions=(req)=>({httpOnly:true,sameSite:'strict',path:'/api',secure:req.secure});
 export async function checkStage(account,id,stage=null) {
   uuid(id);
   if (account.role==='admin') return;
