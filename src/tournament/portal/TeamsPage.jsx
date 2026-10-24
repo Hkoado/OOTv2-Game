@@ -68,10 +68,6 @@ export default function TeamsPage({ teams, accounts, actions, busy }) {
         <div>
           <p className="tt-eyebrow">Ban tổ chức · quyền truy cập</p>
           <h1 className="tt-page-title">Đội &amp; tài khoản</h1>
-          <p className="tt-page-lead">
-            Mỗi đội một tài khoản, không dùng chung. Tạo đội sẽ tạo luôn participant tương ứng; mật khẩu ban đầu
-            bàn giao qua kênh riêng và nên đổi ngay sau lần đăng nhập đầu.
-          </p>
         </div>
       </header>
 
@@ -82,7 +78,7 @@ export default function TeamsPage({ teams, accounts, actions, busy }) {
       </section>
 
       <div className="tt-grid tt-grid--2 tt-grid--form">
-        <Panel title="Cấp tài khoản đội" subtitle="Tạo participant và tài khoản trong một bước.">
+        <Panel title="Cấp tài khoản đội">
           <form className="tt-form" onSubmit={createTeam}>
             <Field label="Tên đội">
               <input
@@ -94,7 +90,7 @@ export default function TeamsPage({ teams, accounts, actions, busy }) {
                 placeholder="Ví dụ: Rùa Thép"
               />
             </Field>
-            <Field label="Tên đăng nhập" hint="3–40 ký tự chữ, số, _ . -; không phân biệt hoa thường.">
+            <Field label="Tên đăng nhập">
               <input
                 name="username"
                 required
@@ -107,7 +103,7 @@ export default function TeamsPage({ teams, accounts, actions, busy }) {
                 placeholder="ruathep"
               />
             </Field>
-            <Field label="Mật khẩu ban đầu" hint="Ít nhất 12 ký tự. BTC chuyển riêng, không gửi qua nhóm công khai.">
+            <Field label="Mật khẩu ban đầu" hint="Tối thiểu 12 ký tự · bàn giao riêng.">
               <input
                 name="password"
                 type="password"
@@ -133,7 +129,7 @@ export default function TeamsPage({ teams, accounts, actions, busy }) {
             </Field>
             {formError && <Alert tone="danger">{formError}</Alert>}
             <div className="tt-form__actions">
-              <button type="submit" className="tt-btn tt-btn--primary" disabled={busy?.teamCreate}>
+              <button type="submit" className="tt-btn tt-btn--success" disabled={busy?.teamCreate}>
                 <UserPlus size={16} aria-hidden="true" />
                 {busy?.teamCreate ? 'Đang tạo…' : 'Tạo đội & tài khoản'}
               </button>
@@ -148,9 +144,8 @@ export default function TeamsPage({ teams, accounts, actions, busy }) {
             <li>Đội chưa có bot hợp lệ không thể được chọn khi tạo giải 8 đội.</li>
             <li>Tên đội phải duy nhất (không phân biệt hoa thường, bỏ khoảng trắng hai đầu).</li>
           </ul>
-          <Alert tone="warning" title="Không phải sandbox">
-            Mật khẩu và cookie chỉ bảo vệ truy cập UI. Bot vẫn chạy bằng tiến trình riêng trên máy BTC,
-            không có cô lập cấp hệ điều hành.
+          <Alert tone="warning" title="Chỉ dùng với người tin cậy">
+            Bot chạy trên máy BTC, chưa được cô lập cấp hệ điều hành.
           </Alert>
         </Panel>
       </div>
@@ -198,7 +193,7 @@ export default function TeamsPage({ teams, accounts, actions, busy }) {
                     {account ? (
                       <button
                         type="button"
-                        className="tt-btn tt-btn--ghost tt-btn--sm"
+                        className="tt-btn tt-btn--warning tt-btn--sm"
                         onClick={() => {
                           setSelected(account);
                           setPassword('');

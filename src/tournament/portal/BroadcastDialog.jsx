@@ -65,10 +65,7 @@ export default function BroadcastDialog({ match, open, onClose, onScheduled }) {
         <form onSubmit={handleSubmit} style={{ marginTop: '1rem' }}>
           {error && <Alert tone="danger">{error}</Alert>}
 
-          <Field
-            label="Thời điểm bắt đầu phát sóng"
-            hint={`Giờ địa phương máy bạn (${timeDetails.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone}); server lưu UTC.`}
-          >
+          <Field label="Thời điểm bắt đầu phát sóng">
             <input
               type="datetime-local"
               value={startsAt}
@@ -92,10 +89,7 @@ export default function BroadcastDialog({ match, open, onClose, onScheduled }) {
             </div>
           </Field>
 
-          <Field
-            label="Nhịp phát (Khoảng cách giữa các nước cờ)"
-            hint="Thời gian máy chủ nhả từng nước cho người xem theo dõi."
-          >
+          <Field label="Nhịp phát">
             <select
               value={plyIntervalMs}
               onChange={(e) => setPlyIntervalMs(Number(e.target.value))}
@@ -108,10 +102,7 @@ export default function BroadcastDialog({ match, open, onClose, onScheduled }) {
             </select>
           </Field>
 
-          <Field
-            label="Chế độ công bố kết quả (Release Mode)"
-            hint="Xác định quyền truy cập replay và kết quả sau khi ván đấu phát xong."
-          >
+          <Field label="Chế độ công bố kết quả">
             <select value={releaseMode} onChange={(e) => setReleaseMode(e.target.value)}>
               <option value="full">
                 Mở toàn bộ sau khi phát xong (Công bố kết quả, mở replay & log)
@@ -126,7 +117,7 @@ export default function BroadcastDialog({ match, open, onClose, onScheduled }) {
             <button type="button" className="tt-btn tt-btn--ghost" onClick={onClose} disabled={busy}>
               Hủy
             </button>
-            <button type="submit" className="tt-btn tt-btn--primary" disabled={busy}>
+            <button type="submit" className="tt-btn tt-btn--success" disabled={busy}>
               <Radio size={16} aria-hidden="true" />
               {busy ? 'Đang lưu lịch…' : 'Xác nhận đặt lịch phát'}
             </button>

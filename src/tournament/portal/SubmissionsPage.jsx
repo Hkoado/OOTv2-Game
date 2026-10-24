@@ -278,7 +278,7 @@ export default function SubmissionsPage({
             commit SHA và kiểm tra tự động. Không yêu cầu upload mã nguồn thủ công qua web.
           </p>
         </div>
-        <a className="tt-btn" href={campusBotDownload} download="bot.py">
+        <a className="tt-btn tt-btn--info" href={campusBotDownload} download="bot.py">
           <Download size={16} aria-hidden="true" />
           Tải bot mẫu
         </a>
@@ -411,7 +411,7 @@ export default function SubmissionsPage({
                 <div className="tt-form__actions">
                   <button
                     type="submit"
-                    className="tt-btn"
+                    className="tt-btn tt-btn--success"
                     disabled={!selectedEventId || isEventFrozen || syncing || !targetId}
                   >
                     <Github size={16} aria-hidden="true" />
@@ -456,7 +456,7 @@ export default function SubmissionsPage({
                 <div className="tt-form__actions" style={{ marginBottom: '1rem' }}>
                   <button
                     type="button"
-                    className="tt-btn tt-btn--primary"
+                    className="tt-btn tt-btn--info"
                     onClick={handleRequestSync}
                     disabled={!canSync || syncing}
                   >

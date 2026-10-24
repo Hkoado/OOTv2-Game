@@ -135,7 +135,7 @@ export default function OfficialSetupPanel({ event, teams, actions, busy, admin 
         <Alert tone="danger" title="Phát hiện xung đột phiên bản">
           {conflict.message}
           <div className="tt-form__actions" style={{ marginTop: '0.5rem' }}>
-            <button type="button" className="tt-btn tt-btn--sm" onClick={reloadFromServer}>
+            <button type="button" className="tt-btn tt-btn--warning tt-btn--sm" onClick={reloadFromServer}>
               Nạp lại bản server (v{event.version})
             </button>
           </div>
@@ -323,13 +323,13 @@ export default function OfficialSetupPanel({ event, teams, actions, busy, admin 
 
           {editable && (
             <div className="tt-form__actions" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <button className="tt-btn tt-btn--primary" disabled={busy?.event}>
+              <button className="tt-btn tt-btn--success" disabled={busy?.event}>
                 {busy?.event ? 'Đang lưu…' : 'Lưu thiết lập chính thức'}
               </button>
               {dirty && <span className="tt-muted">Có thay đổi chưa lưu (bảng dự kiến hiển thị theo bản nháp).</span>}
               <button
                 type="button"
-                className="tt-btn tt-btn--ghost"
+                className="tt-btn tt-btn--warning"
                 disabled={busy?.event}
                 onClick={reloadFromServer}
               >

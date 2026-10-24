@@ -323,7 +323,7 @@ export default function OfficialGameViewer({ roundPk, gameKey, game, map, onClos
                   </button>
                   <button
                     type="button"
-                    className={`tt-btn tt-btn--sm ${playing ? 'tt-btn--warning' : 'tt-btn--primary'}`}
+                    className={`tt-btn tt-btn--sm ${playing ? 'tt-btn--warning' : 'tt-btn--success'}`}
                     onClick={() => setPlaying(!playing)}
                     disabled={frameIndex >= maxFrame}
                     title={playing ? 'Tạm dừng' : 'Tự động phát'}

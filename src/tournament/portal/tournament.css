@@ -75,8 +75,38 @@
 .tt-btn--primary:hover:not(:disabled) { background: var(--ott-color-accent-hover); border-color: var(--ott-color-accent-hover); }
 .tt-btn--primary:active:not(:disabled) { background: var(--ott-color-accent-pressed); }
 .tt-btn--ghost { background: transparent; border-color: var(--ott-color-border-subtle); }
-.tt-btn--danger { background: transparent; border-color: var(--ott-color-status-danger); color: var(--ott-color-status-danger); }
-.tt-btn--danger:hover:not(:disabled) { background: color-mix(in srgb, var(--ott-color-status-danger) 12%, transparent); }
+.tt-btn--success {
+  background: color-mix(in srgb, var(--ott-color-status-success) 16%, var(--ott-color-bg-surface));
+  border-color: var(--ott-color-status-success);
+  color: var(--ott-color-status-success);
+}
+.tt-btn--success:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ott-color-status-success) 24%, var(--ott-color-bg-surface));
+}
+.tt-btn--danger {
+  background: color-mix(in srgb, var(--ott-color-status-danger) 10%, var(--ott-color-bg-surface));
+  border-color: var(--ott-color-status-danger);
+  color: var(--ott-color-status-danger);
+}
+.tt-btn--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ott-color-status-danger) 18%, var(--ott-color-bg-surface));
+}
+.tt-btn--warning {
+  background: color-mix(in srgb, var(--ott-color-status-warning) 14%, var(--ott-color-bg-surface));
+  border-color: var(--ott-color-status-warning);
+  color: var(--ott-color-status-warning);
+}
+.tt-btn--warning:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ott-color-status-warning) 22%, var(--ott-color-bg-surface));
+}
+.tt-btn--info {
+  background: color-mix(in srgb, var(--ott-color-status-info) 12%, var(--ott-color-bg-surface));
+  border-color: var(--ott-color-status-info);
+  color: var(--ott-color-status-info);
+}
+.tt-btn--info:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ott-color-status-info) 20%, var(--ott-color-bg-surface));
+}
 .tt-btn--sm { min-height: var(--ott-control-height-dense); padding: 0 var(--ott-space-4); font-size: var(--ott-type-caption-size); }
 .tt-btn--block { width: 100%; }
 
@@ -155,6 +185,7 @@
 .tt-brand__text { display: flex; flex-direction: column; line-height: 1.15; }
 .tt-brand__text strong { font-family: var(--ott-font-display); font-size: 19px; letter-spacing: 0.04em; }
 .tt-brand__text span { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ott-color-text-secondary); }
+.tt-brand__text .tt-brand__tagline { font-size: 8px; letter-spacing: 0.04em; text-transform: none; white-space: nowrap; }
 
 /* ---------- Login ---------- */
 .tt-login {
@@ -194,11 +225,11 @@
 .tt-login__top { display: flex; align-items: center; justify-content: space-between; }
 .tt-login__title {
   font-family: var(--ott-font-display);
-  font-size: clamp(30px, 4vw, 44px);
-  line-height: 1.14;
+  font-size: clamp(24px, 3.2vw, 36px);
+  line-height: 1.2;
   letter-spacing: -0.01em;
   font-weight: 600;
-  max-width: 15ch;
+  max-width: 32ch;
 }
 .tt-login__lead { color: var(--ott-color-text-secondary); font-size: var(--ott-type-body-large-size); max-width: 46ch; }
 .tt-login__facts { display: flex; flex-direction: column; gap: 0; margin-top: auto; }
@@ -253,22 +284,28 @@
 .tt-login__card-title { font-family: var(--ott-font-display); font-size: var(--ott-type-display-size); line-height: 1.2; }
 .tt-login__card-sub { color: var(--ott-color-text-secondary); font-size: var(--ott-type-label-size); }
 .tt-login__remember {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--ott-space-3);
-  padding: var(--ott-space-3);
-  border: 1px solid var(--ott-color-border-subtle);
-  border-radius: var(--ott-radius-md, 10px);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ott-space-2);
+  padding: var(--ott-space-1) 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
   cursor: pointer;
+  user-select: none;
 }
 .tt-login__remember input {
-  margin-top: 2px;
+  margin: 0;
   width: 16px;
   height: 16px;
   flex: 0 0 auto;
   accent-color: var(--ott-color-accent, #2563eb);
+  cursor: pointer;
 }
-.tt-login__remember > span { display: flex; flex-direction: column; gap: 2px; }
+.tt-login__remember > span {
+  font-size: var(--ott-type-label-size, 13px);
+  color: var(--ott-color-text-secondary);
+}
 .tt-login__remember strong { font-size: var(--ott-type-label-size); color: var(--ott-color-text-primary); }
 
 
@@ -1114,7 +1151,7 @@
 @media (min-width: 981px) {
   .tt-login { padding: 20px; }
   .tt-login__hero { padding: 24px; gap: 12px; }
-  .tt-login__title { font-size: 32px; max-width: 24ch; }
+  .tt-login__title { font-size: 30px; max-width: 32ch; }
   .tt-login__lead { font-size: 14px; }
   .tt-login__board { width: min(100%, 270px); margin: 0 auto; }
 }

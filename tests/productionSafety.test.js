@@ -6,6 +6,8 @@ import { createApp } from '../server/app.js';
 import { runBotRequest } from '../server/judge/botRunner.js';
 import { createTrustedCampusSession } from '../server/judge/campusTrustedSession.js';
 import { runWorker } from '../server/worker.js';
+import { projectRefOf } from '../server/shared/client.js';
+import { readFileSync } from 'node:fs';
 
 test('production and Vercel reject development bypasses without touching secrets', () => {
   for (const mode of [{ NODE_ENV: 'production' }, { VERCEL: '1' }]) {
@@ -21,6 +23,14 @@ test('production and Vercel reject development bypasses without touching secrets
     assert.deepEqual(loadEnvFile(undefined, mode), { file: null, loaded: 0 });
   }
   assert.doesNotThrow(() => assertProductionSafety({ OOTV2_ALLOW_TRUSTED_DEV: '1' }));
+});
+
+test('production database target is pinned to the primary Supabase project', () => {
+  assert.equal(projectRefOf('https://ftzockzolisecnyhlwej.supabase.co'), 'ftzockzolisecnyhlwej');
+  assert.equal(projectRefOf('https://wsyfcgurnrowcuefwynx.supabase.co'), 'wsyfcgurnrowcuefwynx');
+  const source = readFileSync(new URL('../server/shared/client.js', import.meta.url), 'utf8');
+  assert.match(source, /PRIMARY_PROJECT_REF = 'ftzockzolisecnyhlwej'/);
+  assert.match(source, /projectRefOf\(url\) !== PRIMARY_PROJECT_REF/);
 });
 
 test('direct legacy and trusted transports refuse production before any artifact or DB access', async () => {

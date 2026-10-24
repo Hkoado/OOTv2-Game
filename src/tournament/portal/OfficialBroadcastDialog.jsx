@@ -202,7 +202,7 @@ export default function OfficialBroadcastDialog({ roundPk, gameKey, game, open, 
               <button type="button" className="tt-btn tt-btn--ghost" onClick={onClose} disabled={busy}>
                 Đóng
               </button>
-              <button type="submit" className="tt-btn tt-btn--primary" disabled={busy}>
+              <button type="submit" className="tt-btn tt-btn--success" disabled={busy}>
                 <Radio size={16} aria-hidden="true" style={{ marginRight: '4px' }} />
                 {busy ? 'Đang lưu lịch…' : 'Lưu lịch phát sóng'}
               </button>

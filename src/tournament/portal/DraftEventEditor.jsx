@@ -18,7 +18,7 @@ export default function DraftEventEditor({ event, teams, actions, busy }) {
     e.target.value = '';
   }
   const known = SAMPLE_MAPS.some((item) => item.map.id === map.id && JSON.stringify(item.map.blocked) === JSON.stringify(map.blocked));
-  return <Panel title="Chuẩn bị giải" subtitle="Đội · Map · Sau đó bắt đầu. Thứ tự chọn là thứ tự seed MVP.">
+  return <Panel title="Chuẩn bị giải">
     <form className="tt-form" onSubmit={async (e) => { e.preventDefault(); await actions.saveEvent(event.id, { participantIds: ids, map }); }}>
       <div className="tt-grid tt-grid--2"><section><h3>Đội tham gia · {ids.length}/8</h3>
         <div className="tt-picker">{teams.map((team) => <label className={`tt-picker__item${ids.includes(team.id) ? ' is-checked' : ''}`} key={team.id}>
@@ -32,7 +32,7 @@ export default function DraftEventEditor({ event, teams, actions, busy }) {
           {!!map.blocked.length && <Alert tone="warning">Map này dùng được khi chơi offline. Cần nối worker Campus trước khi chạy giải có ô cản.</Alert>}
         </section></div>
       {error && <Alert tone="danger">{error}</Alert>}
-      <div><button className="tt-btn tt-btn--info" disabled={busy?.event}>{busy?.event ? 'Đang lưu…' : 'Lưu đội & map'}</button></div>
+      <div><button className="tt-btn tt-btn--success" disabled={busy?.event}>{busy?.event ? 'Đang lưu…' : 'Lưu đội & map'}</button></div>
     </form>
   </Panel>;
 }

@@ -122,7 +122,7 @@ export function DataTable({ columns, children, label, className = '' }) {
 }
 
 /** Nút hai bước cho thao tác không hoàn tác được (khóa bài, đặt lại mật khẩu). */
-export function ConfirmAction({ label, confirmLabel = 'Xác nhận', onConfirm, busy = false, disabled = false, tone = 'primary' }) {
+export function ConfirmAction({ label, confirmLabel = 'Xác nhận', onConfirm, busy = false, disabled = false, tone = 'danger' }) {
   const [armed, setArmed] = useState(false);
   if (!armed) {
     return (
@@ -137,7 +137,7 @@ export function ConfirmAction({ label, confirmLabel = 'Xác nhận', onConfirm, 
       <span className="tt-confirm__text">{confirmLabel}?</span>
       <button
         type="button"
-        className="tt-btn tt-btn--danger tt-btn--sm"
+        className={`tt-btn tt-btn--${tone} tt-btn--sm`}
         disabled={busy}
         onClick={async () => {
           setArmed(false);

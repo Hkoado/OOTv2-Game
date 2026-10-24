@@ -37,7 +37,7 @@ export default function OfflinePlay({ onBack }) {
         <Panel title="Bàn chơi">
           <label className="tt-field">Map mẫu<select aria-label="Map mẫu" value={mapId} onChange={(e) => { if (window.confirm('Đổi map sẽ bắt đầu ván mới?')) restart(e.target.value); }}>{SAMPLE_MAPS.map((item) => <option key={item.map.id} value={item.map.id}>{item.name}</option>)}</select></label>
           <p className="tt-small">{sample.description}</p>
-          <a className="tt-btn" download={`${state.map.id}.json`} href={`data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(state.map, null, 2))}`}>Tải map mẫu JSON</a>
+          <a className="tt-btn tt-btn--info" download={`${state.map.id}.json`} href={`data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(state.map, null, 2))}`}>Tải map mẫu JSON</a>
           <p className="tt-small tt-muted">Lửa cản Bao · Nước cản Kéo · Bụi cây cản Búa · Vực cản tất cả. Luật áp dụng cả khi xếp và đi quân.</p>
           <OTTTurnBadge team={player} number={state.history.length + 1} label={finished ? (state.winner ? `${state.winner === 'red' ? 'Đỏ' : 'Xanh'} thắng` : 'Hòa') : `${name} ${setup ? 'xếp quân' : 'đến lượt'}`} />
           {finished && <p>{state.winReason}</p>}
@@ -45,9 +45,9 @@ export default function OfflinePlay({ onBack }) {
             const remaining = createUnplacedPieces(player).filter((p) => p.type === key && !state.pieces[p.id]).length;
             return <OTTUnitButton key={key} type={key} team={player} count={remaining} selected={type === key} disabled={!remaining} onClick={setType} />;
           })}</div><p className="tt-small tt-muted">Offline cho xếp tay: chọn quân rồi chọn ô sân nhà hợp lệ, hoặc dùng Xếp nhanh. Hai người lần lượt thao tác cùng máy; đội hình đối phương được ẩn trên bàn đến khi cả hai xác nhận. Khi thi bot, phải viết sẵn cả logic xếp quân và đi quân trong file Python, không xếp tay thay bot.</p>
-            <div className="tt-form__actions"><button className="tt-btn tt-btn--info" onClick={() => update(fillOfflineSetup)}>Xếp nhanh</button><button className="tt-btn tt-btn--primary" onClick={() => update(confirmOfflineSetup)}>Xác nhận</button></div></>}
+            <div className="tt-form__actions"><button className="tt-btn tt-btn--info" onClick={() => update(fillOfflineSetup)}>Xếp nhanh</button><button className="tt-btn tt-btn--success" onClick={() => update(confirmOfflineSetup)}>Xác nhận</button></div></>}
           {error && <Alert tone="danger">{error}</Alert>}
-          <button className="tt-btn tt-btn--ghost" onClick={() => { if (window.confirm('Bắt đầu ván mới?')) restart(); }}>Ván mới</button>
+          <button className="tt-btn tt-btn--warning" onClick={() => { if (window.confirm('Bắt đầu ván mới?')) restart(); }}>Ván mới</button>
         </Panel>
         <Panel title="Nước đi"><ol className="tt-offline__history">{state.history.map((text, i) => <li key={i}>{text}</li>)}</ol>{!state.history.length && <p className="tt-muted">Chưa có nước đi.</p>}</Panel>
       </aside>
