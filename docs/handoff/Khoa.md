@@ -1,5 +1,28 @@
 # Kết quả Khoa — Scheduler / worker / runtime
 
+## 24/10/2026 — Worker Campus chính thức: code local, gate chưa đạt
+
+- Trong workspace có scaffolding chưa track cho `server/officialWorker.js`,
+  `server/services/{officialExecution,officialKnockout,officialOrchestration}.js`,
+  `server/shared/officialJobs.js` và migration additive
+  `supabase/migrations/20261026090000_official_worker_jobs.sql`. Không sửa/xóa các
+  artifact `.tmp_*` hoặc migration; migration **chưa apply**.
+- Đã thêm `worker:official`, `worker:official:once`, `worker:official:drain` vào
+  `package.json`; thêm `tests/officialWorker.test.js` cho claim/reap, queue rỗng,
+  transient backoff, once-mode và abort/shutdown.
+- `node --test tests/officialWorker.test.js`: **5/5 PASS**.
+- `npm.cmd test`: **358/358 PASS**, 0 fail/skip (stdout `data/official-test.stdout.log`).
+- `npm.cmd run build`: **FAIL** sau transform 1652 modules, Vite `EPERM` khi xóa
+  `dist/assets` trên Windows (`data/official-build.stderr.log`). Chưa xác định đây là
+  quyền/lock trên output hiện hữu hay lỗi khác; không xóa `dist` để thử lại.
+- `git diff --check`: không in lỗi; exit không được shell integration ghi nhận ổn định.
+- DB migration/PostgreSQL concurrency: **NOT RUN**, không apply remote. Hyper-V/VM sạch,
+  attestation production, 2 worker thật, update/rollback/recovery và manual-final E2E:
+  **NOT RUN / BLOCKED**. Không bật worker gate/Start và không tuyên bố runtime production-ready.
+- Contract hiện có xác nhận `rows('official_jobs')` tự ánh xạ sang
+  `mvp_official_jobs`; không đổi relation. Manual-final source/provenance chưa có producer
+  trong workspace nên chưa thể enqueue manual snapshot một cách hợp lệ.
+
 ## Trạng thái mới nhất
 
 ### 24/10/2026 — K2 real DB sau H4: PASS 14/14 (migration đã apply)
