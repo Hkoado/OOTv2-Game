@@ -1,5 +1,96 @@
 # Kết quả Khoa — Scheduler / worker / runtime
 
+## 24/10/2026 — Consumer queue Chung kết thủ công đã có code (gỡ blocker E2E manual)
+
+- **Đính chính handoff cũ:** câu "manual-final source/provenance chưa có producer" **không còn đúng**.
+  Producer phía Huy đã có từ trước: bảng `mvp_manual_final_*`, `snapshot_json`, RPC
+  `mvp_manual_final_claim/finish/release` (`supabase/migrations/20261026100000_manual_final.sql`)
+  và client `server/shared/manualFinalJobs.js`. Phần thiếu chỉ là **consumer**, nay đã bổ sung.
+- Code mới: `server/services/manualFinalExecution.js` (xử lý `validate` + `match`).
+- Code sửa: `server/officialWorker.js` — nhận thêm queue `manual`:
+  `WORKER_QUEUES = ['official','manual']`, `processManualFinalJob`, `createQueueProcessor`,
+  `parseWorkerQueues`; `runOfficialWorker` giữ lease riêng từng queue
+  (`leaseSeconds` cho official, `manualLeaseSeconds = 300` cho manual).
+- Không có runner thứ hai: manual và official dùng **cùng** `runCampusMatch`,
+  `createCampusSessionFactory`, `OFFICIAL_BUDGET`, `createOfficialRuntimeIdentity` và
+  `verifyPinnedRuntime`. Không dùng runner MVP, không chạy bot trong API/Vercel.
+- `validate`: tải artifact private theo `storage_path` trong DTO claim → kiểm size/sha256 →
+  `inspectSourceBuffer` (UTF-8/NUL/size) → protocol smoke Campus v2 **trong session sandbox**
+  (setup Đỏ → setup Xanh khi đã thấy Đỏ → một nước Đỏ hợp lệ) → `finish` `valid`/`invalid`.
+- `match`: xác minh snapshot pin trước khi tải bytes:
+  `schemaVersion = manual-final-match.v1`, `provenance = manual_final`, khớp `eventId/roundNo/
+  seriesId/gameNo/seed/contentHash = snapshot_hash`, `mapHash` + `map` khớp `map_hash`,
+  runtime/budget khớp identity đang chạy, `red/blue.submissionId|teamId|sha256` khớp match.
+  Sau đó đọc submission **theo ID đã pin** (không lookup "bài mới nhất"), kiểm `status = valid`
+  + `locked_at`, tải và kiểm hash rồi mới chạy Campus.
+- Phân loại lỗi:
+  - lỗi bot/protocol trong `validate` → `invalid` (không retry);
+  - Storage/sandbox/tải lỗi tạm thời → `release` retry **cùng input**;
+  - input sai vĩnh viễn (hash/map/runtime/provenance) hoặc replay quá lớn → `release` với
+    `maxAttempts = 1` để dừng ở `infra_fault`;
+  - `leaseLost = true` từ `finish` **không** tính là đã ghi và không release;
+  - shutdown giữa ván → release `worker_shutdown`, không có kết quả.
+- **Contract còn mở với Huy:** `mvp_manual_final_finish` yêu cầu `ply_count >= 1`, nên ván kết thúc
+  ngay ở setup (bot lỗi xếp quân, 0 ply) hiện được ghi `bot_fault` + `error_code = setup_bot_fault`
+  thay vì `finished`. Không tự sửa migration của Huy; nếu BTC muốn lưu kết quả forfeit 0 ply thì
+  cần migration additive cho phép `ply_count = 0` và giữ nguyên `result`/`reason`.
+- **Queue manual chưa có RPC heartbeat** trong migration hiện tại; consumer dùng lease 300 s
+  (dưới trần 900 s của claim) đủ cho `2 × responseTotalMs + setup + tải artifact`. Đề nghị Huy
+  bổ sung heartbeat nếu muốn lease ngắn hơn hoặc trần thời gian dài hơn.
+
+### Cách chạy (Huy/BTC dùng để kiểm E2E manual)
+
+```powershell
+# Một job rồi thoát (CI/kiểm tra nhanh)
+node server/officialWorker.js --manual --once
+
+# Xử lý tới khi queue rỗng
+node server/officialWorker.js --manual --drain
+
+# Chạy dài hạn (service)
+node server/officialWorker.js --manual
+
+# Một tiến trình phục vụ cả official + manual (official trước)
+node server/officialWorker.js --all
+```
+
+`--manual` và `--all` loại trừ nhau. Mặc định (không cờ) vẫn chỉ chạy `official` như trước.
+Service dài hạn: `node server/officialWorker.js --manual` (workerId prefix `manual-...`).
+Chưa thêm npm script vì `package.json` thuộc Huy; nếu Huy đồng ý, thêm
+`"worker:manual": "node server/officialWorker.js --manual"`.
+
+### Bằng chứng đã chạy
+
+| Lệnh | Kết quả |
+| --- | --- |
+| `node --test tests/manualFinalExecution.test.js tests/manualFinalWorker.test.js tests/manualFinalApi.test.js tests/officialWorker.test.js` | **32/32 pass**, exit 0 (`data/khoa-manual/contract-tests.log`) |
+| `npm test` (toàn bộ) | **395/395 pass**, 0 fail/skip, exit 0 (`data/khoa-manual/full-test.log`) |
+| `npm run build` | **PASS**, exit 0, 1654 modules, built in 8.62s (`data/khoa-manual/build.log`) — sau khi chuyển `dist/` cũ bị giữ handle sang `data/` (xem ghi chú dưới) |
+| `git diff --check` | sạch |
+
+Test phủ: snapshot pin đúng/sai (schema, provenance, map, runtime, submission), validate
+valid/binary/INVALID_SETUP/Storage lỗi, match accepted result + replay, 0-ply bot fault,
+snapshot bị sửa, source lệch hash, lease lost, shutdown giữa ván, claim/queue rỗng/queue lạ,
+argv `--manual`/`--all`, lease riêng từng queue. Test mới dùng stub session/runMatch —
+**chưa chạy Python thật trong bước này**.
+
+**Ghi chú build trên Windows (đã tái hiện được):** lần đầu `npm run build` FAIL với
+`EPERM ... dist\\assets` tại `emptyDir` của Vite, dù **không có file read-only** và build sang
+thư mục mới (`--outDir dist-check`) **PASS**. `rmSync('dist')` cũng trả `EPERM` → có process
+khác đang giữ handle trong `dist/` (không phải lỗi code). Sau khi chuyển `dist/` cũ sang
+`data/dist-stale-*` (đã ignore), `npm run build` chạy sạch. Đề nghị Huy thêm bước clean dist
+an toàn (`prebuild`) nếu muốn tránh lặp lại; Vercel build từ checkout sạch nên không bị.
+
+### NOT RUN / blocker còn lại
+
+- Chưa chạy consumer trên **Supabase thật**: cần `20261026100000_manual_final.sql` đã apply
+  (Huy báo đã apply trên `wsyfcgurnrowcuefwynx`) và một job thật; lượt này không gọi DB/mạng.
+- Chưa chạy sandbox Linux/VM thật cho job `validate`/`match`; `trusted-dev` vẫn là mặc định
+  và factory fail-closed khi thiếu attestation.
+- Chưa có browser E2E manual (Bảo) dùng worker này; replay manual vẫn cần Bảo sửa callback
+  `onOpenReplay` (đang truyền object replay vào hàm nhận match ID).
+- Chưa có heartbeat manual trong DB; lease 300 s là giải pháp tạm có ghi chú.
+
 ## 24/10/2026 — Worker Campus chính thức: code local, gate chưa đạt
 
 - Trong workspace có scaffolding chưa track cho `server/officialWorker.js`,

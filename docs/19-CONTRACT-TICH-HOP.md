@@ -126,9 +126,26 @@ API không chạy Python; `storage_path`/lease token không nằm trong DTO; int
 ### 6.4 Bàn giao cho Khoa (worker) và Bảo (UI)
 
 - Khoa: `claimManualFinalJobs({worker,limit,leaseSeconds})` → job `validate` (tải artifact từ `storage_path` trong DTO worker, chạy syntax + protocol smoke) hoặc job `match` (chạy Campus trên `snapshot`); trả qua `finishManualFinalJob` / `releaseManualFinalJob`. Cùng sandbox/budget/engine, không runner thứ hai, không lookup latest.
+- **Đã map vào code (24/10/2026, Khoa):** producer ở `server/shared/manualFinalJobs.js` + migration
+  `20261026100000_manual_final.sql`; consumer ở `server/services/manualFinalExecution.js` và
+  `server/officialWorker.js` (queue `manual`, `--manual` / `--all`). Mapping nội bộ:
+
+  | Bước | Nguồn | Dùng bởi consumer |
+  | --- | --- | --- |
+  | Claim | `mvp_manual_final_claim(worker,limit,leaseSeconds)` → `jobs[]` (`job_id/kind/token/generation/attempt/input_hash`, `submission.storage_path`, `match.snapshot`) | `processManualFinalJob` (limit 1, lease manual 300 s) |
+  | `validate` | artifact bytes theo `storage_path` + `sha256`/`byte_size` | static UTF-8/size → protocol smoke Campus v2 trong session sandbox |
+  | `match` | `snapshot_json` pin (`manual-final-match.v1`) + submission ID đã khóa đọc lại theo ID | `verifyManualSnapshot` → tải/verify hash → `runCampusMatch` |
+  | Finish | `mvp_manual_final_finish(job,token,generation,outcome)` | `valid`/`invalid` cho validate; `finished`(result,reason,ply_count,replay) / `bot_fault` / `infra_fault` cho match |
+  | Retry | `mvp_manual_final_release(...,maxAttempts)` | lỗi hạ tầng retry cùng input; input sai vĩnh viễn dùng `maxAttempts=1` |
+  | Fence | `lease_lost` / `already_finished` | `leaseLost` không tính là đã ghi; duplicate finish không nhân đôi |
+
+  Ghi chú còn mở: (a) `finish` yêu cầu `ply_count >= 1` nên ván bot lỗi setup (0 ply) được ghi
+  `bot_fault` + `setup_bot_fault`; (b) queue manual **chưa có RPC heartbeat**, consumer dùng lease
+  300 s (trần claim 900 s). Hai điểm này cần Huy quyết định nếu muốn đổi contract.
 - Bảo: mọi route admin-only; chỉ hiển thị trạng thái/lý do; nạp file bằng multipart + `x-csrf-token`; không có form nhập điểm tay; không mở upload online cho đội.
 - Migration **đã apply** ngày 24/10/2026 trên project `wsyfcgurnrowcuefwynx` (OTTv2-G5) cùng
   `20261025100000_cutoff_capture.sql`; `npm run db:manual` chạy drill trên schema đã apply (ROLLBACK).
-  `apply-migrations.js` đã có 2 migration này trong PLAN. Chưa nối UI/worker, chưa browser/VM acceptance.
+  `apply-migrations.js` đã có 2 migration này trong PLAN. Consumer manual **đã có code + contract
+  test**; browser E2E/VM acceptance và chạy worker trên DB thật vẫn **NOT RUN**.
 
 Các quyết định sản phẩm đã chốt trong docs/18 không được thay đổi khi điền bảng này.

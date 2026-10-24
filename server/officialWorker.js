@@ -13,8 +13,12 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 import { assertSharedConfig } from './shared/client.js';
 import { claimOfficialJob, reapOfficialJobs } from './shared/officialJobs.js';
+import { claimManualFinalJobs } from './shared/manualFinalJobs.js';
 import { executeOfficialJob } from './services/officialExecution.js';
+import { MANUAL_WORKER_LEASE_SECONDS, executeManualFinalJob } from './services/manualFinalExecution.js';
 
+/** Queue một tiến trình worker có thể xử lý; cùng sandbox/budget, khác nguồn job. */
+export const WORKER_QUEUES = Object.freeze(['official', 'manual']);
 const MIN_POLL_MS = 250;
 const MAX_POLL_MS = 60000;
 const MIN_BACKOFF_MS = 1000;
@@ -48,6 +52,64 @@ export async function processOfficialJob({ workerId, leaseSeconds = 120, signal,
     reason: result.reason ?? null, result: result.result ?? null, attempt: job.attempt };
 }
 
+/**
+ * Chung kết thủ công: claim một job `validate`/`match` rồi chấm bằng cùng runner/sandbox.
+ * Không có runner manual thứ hai; manual và official chỉ khác nguồn job.
+ */
+export async function processManualFinalJob({ workerId, leaseSeconds = MANUAL_WORKER_LEASE_SECONDS,
+  signal, claim = claimManualFinalJobs, execute = executeManualFinalJob, logger = console } = {}) {
+  const { jobs } = await claim({ worker: workerId, limit: 1, leaseSeconds });
+  const job = Array.isArray(jobs) ? jobs[0] ?? null : null;
+  if (!job) return { processed: false };
+  const result = await execute(job, { signal, logger });
+  logger.log?.(JSON.stringify({ at: 'manual-worker', workerId, job: job.jobId, kind: job.kind,
+    attempt: job.attempt, recorded: result.recorded === true, status: result.status ?? null,
+    reason: result.reason ?? null }));
+  return { processed: true, jobId: job.jobId, kind: job.kind, recorded: result.recorded === true,
+    status: result.status ?? null, reason: result.reason ?? null };
+}
+
+/**
+ * Ghép nhiều queue vào một loop: thử theo thứ tự, dừng ở job đầu tiên xử lý được.
+ * `handlers` được inject để test không cần DB/Python.
+ */
+export function createQueueProcessor({ queues = ['official'] , handlers = {} } = {}) {
+  const list = Array.isArray(queues) ? [...queues] : null;
+  if (!list || list.length === 0) throw Object.assign(new Error('invalid_queues'), { code: 'invalid_queues' });
+  const resolved = {};
+  for (const queue of list) {
+    if (!WORKER_QUEUES.includes(queue)) {
+      throw Object.assign(new Error('invalid_queue'), { code: 'invalid_queue' });
+    }
+    const handler = handlers[queue] ?? (queue === 'official' ? processOfficialJob : processManualFinalJob);
+    if (typeof handler !== 'function') throw Object.assign(new Error('invalid_worker_dependencies'), { code: 'invalid_worker_dependencies' });
+    resolved[queue] = handler;
+  }
+  return async (context) => {
+    let reaped = 0;
+    for (const queue of list) {
+      // Mỗi queue có lease riêng (manual chưa có heartbeat → dài hơn).
+      const leaseSeconds = typeof context?.leaseFor === 'function'
+        ? context.leaseFor(queue) : context?.leaseSeconds;
+      const outcome = await resolved[queue]({ ...context, leaseSeconds });
+      reaped += Number(outcome?.reaped ?? 0);
+      if (outcome?.processed) return { ...outcome, queue, reaped };
+    }
+    return { processed: false, reaped, queue: null };
+  };
+}
+
+/** Chọn queue từ argv: mặc định official; `--manual` chỉ manual; `--all` cả hai. */
+export function parseWorkerQueues({ argv = [] } = {}) {
+  const args = new Set(argv);
+  if (args.has('--manual') && args.has('--all')) {
+    throw Object.assign(new Error('invalid_queues'), { code: 'invalid_queues' });
+  }
+  if (args.has('--manual')) return ['manual'];
+  if (args.has('--all')) return [...WORKER_QUEUES];
+  return ['official'];
+}
+
 /** Long-running loop: one match at a time per process, graceful stop on signal. */
 export async function runOfficialWorker({
   once = false,
@@ -55,19 +117,24 @@ export async function runOfficialWorker({
   pollMs = 2000,
   errorBackoffMs = 15000,
   leaseSeconds = 120,
+  manualLeaseSeconds = MANUAL_WORKER_LEASE_SECONDS,
+  queues = ['official'],
   signal,
   workerId = defaultWorkerId(),
-  processJob = processOfficialJob,
+  processJob,
   pause = (ms) => sleep(ms, undefined, { signal }),
   logger = console,
 } = {}) {
   if (!isInt(pollMs, MIN_POLL_MS, MAX_POLL_MS)) throw Object.assign(new Error('invalid_poll_interval'), { code: 'invalid_poll_interval' });
   if (!isInt(errorBackoffMs, MIN_BACKOFF_MS, MAX_BACKOFF_MS)) throw Object.assign(new Error('invalid_error_backoff'), { code: 'invalid_error_backoff' });
   if (!isInt(leaseSeconds, 30, 3600)) throw Object.assign(new Error('invalid_lease'), { code: 'invalid_lease' });
+  if (!isInt(manualLeaseSeconds, 10, 900)) throw Object.assign(new Error('invalid_lease'), { code: 'invalid_lease' });
   if (typeof workerId !== 'string' || !WORKER_ID.test(workerId)) {
     throw Object.assign(new Error('invalid_worker_id'), { code: 'invalid_worker_id' });
   }
-  if (typeof processJob !== 'function' || typeof pause !== 'function') {
+  // Mỗi queue giữ lease riêng: manual chưa có heartbeat nên cần lease dài hơn official.
+  const processor = processJob ?? createQueueProcessor({ queues });
+  if (typeof processor !== 'function' || typeof pause !== 'function') {
     throw Object.assign(new Error('invalid_worker_dependencies'), { code: 'invalid_worker_dependencies' });
   }
 
@@ -77,12 +144,14 @@ export async function runOfficialWorker({
   signal?.addEventListener('abort', onSignal, { once: true });
   if (signal?.aborted) stopping = true;
 
+  const queueLease = (queue) => (queue === 'manual' ? manualLeaseSeconds : leaseSeconds);
   const stats = { workerId, processed: 0, recorded: 0, failures: 0, idlePolls: 0, reaped: 0 };
   try {
     while (!stopping) {
       let outcome;
       try {
-        outcome = await processJob({ workerId, leaseSeconds, signal, logger });
+        outcome = await processor({ workerId, leaseSeconds, manualLeaseSeconds,
+          leaseFor: queueLease, signal, logger });
       } catch (error) {
         // DB/Storage/runner failure: back off, never switch judge profile locally.
         stats.failures += 1;
@@ -113,12 +182,15 @@ export async function runOfficialWorker({
 export async function runOfficialWorkerEntry({ argv = process.argv.slice(2), ...options } = {}) {
   const args = new Set(argv);
   assertSharedConfig();
+  const queues = parseWorkerQueues({ argv });
   const controller = new AbortController();
   const shutdown = () => controller.abort();
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
   try {
     return await runOfficialWorker({ once: args.has('--once'), drain: args.has('--drain'),
+      queues, ...(queues.length === 1 && queues[0] === 'manual'
+        ? { workerId: defaultWorkerId('manual') } : {}),
       signal: controller.signal, ...options });
   } finally {
     process.off('SIGINT', shutdown);
@@ -137,4 +209,5 @@ if (isEntryPoint) {
   });
 }
 
-export default { runOfficialWorker, runOfficialWorkerEntry, processOfficialJob };
+export default { runOfficialWorker, runOfficialWorkerEntry, processOfficialJob,
+  processManualFinalJob, createQueueProcessor, parseWorkerQueues };
