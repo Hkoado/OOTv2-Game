@@ -452,7 +452,7 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                               type="button"
                               className="tt-btn tt-btn--sm"
                               onClick={() => {
-                                setJobModal({ type: 'requeue', jobId: fJob.gameKey, gameKey: fJob.gameKey });
+                                setJobModal({ type: 'requeue', jobId: fJob.jobId, gameKey: fJob.gameKey });
                                 setJobReason('');
                                 setJobReasonError('');
                               }}
@@ -464,7 +464,7 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                               type="button"
                               className="tt-btn tt-btn--sm tt-btn--danger"
                               onClick={() => {
-                                setJobModal({ type: 'cancel', jobId: fJob.gameKey, gameKey: fJob.gameKey });
+                                setJobModal({ type: 'cancel', jobId: fJob.jobId, gameKey: fJob.gameKey });
                                 setJobReason('');
                                 setJobReasonError('');
                               }}

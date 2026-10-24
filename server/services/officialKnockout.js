@@ -221,15 +221,16 @@ export async function bracketProgress({ groupRoundId, level = 'weekly' } = {},
           colorPolicy: COLOR_POLICY });
         continue;
       }
-      const roundId = seriesRoundId(match.stage, match.id);
-      const found = await findRound({ eventId: groupRound.snapshot.eventId, roundId });
+      const roundKey = seriesRoundId(match.stage, match.id);
+      const found = await findRound({ eventId: groupRound.snapshot.eventId, roundId: roundKey });
       if (!found) {
-        next = next ?? { matchId: match.id, stage: match.stage, series, roundId, opened: false };
+        next = next ?? { matchId: match.id, stage: match.stage, series, roundId: roundKey, opened: false };
         continue;
       }
-      const outcome = await knockoutSeriesOutcome({ series, roundId }, { loadRound });
+      const outcome = await knockoutSeriesOutcome({ series, roundId: found }, { loadRound });
       if (outcome.complete) outcomes[match.id] = outcome;
-      else next = next ?? { matchId: match.id, stage: match.stage, series, roundId, opened: true };
+      else next = next ?? { matchId: match.id, stage: match.stage, series, roundId: found,
+        roundKey, opened: true };
     }
   }
   const expected = bracketOrder(plan.bracket).reduce((count, stageInfo) => count + stageInfo.matches.length, 0);

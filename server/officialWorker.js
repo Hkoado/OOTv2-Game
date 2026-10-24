@@ -45,7 +45,7 @@ export async function processOfficialJob({ workerId, leaseSeconds = 120, signal,
   const job = await claim({ workerId, leaseSeconds });
   if (!job) return { processed: false, reaped: reaped.reaped };
   const result = await execute(job, { heartbeatMs: Math.max(5000, Math.floor(leaseSeconds * 1000 / 3)),
-    leaseSeconds, logger });
+    leaseSeconds, signal, logger });
   logger.log?.(JSON.stringify({ at: 'official-worker', workerId, job: job.id,
     round: job.roundId, game: job.gameKey, attempt: job.attempt, reclaimed: job.reclaimed,
     recorded: result.recorded === true, reason: result.reason ?? null }));

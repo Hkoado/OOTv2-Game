@@ -10,7 +10,7 @@ import { loadOfficialRound, appendOfficialGame, freezeOfficialRound,
   nextPinnedGroupGame } from '../shared/officialSchedule.js';
 import { enqueueOfficialJob, officialGameInputHash, cancelOfficialJob,
   requeueOfficialJob } from '../shared/officialJobs.js';
-import { computeOfficialGroupStandings } from '../lib/officialGroups.js';
+import { computeOfficialGroupStandings, createOfficialGroupSchedule } from '../lib/officialGroups.js';
 import { seedOfficialQualifiers } from '../lib/officialBracket.js';
 import { COLOR_POLICY } from '../lib/officialColors.js';
 
@@ -80,11 +80,11 @@ export async function publishNextGame({ roundId } = {}) {
 }
 
 /** Progress DTO (admin/UI). Score detail stays server-side until publication. */
-export async function roundProgress({ roundId } = {}) {
+export async function roundProgress({ roundId } = {}, { loadRound = loadOfficialRound } = {}) {
   assertRoundId(roundId);
-  const round = await loadOfficialRound({ roundId });
+  const round = await loadRound({ roundId });
   const jobs = await rows('official_jobs',
-    `round_pk=eq.${roundId}&select=game_key,status,attempt,error,error_category`);
+    `round_pk=eq.${roundId}&select=id,game_key,status,attempt,error,error_category`);
   const byStatus = jobs.reduce((acc, job) => {
     acc[job.status] = (acc[job.status] ?? 0) + 1;
     return acc;
@@ -94,7 +94,8 @@ export async function roundProgress({ roundId } = {}) {
     games: { total: round.games.length, finished: round.games.filter((game) => game.result !== null).length },
     jobs: { total: jobs.length, byStatus,
       failed: jobs.filter((job) => job.status === 'failed').slice(0, 50).map((job) => ({
-        gameKey: job.game_key, attempt: job.attempt, error: job.error, category: job.error_category })) },
+        jobId: job.id, gameKey: job.game_key, attempt: job.attempt,
+        error: job.error, category: job.error_category })) },
     pending: pending ? gameDto(round, pending) : null };
 }
 
@@ -122,11 +123,27 @@ export async function groupStandings({ roundId } = {}) {
 }
 
 /** Freeze only when the schedule is complete and every game has an accepted result. */
-export async function freezeGroupRound({ roundId, expectedGames } = {}) {
+export async function freezeGroupRound({ roundId, expectedGames } = {},
+  { loadRound = loadOfficialRound, freeze = freezeOfficialRound } = {}) {
   assertRoundId(roundId);
-  const round = await loadOfficialRound({ roundId });
-  const expected = Number.isInteger(expectedGames) ? expectedGames : round.games.length;
-  const result = await freezeOfficialRound({ roundId, expectedGames: expected });
+  const round = await loadRound({ roundId });
+  if (round.snapshot.roundId !== 'group') {
+    throw fail(409, 'not_group_round', 'Chỉ đóng băng vòng bảng bằng thao tác này.');
+  }
+  const schedule = createOfficialGroupSchedule({
+    participantIds: round.snapshot.bots.map((bot) => bot.participantId),
+    seed: round.snapshot.seed,
+    mapHash: round.snapshot.maps.primary.hash,
+    mapPackVersion: round.snapshot.mapPackVersion,
+  });
+  const expected = schedule.games.length;
+  if (Number.isInteger(expectedGames) && expectedGames !== expected) {
+    throw fail(400, 'bad_expected_games', 'Số ván kỳ vọng không khớp lịch vòng bảng chính thức.');
+  }
+  if (round.games.length !== expected) {
+    throw fail(409, 'incomplete_schedule', 'Lịch vòng bảng chưa được pin đầy đủ.');
+  }
+  const result = await freeze({ roundId, expectedGames: expected });
   return { ...result, expectedGames: expected };
 }
 
