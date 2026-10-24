@@ -22,6 +22,9 @@ data/
 *.pfx
 *.p12
 
+# Per-machine worker settings (VM name/paths); copy from worker.config.example.json
+tools/vm/worker.local.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

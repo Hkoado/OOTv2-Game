@@ -1,57 +1,65 @@
-# Huy — Backend GitHub intake và bảo mật dữ liệu công bố
+# Huy — Backend, dữ liệu, bảo mật và release integration
 
-## Đọc và hiện trạng
+## Nhiệm vụ hiện hành — 24/10/2026
 
-Đọc AGENTS.md, docs/16, docs/01-THE-THUC-GIAI.md, docs/06, docs/14, docs/07 và code thật.
-Setup `campus-setup.v1` đã có nhưng migration chưa apply; runtime chính thức chưa chạy.
-Supabase-only, không merge nguyên Backend `8540d2f`; live/log nhánh cũ đã có trên dev.
+Đọc AGENTS.md, docs/18-CHOT-HOAN-THIEN-VA-NGHIEM-THU.md,
+docs/19-CONTRACT-TICH-HOP.md, docs/17, PRODUCTION-READINESS và code thật.
+Thay prompt cũ chỉ làm H1 rồi dừng: hoàn thiện **toàn gói** dưới đây, checkpoint/test nội bộ;
+không đợi người dùng review từng PR. Người dùng chỉ nghiệm thu một RC đã tích hợp.
 
-## Ownership
+## Ownership và đầu ra
 
-`server/shared/router.js`, `accounts.js`, `client.js`, `participants.js`, services GitHub metadata,
-schema/RPC intake và publication. Không sửa React (Bảo), scheduler/worker (Khoa).
-SQL scheduler Khoa sở hữu file riêng, bạn review grants/transaction. Config/package cần phối hợp.
+- API/router/auth/client/intake/publication, schema nền và Storage; backend chung kết thủ công.
+- File config/package/lock/Vercel dùng chung: bạn quản lý thay đổi, nhận yêu cầu từ Bảo/Khoa.
+- Khoa sở hữu runner/scheduler và SQL runtime file mới; bạn review transaction/grants và tích hợp.
+- Không sửa UI hoặc viết runner thay hai người kia. Mỗi người tự nối/test phần mình.
 
-## Các PR theo thứ tự (mỗi lượt chỉ một PR nhỏ)
+## Phải hoàn thành
 
-1. **H1 — Contract + GitHub intake:** schema additive repo approval/job/receipt; resolve numeric repo ID/full SHA
-   đúng một lần trước transaction kiểm cutoff/freeze/membership/quota/idempotency. API không clone/source/Python.
-   Chốt DTO với Bảo/Khoa trước nối UI/consumer; đọc route đề xuất docs/16, không coi tên route là đã có.
-2. **H2 — Hoàn thiện transaction/ACL/intake:** whitelist receipt, cross-team denial, clock DB,
-   unique event/team/repo/SHA/path, pending-before-cutoff, giữ valid cũ; quyền repo chưa verify phải BTC duyệt.
-   Disable upload online team; fallback opt-in admin/trusted-dev, không loại offline import file.
-3. **H3 — Privacy/publication:** bảng lịch phát riêng, admin schedule/cancel, server_time/visible_plies,
-   member giải được xem ván đã công bố kể cả vòng sau; chặn anonymous live hiện tại và mọi leak qua
-   result/standings/bracket/replay/log/Storage. Không lấy trạng thái finished làm công bố.
-4. **H4 — Integration/ops:** project DB test riêng được phép, hai worker claim/retry và stale writes cùng Khoa;
-   review security/SQL, phối hợp Bảo load harness/Preview. Không tự apply remote hoặc seed tài khoản thật.
+1. GitHub approval → cutoff capture → receipt/artifact → immutable snapshot đúng SHA/hash/provenance.
+   Race/retry/revoke/quota/pending không nhận nhầm latest hoặc valid lịch sử. API không chạy bot/git/Python.
+2. API readiness, vòng/trận/lịch/màu, standings/bracket/vé theo module Khoa; kết quả kín,
+   publication/replay whitelist; role/membership/CSRF/IDOR ở mọi endpoint/download, không chỉ UI.
+3. Chung kết thủ công: admin-only scoped event/round/team upload một `.py` UTF-8 1..262144 bytes,
+   private artifact/hash/server time/actor, validation job, chọn phiên bản, khóa snapshot transaction.
+   Provenance manual riêng, không giả GitHub receipt và không nới online capture policy.
+   API yêu cầu chấm/đọc kết quả/audit cancel-rerun; Khoa thực hiện chấm bằng pipeline chung.
+4. Không dùng cờ bật upload online toàn cục làm chức năng chung kết; team online vẫn chỉ GitHub.
+   Pending/invalid không khóa; không thay bài sau khóa; job không lookup latest toàn đội.
+5. Đối chiếu history/object project đích, review migration additive, backup và smoke nâng cấp.
+   Không reset DB, không chạy fresh bundle trên project đã có foundation; không tự apply remote.
+6. Kiểm backend Vercel: route/session/cookie/CSRF/no-store/timeout; worker chạy ngoài Vercel.
+   Rà dependency/security/secrets/license với cả nhóm; không audit-fix mù hoặc ghi credential vào docs.
+7. Tích hợp tăng dần, tổng hợp RC và biên bản chung; phối hợp sửa boundary, không đợi cuối mới merge.
+   Không ôm toàn bộ QA thay Bảo/Khoa. Không tự push/deploy hoặc seed tài khoản thật.
 
-## Test và Done
+## Contract và kiểm thử
 
-Node built-in tests mock không chạm `.env` DB thật; HTTP session/CSRF/admin/team/membership,
-GitHub host/URL/token/redirect/rate limit, cutoff race, duplicate receipt/quota, 403 đoán ID.
-SQL integration phải chạy thật trên disposable project khi được cấp, ghi mock/integration tách biệt.
-Publication không trả tương lai/kết quả kín dù client sửa afterSeq; cache private/no-store.
-Không PAT sinh viên trong form/URL/log; service role backend-only. Sandbox chưa có thì trusted-only.
-Chạy full test/build, `git diff --check`, bàn giao DTO + migration ordering/rollback/recovery.
+Điền mapping API/DB thực tế trong docs/19 trước nối từng boundary, Khoa xác nhận runtime,
+Bảo xác nhận DTO. Fixture có version để hai người làm song song; tên kỹ thuật không cần user duyệt lại.
+Không tự sửa luật/budget/cutoff đã chốt. Contract đổi phải có producer/consumer/test đồng bộ.
 
-## Bàn giao kết quả bắt buộc trong thư mục chung
+Node built-in tests mặc định mock, không chạm DB thật. Integration được cấp phép phải kiểm
+RLS/grants/Storage/cutoff/lock/concurrency/idempotency thật; anonymous/team/cross-event, CSRF,
+source/log/replay secrecy, manual vs online provenance. Restore backup phải có rehearsal.
+Test/build/diff cuối trên bản tích hợp; kết quả dự án cũ không thay chứng cứ project đích mới.
 
-- Đọc [quy ước bàn giao](../handoff/README.md); sau mỗi PR/milestone và trước khi dừng phiên,
-  cập nhật **`docs/handoff/Huy.md`**, commit cùng code, không chỉ báo trong chat.
-- Ghi branch/SHA/PR, file/route/RPC/DTO thực tế, migration applied/not applied, lệnh test và exit code,
-  mock vs integration, NOT RUN, blocker, gate và bước tiếp có thể tái hiện. Không lưu token/log nhạy cảm.
-- Nêu rõ API nào đã nối với Bảo/Khoa, phần nào còn đề xuất; không sửa báo cáo hai người khác.
-- Xem [checklist sau tích hợp](../handoff/SAU-TICH-HOP.md): hoàn thành gói Huy chưa đồng nghĩa
-  hoàn thành E2E, sandbox, offline/restore hoặc sẵn sàng deploy; chuyển phần chưa xong cho agent sau.
+## Done và bàn giao
 
-## Prompt tiếp tục
+- Gate API/DB/security và phần backend của hai E2E trong docs/18 đạt; không để user nối code.
+- Cập nhật `docs/handoff/Huy.md`: SHA, exports/routes/RPC, DTO, migration applied/project,
+  tên env, commands/exit/evidence, mock vs thật, NOT RUN/blocker. Không ghi secret.
+- Tổng hợp `docs/handoff/SAU-TICH-HOP.md`, nhận bằng chứng Bảo/Khoa; RC một commit xác định,
+  deployment checklist Vercel + smoke sau user deploy, backup/recovery và giới hạn trung thực.
+- Thiếu quyền DB/hardware báo ngay; không nhận `NOT RUN` thành PASS để đóng RC.
 
-> Tôi là Huy. Đọc AGENTS.md, docs/16-THIET-LAP-CHINH-THUC-VA-CHIA-VIEC.md và docs/assignments/Huy.md.
-> Kiểm branch/status, giữ thay đổi người dùng, xác lập baseline. Chỉ triển khai H1: contract và GitHub intake
-> Supabase-only, API resolve metadata/SHA không clone/tải source/chạy bot, transaction cutoff/idempotency/
-> membership, receipt private. Đọc code/schema thật; trước code nêu DTO và ownership cho Bảo/Khoa.
-> Không merge nguyên Backend, không sửa worker/UI, không tự deploy/apply SQL/seed remote. Thêm tests chặn
-> mạng thật mặc định, test/build cuối và báo chính xác phần chưa nghiệm thu. Dừng sau H1 để review.
-> Trước khi dừng, đọc docs/handoff/README.md và cập nhật docs/handoff/Huy.md theo mẫu chung, commit cùng code;
-> ghi contract thực tế, SHA/PR, migration, test/exit, NOT RUN, blocker và bước tiếp. Không chỉ bàn giao qua chat.
+## Prompt giao Huy
+
+> Bạn là Huy. Đọc AGENTS.md, docs/18, docs/19 và toàn bộ file phân công này, kiểm git/status/code thật.
+> Hoàn thiện toàn gói API/DB/security/Chung kết thủ công và phối hợp RC, không chỉ H1 rồi dừng.
+> Bảo toàn working tree và baseline chung; không làm lại phần đã có. Chốt API/DB contract với Khoa/Bảo
+> trước boundary, làm song song qua fixture, tích hợp sớm và tự xử lý lỗi phần mình tới khi RC đạt.
+> Giữ Campus v2, Supabase-only, online GitHub capture; manual final provenance riêng/admin-only.
+> Không thực thi bot trên API, không mở gate khi runtime/privacy chưa đạt, không tự apply remote/push/deploy.
+> Chạy tests và integration được phép, cập nhật handoff + bằng chứng và checklist chung. Không báo
+> hoàn thiện nếu gate DB/VM/browser bắt buộc chưa chạy; user chỉ review RC cuối và tự deploy Vercel.

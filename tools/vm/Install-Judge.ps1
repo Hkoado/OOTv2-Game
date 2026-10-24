@@ -25,8 +25,8 @@ try {
   # Secret transferred separately, to the same verified SSH host only.
   & scp.exe @options $workerEnv "ootv2@${Address}:/home/ootv2/worker.env"
   if ($LASTEXITCODE -ne 0) { throw 'Environment transfer failed' }
-  & ssh.exe @options "ootv2@$Address" 'chmod 600 /home/ootv2/worker.env; mkdir -p /home/ootv2/staging; tar -xzf /home/ootv2/release.tar.gz -C /home/ootv2/staging; sudo bash /home/ootv2/staging/tools/provision/install-judge.sh'
-  if ($LASTEXITCODE -ne 0) { throw 'Guest installation failed; worker remains gated' }
+  & ssh.exe @options "ootv2@$Address" 'set -e; chmod 600 /home/ootv2/worker.env; rm -rf /home/ootv2/staging; mkdir -p /home/ootv2/staging; tar -xzf /home/ootv2/release.tar.gz -C /home/ootv2/staging; rm -f /home/ootv2/release.tar.gz; sudo -n bash /home/ootv2/staging/tools/provision/install-judge.sh'
+  if ($LASTEXITCODE -ne 0) { throw 'Guest installation failed; the worker stays stopped. Check the guest log above.' }
 } finally {
   Remove-Item $archive,$workerEnv -Force -ErrorAction SilentlyContinue
 }

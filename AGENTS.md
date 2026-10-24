@@ -4,6 +4,15 @@
 
 ### Quyết định hiện hành ngày 23/10/2026
 
+- **24/10/2026 — chốt hoàn thiện ba người, một RC nghiệm thu:** đọc
+  `docs/18-CHOT-HOAN-THIEN-VA-NGHIEM-THU.md`, `docs/19-CONTRACT-TICH-HOP.md` và assignments mới.
+  Thay chỉ dẫn cũ chỉ làm H1/B1/K1 hoặc dừng chờ user sau milestone: checkpoint/test nội bộ,
+  ba người tự hoàn thiện/tích hợp toàn gói. UI theo UI-GUIDE và UI hiện có, không redesign.
+  Hoãn giải hoàn toàn không Internet; chỉ thêm **Chung kết thủ công** admin nạp/chọn/khóa bot,
+  chấm bằng worker chung qua API/Supabase có kết nối. Không SQLite/offline sync.
+  User review một RC rồi tự deploy Vercel; không tự push/deploy/apply remote/tạo worktree,
+  không bỏ gate an toàn hoặc coi NOT RUN là PASS.
+
 - **24/10/2026 — luật mới của người dùng:** đọc `docs/17-LUAT-DIA-HINH-VA-XEP-KIN.md`.
   Campus v2: Lửa cản Bao, Nước cản Kéo, Bụi cây cản Búa, Vực cản tất cả;
   setup bot kín, phân màu so le/ưu tiên số thua trong cùng vòng. Dùng asset hiện có.

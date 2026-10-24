@@ -68,6 +68,23 @@ API vẫn chỉ bind loopback vì chưa có sandbox OS. Tài khoản và passwor
 session cũ bị bỏ: đăng nhập lại. Bucket bot private giữ profile MVP **256 KiB/200 plies**
 (xem `docs/07-TRANG-THAI-TRIEN-KHAI.md`); không thay luật hoặc runner sang Campus trong đợt này.
 
+## Đóng gói worker cho máy Windows khác (24/10/2026)
+
+Máy Windows khác pull repo có thể tự dựng VM chấm bằng script:
+
+```powershell
+Copy-Item tools\vm\worker.config.example.json tools\vm\worker.local.json
+powershell -File tools\vm\Worker.ps1 -Action doctor
+powershell -File tools\vm\Worker.ps1 -Action install
+powershell -File tools\vm\Worker.ps1 -Action start
+```
+
+Gói này chạy **worker GitHub intake** (`npm run worker:github`): tải source theo
+SHA, kiểm tra tĩnh + cú pháp Python, upload Storage private. **Chưa có** worker
+chấm trận Campus và service `ootv2-official-worker` không tồn tại; `server/worker.js`
+(MVP) không được cài, không được enable. Đọc
+[đóng gói worker](docs/WORKER-PACKAGING.md) trước khi cài.
+
 ## Nền tảng DB Supabase (22/10/2026)
 
 Đã tạo 13 bảng quản lý người chơi/đội/giải/vòng/trận trên project OTTv2-G5.

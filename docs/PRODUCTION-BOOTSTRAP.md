@@ -37,6 +37,13 @@ không giả làm migration history của Supabase. Management API tự gán tim
 
 ## Bộ dựng VM (đã có code, chưa chạy end-to-end)
 
+Từ 24/10/2026 có script điều phối duy nhất **`tools/vm/Worker.ps1`** (doctor /
+install / update / start / stop / restart / status / logs / health / version /
+config) đọc `tools/vm/worker.local.json`. Quy trình, phạm vi và giới hạn:
+[Đóng gói worker](WORKER-PACKAGING.md).
+
+`Worker.ps1` gọi hai script bên dưới; chúng vẫn dùng được trực tiếp.
+
 Đường dẫn script: `D:\OOTv2-Game\tools\vm\New-JudgeVM.ps1`.
 
 - PowerShell Administrator, Hyper-V đã bật; cần `ssh`, `scp`, `tar` trên Windows.
@@ -67,14 +74,12 @@ Không tắt StrictHostKeyChecking hoặc coi ssh-keyscan riêng lẻ là xác m
 Install chuyển archive allowlist (không Git history/data/.env/node_modules), chuyển
 riêng **chỉ** URL/service-role/GitHub token qua SSH đã xác minh. Không chuyển PAT,
 DB password hay `VITE_*`. Guest root sở hữu code/config; credential mode 0600.
-Bootstrap cài runtime, chạy full attestation, timer 12 giờ và DB auth smoke.
-**Không cài/bật service legacy worker hay official worker chưa hoàn tất.**
-DB smoke tạm tạo admin rồi cleanup; chỉ chạy khi schema runtime đã đầy đủ.
 
-Vận hành đã có: status VM và `journalctl -u ootv2-attest.service`,
-`systemctl status ootv2-attest.timer` trên guest. Worker startup/recovery/update
-atomic/rollback vẫn chưa triển khai. Install hiện là cập nhật tại chỗ, không phải
-release transaction; nếu lỗi không tự restart worker.
+Từ 24/10/2026 guest dùng **release bất biến** `/srv/ootv2/releases/<id>` +
+symlink `/srv/ootv2/current`; `deploy-release.sh` rollback về release trước nếu
+service không lên. Bootstrap cài runtime + full attestation + timer 12 giờ, rồi
+chạy `worker-health` (không còn `verify-shared-db` tạo tài khoản tạm).
+**Không cài/bật worker MVP hay `ootv2-official-worker`** (service sau không tồn tại).
 
 ## Gate tiếp theo
 

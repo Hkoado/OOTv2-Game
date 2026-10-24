@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { productionMigrations, projectRef, freshDatabaseBundle } from '../tools/production/migrationPlan.js';
 import { workerEnvironment } from '../tools/production/workerEnvironment.js';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
 test('production manifest includes foundations and capture, exact checksums, ordered once', () => {
   const plan = productionMigrations();
@@ -26,6 +26,24 @@ test('production target rejects non-Supabase endpoints and ambiguous URLs', () =
   assert.throws(() => freshDatabaseBundle([]));
 });
 
+test('guest shell/service files stay LF-only and the unit is sandboxed', () => {
+  for (const dir of ['tools/provision', 'tools/vm', 'sandbox/linux']) {
+    const folder = new URL(`../${dir}/`, import.meta.url);
+    for (const name of readdirSync(folder)) {
+      if (!/\.(sh|service|timer)$/.test(name)) continue;
+      const text = readFileSync(new URL(name, folder), 'utf8');
+      assert.equal(text.includes('\r'), false, `${dir}/${name} must use LF endings`);
+    }
+  }
+  const unit = readFileSync(new URL('../tools/provision/ootv2-github-worker.service', import.meta.url), 'utf8');
+  assert.match(unit, /^User=ootv2-worker$/m);
+  assert.match(unit, /^NoNewPrivileges=yes$/m);
+  assert.match(unit, /^ProtectSystem=strict$/m);
+  assert.match(unit, /^WantedBy=multi-user\.target$/m);
+  assert.match(unit, /ExecStart=\/opt\/ootv2-node\/bin\/node \/srv\/ootv2\/current\/server\/githubWorker\.js/);
+  assert.doesNotMatch(unit, /server\/worker\.js/);
+});
+
 test('worker environment exports only runtime allowlist, never migration/browser secrets', () => {
   const env = { SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'secret-token',
     SUPABASE_ACCESS_TOKEN: 'ddl-token', SUPABASE_DB_URL: 'db-password', VITE_SECRET: 'bad-browser-secret',
@@ -45,6 +63,12 @@ test('VM install refuses unchecked SSH and never starts the legacy worker', () =
   const sh = readFileSync(new URL('../tools/provision/install-judge.sh', import.meta.url), 'utf8');
   assert.match(sh, /wsl_is_not_a_judge_vm/);
   assert.match(sh, /sha256sum --check/);
-  assert.match(sh, /worker is NOT enabled/);
-  assert.doesNotMatch(sh, /systemctl enable.*worker/);
+  // Releases are swapped, and the worker is only referenced by an explicit stop.
+  assert.match(sh, /deploy-release\.sh/);
+  assert.doesNotMatch(sh, /systemctl (enable|start)[^\n]*github-worker/);
+  assert.doesNotMatch(sh, /server\/worker\.js/);
+  assert.match(sh, /NOT part of it/);
+  const ctl = readFileSync(new URL('../tools/provision/workerctl.sh', import.meta.url), 'utf8');
+  assert.match(ctl, /worker-health\.js/);
+  assert.match(ctl, /worker_start_refused/);
 });

@@ -15,7 +15,7 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 Import-Module Hyper-V
 $existing = Get-VM -Name $Name -ErrorAction SilentlyContinue
 if ($existing) {
-  Write-Output 'VM exists: no changes made. Use Get-JudgeStatus.ps1 to inspect; updates use Install-Judge.ps1.'
+  Write-Output 'VM exists: no changes made. Inspect with Worker.ps1 -Action status; deploy with -Action install.'
   return
 }
 Get-VMSwitch -Name $SwitchName -ErrorAction Stop | Out-Null
@@ -25,10 +25,13 @@ New-Item -ItemType Directory -Force $Directory | Out-Null
 if ((Get-PSDrive -Name $Directory.Substring(0,1)).Free -lt 45GB) { throw 'At least 45 GiB free required' }
 $key = Join-Path $Directory 'judge_ed25519'
 if (-not (Test-Path $key)) {
-  # Empty passphrase: dedicated automation key; restrict its Windows ACL immediately.
+  # `-N '""'` is the only form Windows PowerShell delivers to ssh-keygen as an
+  # empty passphrase; the verification below proves the key really is usable.
   & ssh-keygen.exe -t ed25519 -f $key -N '""' -C 'ootv2-local-judge'
   if ($LASTEXITCODE -ne 0) { throw 'SSH key generation failed' }
 }
+& ssh-keygen.exe -y -P '' -f $key | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'SSH key is not usable non-interactively (passphrase set?). Remove it and retry.' }
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 & icacls.exe $key /inheritance:r /grant:r "${identity}:(R,W)" '*S-1-5-18:(F)' | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Cannot restrict private key ACL' }
@@ -51,5 +54,6 @@ Set-VMFirmware -VMName $Name -EnableSecureBoot On -SecureBootTemplate MicrosoftU
 Add-VMHardDiskDrive -VMName $Name -Path (Join-Path $Directory 'seed.vhdx')
 Set-VM -VMName $Name -AutomaticStartAction StartIfRunning -AutomaticStopAction ShutDown -CheckpointType Disabled
 Start-VM -VMName $Name
-Write-Output "VM created: $Name. Wait for cloud-init; inspect IP using Get-VMNetworkAdapter."
-Write-Output "SSH key: $key. Verify guest SSH fingerprint in VM console before provisioning."
+Write-Output "VM created: $Name."
+Write-Output "SSH key: $key"
+Write-Output 'Next: open the VM console, compare the guest SSH host fingerprint, then add it to known_hosts.'

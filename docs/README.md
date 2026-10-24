@@ -1,7 +1,15 @@
 # OTTv2 — Bộ tài liệu giải đấu và giao diện
 
+**Quyết định mới 24/10/2026:** [Phạm vi hoàn thiện và một RC nghiệm thu](18-CHOT-HOAN-THIEN-VA-NGHIEM-THU.md),
+[contract phối hợp](19-CONTRACT-TICH-HOP.md), assignments [Huy](assignments/Huy.md),
+[Bảo](assignments/Bao.md), [Khoa](assignments/Khoa.md). Nhóm tự tích hợp toàn gói, không chờ
+user sau H1/B1/K1. UI giữ hiện có theo UI-GUIDE. Offline hoàn toàn không Internet hoãn;
+chỉ làm Chung kết thủ công BTC nạp/chọn/khóa/chấm qua hệ thống có kết nối.
+Đây là kế hoạch đã duyệt, không phải tuyên bố triển khai xong.
+
 **Trạng thái nghiệm thu hiện hành:** [Production readiness](PRODUCTION-READINESS.md).
 **DB mới / bộ dựng Hyper-V đang triển khai:** [Production bootstrap](PRODUCTION-BOOTSTRAP.md).
+**Máy Windows khác pull repo chạy worker:** [Đóng gói worker](WORKER-PACKAGING.md).
 Phân biệt code/test local, migration remote và sandbox thật; các handoff/drill cũ
 không phải tuyên bố hệ thống đã production-ready.
 

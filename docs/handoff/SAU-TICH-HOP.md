@@ -1,5 +1,47 @@
 # Các bước còn lại để hoàn thiện sau Huy / Bảo / Khoa
 
+## Checklist RC hiện hành — quyết định 24/10/2026
+
+Ưu tiên [docs/18](../18-CHOT-HOAN-THIEN-VA-NGHIEM-THU.md) và
+[docs/19](../19-CONTRACT-TICH-HOP.md). Checklist bên dưới phần này giữ làm lịch sử;
+offline tự động/bundle/import hai chiều không là gate đợt này, prompt chỉ chọn một bước rồi dừng
+không áp dụng. Nhóm tự checkpoint/tích hợp, user nghiệm thu một RC.
+
+- [ ] Cả ba: baseline SHA chung bảo toàn working tree, mapping concrete API/RPC/job/DTO/error/version
+  trong docs/19, producer/consumer tests; ghép sớm giải nhỏ bằng runtime chính thức.
+- [ ] Huy: schema/history project đích đúng, migration additive được phép, backup/restore đã thử;
+  DB/RLS/grants/Storage/auth/CSRF/IDOR/cutoff/provenance/concurrency integration thật.
+- [ ] Khoa: worker Campus riêng, snapshot/hash/runtime/budget, accepted attempt fencing result/log/replay;
+  hai worker/crash/retry/stale/duplicate không tính đôi, infra không forfeit.
+- [ ] Khoa: group/standings/tie/knockout/extra/tranh ba/bye/DQ/walkover/vé đúng; màu lưu trước chạy.
+- [ ] Khoa: sandbox VM thật, resources/network/filesystem/cleanup/attestation, không secret vào bot;
+  WSL/mock không thay production acceptance.
+- [ ] Khoa: Windows khác không chạy API, installer/start/stop/reboot/update hỏng/rollback đã thử;
+  sửa path attestation/SSH user/doctor/config null/env-cache-cgroup; SSH console verified.
+- [ ] Bảo: UI hiện có/UI-GUIDE, không redesign; hai theme/desktop/keyboard/error/loading/draft/conflict;
+  các action online nối API thật, viewer clock/cursor/reconnect không leak tương lai/kết quả kín.
+- [ ] Cả ba: online E2E repo → cutoff → receipt/snapshot → chấm → standings/knockout/vé
+  → publication/viewer, không sửa DB để vượt bước thiếu.
+- [ ] Cả ba: Chung kết thủ công E2E admin tạo đợt/vòng → nạp bot → validation → chọn/khóa
+  → chọn cặp/chấm → điểm/lý do/replay → BTC xác nhận đi tiếp; dùng cùng runner/sandbox.
+- [ ] Huy/Bảo/Khoa: manual scoped event/round/team admin-only, source/hash/actor/server time;
+  pending/invalid/lock race đúng; sau khóa không thay bài; online không nhận manual provenance giả.
+- [ ] Cả ba: manual cancel/rerun có reason/audit giữ lịch sử; infra retry cùng input;
+  không form nhập tay thay engine result, không mở upload online toàn cục, mặc định BTC-only.
+- [ ] Bảo/Khoa: counts 35/40/48/50, benchmark worker và viewer 50/100/200 có môi trường/P95/error/resource;
+  không coi in-process simulation là nghiệm thu hạ tầng triển khai.
+- [ ] Cả ba: full tests/build/diff, replay/rules cũ, backup/artifact/recovery; security/dependency/secret-history/license review.
+- [ ] Huy tổng hợp, mỗi owner ký: một RC SHA, evidence commands/exit/PASS/FAIL/NOT RUN,
+  Bảo review script, Khoa worker runbook, Huy schema/env/deploy checklist; không để user nối code.
+- [ ] Supabase và VM sẵn sàng trước bàn giao. User tự deploy Vercel; HTTPS/cookie/routing production
+  smoke sau deploy là checkpoint môi trường riêng, không giả đã chạy trước deploy.
+
+**Gate bắt buộc chưa chạy thật thì RC chưa đạt.** Thiếu quyền/hardware báo sớm owner/impact,
+không chuyển NOT RUN thành PASS. Manual finals cần API/Supabase/worker có kết nối; không quảng cáo
+chạy khi mất Internet. Hoãn local DB/offline sync/bundle thi/thu-phát USB tự động; BTC tự tổ chức.
+
+## Checklist lịch sử trước khi chốt lại phạm vi (không áp dụng khi mâu thuẫn phần trên)
+
 Checklist này chưa được nghiệm thu. Người tích hợp ghi commit, ngày, môi trường và bằng chứng khi đánh dấu.
 Hoàn thành H1/B1/K1 chỉ là **PR đầu tiên**, không phải hoàn thành cả gói H1–H4/B1–B4/K1–K4.
 Nếu các gói đã có bằng chứng VERIFIED thì kiểm lại trên nhánh tích hợp, không bắt viết lại tính năng.

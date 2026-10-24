@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "ootv2-worker-config.v1",
+  "vmName": "OOTv2-Judge",
+  "vmDirectory": "D:\\OOTv2-VM",
+  "switchName": "Default Switch",
+  "wslDistribution": "Ubuntu",
+  "cpuCount": 4,
+  "memoryGiB": 4,
+  "sshUser": "ootv2"
+}

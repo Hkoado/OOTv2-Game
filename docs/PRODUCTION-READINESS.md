@@ -1,11 +1,37 @@
 # Production readiness — 24/10/2026
 
+## Phạm vi RC mới (đặc tả được duyệt, chưa nghiệm thu)
+
+[Docs/18](18-CHOT-HOAN-THIEN-VA-NGHIEM-THU.md) và [contract](19-CONTRACT-TICH-HOP.md)
+thay yêu cầu offline tự động và milestone chờ user review. Nhóm tự hoàn thiện/tích hợp,
+user nghiệm thu một RC. Online đầu-cuối và Chung kết thủ công BTC nạp/chọn/khóa/chấm qua
+hệ thống có kết nối là bắt buộc; bundle/sync/giải hoàn toàn không Internet hoãn.
+Checklist hiện hành: [SAU-TICH-HOP](handoff/SAU-TICH-HOP.md). Evidence cũ theo môi trường
+không đóng gate mới, không chứng minh chức năng manual finals đã có.
+
 **Chưa đủ điều kiện mở chấm bot công khai.** Public source repository và vận hành
 dịch vụ nhận code không tin cậy là hai mốc riêng biệt. Không bỏ gate Start để demo.
 
 ## Mốc đã kiểm tra trong đợt rà soát
 
-### Checkpoint bootstrap tiếp theo — 24/10/2026
+### Checkpoint đóng gói worker — 24/10/2026
+
+Đã thêm gói chạy worker cho máy Windows khác pull repo: `tools/vm/Worker.ps1`
+(doctor/install/update/start/stop/restart/status/logs/health), cấu hình theo máy
+`tools/vm/worker.local.json`, release swap có rollback trên guest,
+`server/githubWorker.js` chạy dài hạn và `worker-health` chặn start khi thiếu schema.
+Phạm vi: **chỉ GitHub intake**, chưa có worker chấm trận. Chi tiết:
+[Đóng gói worker](WORKER-PACKAGING.md).
+
+- Test: **353/353 pass**, 0 skip; build exit 0; PowerShell parser + `bash -n` cho
+  toàn bộ script guest/host pass; `git diff --check` sạch.
+- `worker-health` trên project hiện tại: **BLOCKED** — Storage PASS, ba bảng intake
+  và `mvp_github_claim` trả 404 vì 13 migration runtime chưa áp. Đây là hành vi
+  đúng, không phải lỗi công cụ (`data/wp-health.log`).
+- **Chưa** boot VM, chưa chạy `install-judge.sh`/`deploy-release.sh`/systemd thật.
+  Không tuyên bố gói worker đã nghiệm thu trên Hyper-V.
+
+### Checkpoint bootstrap DB mới
 
 Đích `.env` đã đổi sang project mới `ftzockzolisecnyhlwej`. Đã apply **chỉ
 foundation** và đọc lại 13 bảng RLS; không được hiểu các kết quả remote project

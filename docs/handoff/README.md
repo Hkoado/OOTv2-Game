@@ -1,5 +1,15 @@
 # Bàn giao chung — Huy / Bảo / Khoa
 
+## Quyết định hiện hành 24/10/2026
+
+Ưu tiên [phạm vi chốt](../18-CHOT-HOAN-THIEN-VA-NGHIEM-THU.md) và
+[contract](../19-CONTRACT-TICH-HOP.md) trước chỉ dẫn lịch sử dưới đây.
+Ba người hoàn thiện toàn gói, checkpoint/test nội bộ; không chỉ H1/B1/K1 rồi chờ user.
+User nghiệm thu một RC tích hợp, tự deploy Vercel. Offline hoàn toàn không Internet hoãn;
+chỉ Chung kết thủ công BTC nạp/chọn/khóa/chấm qua hệ thống có kết nối.
+Mỗi owner tự nối/sửa lỗi phần mình tới RC; Huy tổng hợp, Bảo browser/review script,
+Khoa VM/runtime/runbook. Prompt chọn một bước rồi dừng ở cuối file không thu hẹp nhiệm vụ mới.
+
 Thư mục duy nhất để ghi **kết quả thực hiện**, khác với kế hoạch trong `docs/assignments/`.
 Khởi tạo ngày 23/10/2026 tại checkpoint `3de220e` (dev); đây chưa phải báo cáo hoàn thành của ba người.
 

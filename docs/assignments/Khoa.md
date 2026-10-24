@@ -1,65 +1,66 @@
-# Khoa — Thể thức chính thức, scheduler và worker/runtime
+# Khoa — Runtime chính thức, điều phối giải và máy chấm
 
-## Đọc và hiện trạng
+## Nhiệm vụ hiện hành — 24/10/2026
 
-Đọc AGENTS.md, docs/16, đủ docs/01-THE-THUC-GIAI.md và docs/03-DAC-TA-KY-THUAT.md,
-docs/06, docs/14, campusEngine/replay/worker/RPC thật. Ưu tiên Supabase-only và policy theo giải
-ở docs/14 hơn SQLite/ACL vòng trong docs cũ. Không đổi replay MVP thành Campus.
-Setup foundation đã có, chưa runtime chính thức. `ott-campus.v1` engine thuần có sẵn; worker vẫn MVP.
+Đọc AGENTS.md, docs/18-CHOT-HOAN-THIEN-VA-NGHIEM-THU.md,
+docs/19-CONTRACT-TICH-HOP.md, docs/17, điều lệ, OFFICIAL-RUNTIME và code/test thật.
+Hoàn thiện **toàn gói**, không chỉ K1 rồi dừng chờ user. Giữ engine/protocol/replay lịch sử.
 
 ## Ownership
 
-`src/game/competition.js`, `server/shared/{tournaments,officialSetup,worker,artifacts}.js`,
-scheduler thuần, `server/judge/*`, protocol/SDK/sandbox, test runner/scheduler.
-Migration scheduler file riêng bạn viết, Huy review; không sửa router/intake hoặc React của hai người khác.
-Contract snapshot/job/output cần chốt với Huy, standings/bracket DTO gửi Bảo trước tích hợp.
+Engine/protocol/runner/scheduler/worker/artifact runtime, sandbox/SDK, tools/vm và provisioning/service.
+SQL runtime mới file riêng do bạn viết, Huy review/tích hợp. Không sửa router/auth/intake hoặc React.
+File config/package/lock chung yêu cầu Huy thay đổi; cung cấp export/adapters/DTO để Huy/Bảo nối.
 
-## Các PR theo thứ tự
+## Phải hoàn thành
 
-1. **K1 — Thể thức thuần:** round-robin 2 ván/cặp cùng map/seed, balanced groups thresholds,
-   điểm ván 1/0.5/0 và điểm cặp 3/1/0. Tie: điểm bảng → mini-table từ nhóm đồng điểm ban đầu
-   → tổng điểm ván → điểm ván mini-table → seeded draw; không lặp tách mini-table.
-   Tests 35/40/48/50 + biên 4/7/8/15/16/31/32/56, không mutation/nonseed RNG.
-2. **K2 — Bracket/vé/snapshot:** tỷ lệ seed so phân số chính xác; nhất bảng trước nhì,
-   tránh cùng bảng vòng đầu bằng permutation tổng lệch nhỏ nhất rồi lexicographic, lưu permutation,
-   fixed bracket không reseed. Main 4 / final 6 / extra đúng 2 rồi seed, đủ ván, tranh ba.
-   Bye/double-DQ/walkover không ván giả; ranking/cấp bù vé không trùng; kỳ 3 tháng/6 đội 2 bye.
-   Snapshot/map hash/runtime bất biến theo vòng, không trỏ latest submission toàn đội như MVP.
-3. **K3 — Worker GitHub/job:** consume contract Huy, claim/lease/fencing/retry/backoff, bounded blob SHA/hash,
-   không clone branch HEAD, không secret vào bot; giữ valid cũ khi lỗi hạ tầng, pin/cache/GC.
-   Không chỉ fence result: live/log/terminal cũng phải thuộc accepted attempt, tránh stale worker overwrite.
-4. **K4 — Runtime chính thức:** persistent bot.v1 + SDK, nối campusEngine/map/repetition/400 plies;
-   Linux supervisor/nsjail/cgroups/preflight trên VM sạch, budgets benchmark. Chưa có sandbox thì
-   chỉ fixtures/bot tin cậy, không tuyên bố production. Offline bundle/cache/receipt/restore là milestone
-   kế tiếp phối hợp cả nhóm, không dùng SQLite fallback để chạy offline khi đã chốt Supabase-only.
+1. Worker Campus chính thức riêng, nối runner đã có: claim/heartbeat/lease/token generation,
+   accepted attempt, bounded artifacts/replay, fencing result/log/terminal, retry/backoff/pause/recovery.
+   Hai worker và duplicate finish không tính đôi; stale attempt không overwrite. Không fallback MVP.
+2. Snapshot source/map/runtime/budget hash trước chạy; setup kín Campus v2, bot tự setup đủ 9 quân.
+   Lỗi infra không forfeit, lỗi bot chỉ quy đúng bên được yêu cầu, không lấy thứ tự OS event chọn thua.
+3. Online orchestration: pin lịch/màu trước ván, group → accepted result → standings → knockout/vé,
+   ván phụ/tranh ba/bye/DQ/walkover, tie-break đúng điều lệ; không sinh fake games hoặc màu từ kết quả tương lai.
+   Đủ persistence và service exports để Huy nối API, Bảo hiển thị; không chỉ hàm thuần/mock.
+4. Job chung kết thủ công: nhận hai đội/submission đã khóa, map/seed/runtime/cấu hình cặp;
+   dùng cùng queue/runner/sandbox, provenance manual rõ. BTC chủ động cặp/vòng/đi tiếp,
+   không cần tự điều hành toàn buổi. Không lookup latest khi chấm, không runner manual thứ hai.
+5. Sandbox VM Linux thật: filesystem/network/CPU/RAM/PIDs/stdout/timeout/cleanup, attestation
+   còn hạn, runtime identity, không secret vào bot. Không gọi subprocess là sandbox an toàn.
+6. Hoàn thiện Windows → Hyper-V cài/control/update/rollback; máy worker không cần web/API local.
+   Sửa attestation path `/srv/ootv2/current`, SSH user/cloud-init/config nhất quán, doctor thiếu lệnh
+   và dependency WSL image prep, config JSON null, service state/update health/rollback/abort.
+   Review quyền/cgroup/env/cache: hardening intake không tự động phù hợp match runner.
+7. VM rehearsal cài sạch, service start/stop/reboot, attestation expired, update hỏng/rollback,
+   kill giữa ván, mất DB/Storage/GitHub. SSH fingerprint phải đối chiếu console, không tắt verification.
+8. Benchmark counts 35/40/48/50 và worker capacity, hai máy tranh job khi có môi trường,
+   runbook backup/artifacts/recovery. Không coi mock hoặc WSL test là VM production acceptance.
 
-## Test và Done
+## Hoãn
 
-Mỗi PR nhỏ: pure tests trước → persistence/RPC integration trên project disposable → worker E2E.
-Thiếu Python/git/disk/mạng/DB là hạ tầng, không forfeit. Hai worker tranh job/lease hết hạn/crash/
-duplicate finish không tính đôi. Bot fault chỉ đúng bên đang được yêu cầu.
-Runtime không thay đổi luật game phòng; regression engine/replay cũ, test/build và báo NOT RUN Linux.
-Không bỏ trigger `official_scheduler_not_ready` cho đến khi snapshot/runner/privacy của Huy đạt gate;
-thay bằng migration reviewed chứ không sửa migration đã apply. Không tự bật giải thật/deploy/apply remote.
+Không triển khai bundle thi hoàn toàn không Internet, local DB, SQLite fallback, thu/phát USB
+tự động hoặc sync/import offline kết quả. Giữ module offline-bundle cũ nhưng không mở rộng.
+Chung kết thủ công vẫn dùng API/Supabase/worker có kết nối. USB bot vẫn không tin cậy.
 
-## Bàn giao kết quả bắt buộc trong thư mục chung
+## Contract, Done và bàn giao
 
-- Đọc [quy ước bàn giao](../handoff/README.md); sau mỗi PR/milestone và trước khi dừng phiên,
-  cập nhật **`docs/handoff/Khoa.md`**, commit cùng code, không chỉ báo trong chat.
-- Ghi branch/SHA/PR, scheduler/worker exports và contract, snapshot/map/runtime versions, migration
-  applied/not applied, test counts/exit, mock/DB/Linux phân biệt; không gọi subprocess là sandbox đã đạt.
-- Nêu gate Start, lease/fencing/recovery và offline còn thiếu, dependency Huy/Bảo, cách tái hiện và bước tiếp;
-  chỉ sửa báo cáo của mình. Lỗi/NOT RUN không được chuyển thành PASS để đóng milestone.
-- Xem [checklist sau tích hợp](../handoff/SAU-TICH-HOP.md): pure tests hoặc K1 không thay K2–K4,
-  E2E/privacy/load/restore và diễn tập giải. Chuyển phần chưa làm cho agent sau bằng chứng cụ thể.
+Điền job/runtime/schedule/accepted result mapping docs/19 với Huy; Bảo xác nhận DTO.
+Adapter/tests contract cho phép làm song song, rồi tự nối persistence thật sớm. SQL additive,
+Huy review grants/transactions; không tự apply remote/push/deploy hoặc bỏ Start gate để demo.
+Thay gate chỉ khi orchestration/runtime/privacy đạt bằng migration reviewed, không sửa migration đã áp.
 
-## Prompt tiếp tục
+Node built-in tests, DB concurrency được phép, Linux VM acceptance và orchestration E2E;
+full regression/build/diff. Mọi command có exit/evidence. `docs/handoff/Khoa.md` ghi commit,
+exports/job/schema/runtime versions, applied/not applied, mock vs VM thật, NOT RUN/blocker.
+Giao installer/control/recovery đã thử, ký gate runtime/install/scale và hai E2E.
+Còn trách nhiệm sửa lỗi runtime tích hợp tới RC cuối, không để user nối scheduler/worker.
 
-> Tôi là Khoa. Đọc AGENTS.md, docs/16-THIET-LAP-CHINH-THUC-VA-CHIA-VIEC.md và docs/assignments/Khoa.md.
-> Kiểm Git/baseline, chỉ làm K1: scheduler vòng bảng và standings thuần đúng điều lệ chính thức,
-> dùng seed lưu, cùng map/seed trong cặp đổi màu, điểm cặp khác điểm ván và mini-table không đệ quy.
-> Đọc campusEngine/code export thật, giữ profile MVP/replay cũ, không mở Start hoặc sửa router/UI.
-> Chốt DTO với Huy/Bảo, tests counts 35/40/48/50 và tie nhiều đội; không DB thật mặc định.
-> Chạy full test/build, báo kết quả/giới hạn, không tự deploy/apply SQL hoặc chạy bot lạ. Dừng sau K1.
-> Trước khi dừng, đọc docs/handoff/README.md và cập nhật docs/handoff/Khoa.md theo mẫu chung, commit cùng code;
-> ghi SHA/PR, scheduler/worker contract, migration, tests/exit, NOT RUN Linux/offline, blocker và bước tiếp.
+## Prompt giao Khoa
+
+> Bạn là Khoa. Đọc AGENTS.md, docs/18, docs/19, docs/17 và toàn bộ phân công này, kiểm code/status/baseline.
+> Hoàn thiện toàn runtime chính thức/scheduler/worker/sandbox/Windows installer, không chỉ K1 rồi dừng.
+> Tái sử dụng runner Campus, không fallback MVP. Chốt persistence/job/DTO với Huy/Bảo và tự nối/test thật.
+> Chung kết thủ công dùng chung worker, source manual đã khóa; offline không Internet đã hoãn.
+> Nghiệm thu VM/sandbox/2 worker/crash/update rollback, không thay bằng mock/WSL. Không secret vào bot,
+> không tự apply remote/push/deploy hoặc tắt gate an toàn. Cập nhật handoff evidence/runbook,
+> phối hợp fix tích hợp tới RC một bản để user review cuối rồi tự deploy Vercel.

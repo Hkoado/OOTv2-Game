@@ -1,5 +1,11 @@
 # Thiết lập giải chính thức và bàn giao 3 thành viên
 
+> **Quyết định thay thế 24/10/2026:** [docs/18](18-CHOT-HOAN-THIEN-VA-NGHIEM-THU.md),
+> [docs/19](19-CONTRACT-TICH-HOP.md) và assignments mới. Các yêu cầu mỗi người một milestone
+> rồi dừng chờ user và offline tự động bên dưới là lịch sử. Nay nhóm hoàn thiện/tích hợp toàn
+> gói, user nghiệm thu một RC. UI giữ hiện có; chỉ chung kết thủ công BTC nạp/chọn/khóa/chấm
+> qua hệ thống có kết nối; hoãn giải hoàn toàn không Internet.
+
 Ngày 23/10/2026. Quyết định mới của người dùng: bỏ luồng **tạo mới** giải MVP 8 đội,
 thiết lập theo điều lệ chính thức, chuyển nộp online sang repo GitHub, chia việc Huy/Bảo/Khoa.
 Thay kế hoạch một agent trong docs/15 cho đợt tiếp theo. Không tự phục hồi SQLite.
