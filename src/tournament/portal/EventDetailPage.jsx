@@ -199,7 +199,7 @@ function MatchTable({
 }
 
 export default function EventDetailPage({
-  account, teams, detail, detailLoading, detailError, eventId, busy, actions, onNavigate, onOpenReplay,
+  account, teams, detail, detailLoading, detailError, eventId, busy, actions, onNavigate, onOpenReplay, onOpenReplayPayload,
 }) {
   const isAdmin = account.role === 'admin';
   const [stage, setStage] = useState('all');
@@ -307,7 +307,7 @@ export default function EventDetailPage({
       )}
     </header>
     {activeTab === 'finals' && isAdmin ? (
-      <ManualFinalsPanel event={event} teams={teams} actions={actions} busy={busy} admin={isAdmin} onOpenReplay={onOpenReplay} />
+      <ManualFinalsPanel event={event} teams={teams} actions={actions} busy={busy} admin={isAdmin} onOpenReplay={onOpenReplay} onOpenReplayPayload={onOpenReplayPayload} />
     ) : (
       <OfficialSetupPanel key={`${event.id}:${account.role}`} event={event} teams={teams} actions={actions} busy={busy} admin={isAdmin} />
     )}
@@ -358,7 +358,7 @@ export default function EventDetailPage({
       </header>
 
       {activeTab === 'finals' && isAdmin ? (
-        <ManualFinalsPanel event={event} teams={teams} actions={actions} busy={busy} admin={isAdmin} onOpenReplay={onOpenReplay} />
+        <ManualFinalsPanel event={event} teams={teams} actions={actions} busy={busy} admin={isAdmin} onOpenReplay={onOpenReplay} onOpenReplayPayload={onOpenReplayPayload} />
       ) : (
         <>
           {event.status === 'draft' && isAdmin && <DraftEventEditor key={event.id} event={event} teams={teams} actions={actions} busy={busy} />}

@@ -2,11 +2,11 @@
 
 ## Trạng thái mới nhất
 
-- Trạng thái: **IN PROGRESS / CHECKPOINT 8** — Nối hoàn chỉnh API backend thật cho **Chung kết thủ công (Manual Finals Panel)**, mở rộng phạm vi cookie phiên sang `/api`, đồng bộ sạch sẽ với `origin/dev`.
-- Phạm vi: B1–B4 và Mục Chung kết thủ công theo quyết định 24/10/2026 trong [phân công Bảo](../assignments/Bao.md).
-- Checkpoint: branch `dev` (đã hợp nhất commit mới nhất từ `origin/dev`).
-- Tổng test suite hiện tại: **372/372 bài kiểm thử PASS** (100% thành công, 0 lỗi, 0 skip).
-- Build production: **Vite build sạch** (1654 modules transformed, bundle `dist/` sẵn sàng trong 2.90s).
+- Trạng thái: **IN PROGRESS / CHECKPOINT 10** — Nối Panel vòng chính thức K2/K3 với §7 (progress/standings/publish/freeze/bracket/tickets + cancel/requeue job có lý do bắt buộc), chỉ hiển thị — không tính điểm/bracket ở client.
+- Phạm vi: B1–B4, Mục Chung kết thủ công, Viewer Replay và Panel Vòng chính thức K3 theo [phân công Bảo](../assignments/Bao.md) & [docs/19 §7](../19-CONTRACT-TICH-HOP.md).
+- Checkpoint: branch `dev` (đồng bộ với commit `aaac3d9` của Huy & `96f6231` của Khoa trên `origin/dev`).
+- Tổng test suite hiện tại: **401/401 bài kiểm thử PASS** (100% thành công, 0 lỗi, 0 skip).
+- Build production: **Vite build sạch** (1654 modules transformed, bundle `dist/` sẵn sàng trong ~5.8s).
 
 ---
 
@@ -16,10 +16,10 @@ Theo yêu cầu điều lệ bàn giao, các thành phần kỹ thuật được
 
 | Mức độ | Thành phần / Module | Chi tiết & Minh chứng |
 | :--- | :--- | :--- |
-| **FULL** *(Thực tế 100%)* | **Frontend UI Components** | Toàn bộ giao diện React 19: `OfficialSetupPanel.jsx` (bảo vệ dirty draft, conflict reload), `SubmissionsPage.jsx` (đăng ký repo GitHub, duyệt BTC & thu hồi duyệt Admin, receipt SHA, USB offline fallback), `LivePage.jsx` (xử lý 401, ngắt poll 403, countdown, stream visible_plies), `BroadcastDialog.jsx` (đặt/hủy lịch phát), `EventDetailPage.jsx` (bảng điểm chính thức theo DTO Khoa). |
-| **FULL** *(Thực tế 100%)* | **Pure View Adapters** | Các hàm thuần không phụ thuộc DOM: `publicationView.js`, `officialSetupView.js`, `githubSyncState.js` được kiểm thử 100% qua Node built-in test runner. |
+| **FULL** *(Thực tế 100%)* | **Frontend UI Components** | Toàn bộ giao diện React 19: `OfficialSetupPanel.jsx` (bảo vệ dirty draft, conflict reload), `OfficialRoundPanel.jsx` (bảng điều khiển vòng chính thức K2/K3 §7: tiến độ, standings, bracket, tickets, cancel/requeue job), `ManualFinalsPanel.jsx` (chung kết thủ công, nạp bot .py, lock snapshot, chấm trận, audit log), `SubmissionsPage.jsx` (đăng ký repo GitHub, duyệt BTC & thu hồi duyệt Admin, receipt SHA, USB offline fallback), `LivePage.jsx` (xử lý 401, ngắt poll 403, countdown, stream visible_plies), `BroadcastDialog.jsx` (đặt/hủy lịch phát), `EventDetailPage.jsx` (bảng điểm chính thức theo DTO Khoa). |
+| **FULL** *(Thực tế 100%)* | **Pure View Adapters & API Clients** | Các client/adapter: `officialRoundApi.js` (11 hàm gọi API §7), `manualFinalApi.js`, `publicationView.js`, `officialSetupView.js`, `githubSyncState.js` được kiểm thử 100% qua Node built-in test runner. |
 | **FULL** *(Thực tế 100%)* | **Tài liệu Runbook Vận Hành** | Đã biên soạn đầy đủ 2 sổ tay thực tế: [`docs/runbook/SINH-VIEN.md`](../runbook/SINH-VIEN.md) (hướng dẫn thí sinh nộp bài GitHub & receipt) và [`docs/runbook/BAN-TO-CHUC.md`](../runbook/BAN-TO-CHUC.md) (hướng dẫn BTC cấu hình giải, duyệt & thu hồi repo, lên lịch phát, và quy trình ứng cứu khẩn cấp). |
-| **FULL** *(Thực tế 100%)* | **Build Production Bundle** | `npm run build` đóng gói sạch sẽ toàn bộ mã nguồn frontend tại thư mục `dist/` trong ~3.4s. |
+| **FULL** *(Thực tế 100%)* | **Build Production Bundle** | `npm run build` đóng gói sạch sẽ toàn bộ mã nguồn frontend tại thư mục `dist/` trong ~5.8s. |
 | **MOCK** *(Mô phỏng có kiểm soát)* | **Kịch bản QA người dùng (Scenario QA)** | File [`tests/portalScenarios.test.js`](../../tests/portalScenarios.test.js) (6/6 tests pass): kiểm thử đa vai trò (Team / Admin), cô lập phiên đăng nhập/đăng xuất, bảo vệ dirty draft form, hàng rào bảo mật 401 login_required và 403 scope_denied, vòng đời phát trực tiếp (waiting -> broadcasting -> ended window vs full), và kiểm tra DTO bảng điểm. Chạy trên in-process HTTP mock server của Express. |
 | **MOCK** *(Mô phỏng có kiểm soát)* | **Thử nghiệm tải Viewer (Load Testing)** | File [`tests/viewerLoadSimulation.test.js`](../../tests/viewerLoadSimulation.test.js) (3/3 tests pass): đo đạc thực tế độ trễ và thông lượng khi 50, 100, 200 concurrent viewers cùng polling `/api/live/overview` và `/api/local/broadcasts/:matchId`. |
 | **PARTIAL / NOT RUN** | **PostgreSQL Remote Supabase** | **POSTGRES APPLIED / DRILL 30/30** — Phía Huy (H4) đã apply 10/10 migration lên Supabase thật và drill 2 worker đạt 30/30. Tuy nhiên đo tải 50–200 viewers trên project Supabase thật từ browser vẫn giữ NOT RUN theo kế hoạch (chờ disposable DB riêng). |
@@ -44,51 +44,25 @@ Theo yêu cầu điều lệ bàn giao, các thành phần kỹ thuật được
 
 ---
 
-## Chi tiết checkpoint rà soát B1–B4 sau thay đổi phần H (H1–H4)
-
-```text
-Ngày / người / milestone / trạng thái:
-24/10/2026 | Bảo (Frontend UI / QA) | Rà soát & Đồng bộ B1–B4 với phần H (H1–H4) | READY FOR REVIEW
-
-Branch / commit code / PR / đã merge vào đâu:
-dev | commit code hiện tại (tra bằng `git log -1`) | Chưa tạo PR remote | Tích hợp trực tiếp trên branch dev theo quy ước chung
-
-Các nội dung đã rà soát và điều chỉnh:
-1. B1 (Setup UX & Draft Protection):
-   - Khớp 100% với DTO H1 và migration 20261023160000_official_setup.sql.
-   - Nhớ tài khoản (rememberAccount.js) được Huy bổ sung độc lập tại LoginScreen mà không làm ảnh hưởng đến OfficialSetupPanel.
-2. B2 (GitHub Intake UI & Approval):
-   - Bổ sung hàm `revokeRepositoryConnection` vào `githubApi.js` (gọi DELETE /api/local/events/:id/repository?team=...).
-   - Bổ sung nút "Thu hồi phê duyệt" cho Admin trong `SubmissionsPage.jsx` khi repository đã được duyệt, bảo đảm admin có quyền hủy duyệt và hủy job đang chờ theo contract H2 hardening.
-   - Ghi nhận việc Huy đã apply 10 migration lên Supabase thật (`cfc7a77`), sửa dứt điểm lỗi thiếu RPC `mvp_repo_connection_upsert` khi lưu repo.
-   - Giữ nguyên cơ chế đóng cổng upload HTTP (`403 upload_disabled`), chỉ hiển thị fallback USB cho Admin khi có cờ OOTV2_ALLOW_ONLINE_UPLOAD.
-3. B3 (Publication Viewer & Live Stream):
-   - Khớp chính sách H3 privacy: Live View đưa vào trong login, xử lý 401 (nhắc login) và 403 (dừng poll chéo giải).
-   - Tiến độ visible_plies, countdown waiting, và mở kết quả window vs full đồng bộ 100% với server.
-4. B4 (QA Scenarios, Load Testing & Runbooks):
-   - Cập nhật tài liệu BAN-TO-CHUC.md bổ sung quy trình Thu hồi duyệt repo (Revoke).
-   - Kiểm thử toàn bộ 304 bài test PASS, không có hồi quy nào.
-
-File / export / route / RPC quan trọng:
-- src/tournament/portal/githubApi.js (thêm revokeRepositoryConnection)
-- src/tournament/portal/SubmissionsPage.jsx (thêm nút Thu hồi phê duyệt cho Admin)
-- docs/runbook/BAN-TO-CHUC.md (bổ sung quy trình Revoke)
-- tests/portalScenarios.test.js
-- tests/viewerLoadSimulation.test.js
-
-Tests: lệnh | môi trường | exit | pass/fail/skip | vị trí log:
-- npm test (node --test tests/*.test.js) | Windows local Node v22.13.0 | exit 0 | pass 304/304, fail 0, skip 0 | console stdout
-- npm run build (vite build) | Windows local Node v22.13.0 | exit 0 | pass (1650 modules transformed, dist bundle sạch) | console stdout
-
-NOT RUN + lý do:
-- Test tải trên DB Supabase thật từ browser: NOT RUN (chờ disposable DB riêng do BTC cấp phép).
-- Sandbox worker Linux cấp OS: NOT RUN (thuộc mốc K4 của Khoa, chờ hạ tầng VM độc lập).
-- Test headless browser qua mạng LAN/Internet: NOT RUN (chỉ chạy nội bộ loopback 127.0.0.1 theo chính sách bảo mật).
-```
-
----
-
 ## Lịch sử checkpoint
+
+- 24/10/2026 (Checkpoint 10): **Nối Panel vòng chính thức K2/K3 với §7 (docs/19)**:
+  - Tạo và nâng cấp [`src/tournament/portal/officialRoundApi.js`](../../src/tournament/portal/officialRoundApi.js) (11 hàm API bọc trọn vẹn spec §7: `fetchOfficialProgress`, `fetchOfficialStandings`, `publishNextOfficialGame`, `freezeOfficialRound`, `fetchOfficialBracket`, `openNextKnockoutSeries`, `fetchOfficialTickets`, `cancelOfficialJob`, `requeueOfficialJob`).
+  - Nâng cấp toàn diện [`OfficialRoundPanel.jsx`](../../src/tournament/portal/OfficialRoundPanel.jsx):
+    - Sub-tab **Tiến độ & Điều hành** (`progress`): Quản lý tổng số ván, % hoàn thành, breakdown jobs byStatus, ván pending, nút phát ván kế tiếp (Publish), nút đóng băng (Freeze), bảng jobs lỗi kèm thao tác Hủy/Chấm lại có modal nhập lý do kiểm toán bắt buộc (5..400 ký tự).
+    - Sub-tab **Bảng xếp hạng** (`standings`): Hiển thị nguyên trạng dữ liệu máy chủ tính toán (điểm cặp, điểm ván, tie-break, danh sách qualifiers). **Tuân thủ tuyệt đối: chỉ hiển thị — không tự tính điểm/bracket ở client**.
+    - Sub-tab **Nhánh Knockout** (`bracket`): Hiển thị tiến độ resolved/expected, series kế tiếp, nút mở/tiến series, bảng kết quả các series knockout.
+    - Sub-tab **Vé chung kết** (`tickets`): Hiển thị danh sách vé phân bổ chính thức từ server.
+  - Bổ sung unit test [`tests/officialRoundApi.test.js`](../../tests/officialRoundApi.test.js) (2 tests: validation tham số, error handling 404/409/reason & mock fetch).
+  - Kết quả kiểm thử: **401/401 tests PASS** (100%), Vite build sạch 1,654 modules trong 5.79s.
+
+- 24/10/2026 (Checkpoint 9): **Khắc phục P1 — Tách callback mở Replay payload & Hỗ trợ Replay Campus Engine v2**:
+  - Tách bạch hai luồng mở replay trong [LocalCore.jsx](../../src/tournament/portal/LocalCore.jsx): `onOpenReplay(matchId)` dùng cho ván đấu thường (gọi API `/matches/:id/replay`), và `onOpenReplayPayload(data)` dùng cho ván đã có sẵn payload `{ match, replay }` (tránh lỗi dùng object replay làm matchId). Bổ sung phòng thủ tự động chuyển luồng nếu `openReplay` nhận object.
+  - Truyền `onOpenReplayPayload` xuyên suốt từ `LocalCore` -> `TournamentWorkspace` -> `EventDetailPage` -> [ManualFinalsPanel.jsx](../../src/tournament/portal/ManualFinalsPanel.jsx).
+  - Nâng cấp [src/tournament/replay.js](../../src/tournament/replay.js) (`buildReplayFrames`): hỗ trợ phân giải toàn diện cấu trúc Replay Campus v2 (`campus-engine-replay.v1`), gộp 2 sự kiện setup kín (đủ 18 quân) thành frame 0 khởi đầu, diễn hoạt nước đi với địa hình map v2 và bắt sự kiện `bot_fault`. Chuẩn hóa tọa độ ô chữ hoa/thường an toàn.
+  - Cập nhật [ReplayBoard.jsx](../../src/tournament/ReplayBoard.jsx): nhận map địa hình Campus từ `replay.map || replay.config?.map`, hiển thị tên đội và seed an toàn khi mở replay thủ công.
+  - Thêm bài test mới [tests/replayViewerCampus.test.js](../../tests/replayViewerCampus.test.js) (4 tests: MVP v1, Campus v2 terrain/setup, bot fault, empty replay).
+  - Kết quả kiểm thử: **381/381 tests PASS** (100%), Vite build sạch trong 2.86s.
 
 - 24/10/2026 (Checkpoint 8): **Nối API thật cho Chung kết thủ công & Mở rộng phạm vi Cookie Session**:
   - Tạo client API [`manualFinalApi.js`](../../src/tournament/portal/manualFinalApi.js) (10 hàm gọi API `/api/local/manual-finals/*` có CSRF & same-origin credentials).

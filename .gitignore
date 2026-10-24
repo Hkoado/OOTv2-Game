@@ -32,8 +32,8 @@ tests-local/
 *.local.test.js
 tests-*.log
 manual-final-*.txt
-# File nháp tạm của agent/công cụ (từng bị track nhầm)
-.tmp_*
+# File nháp tạm của công cụ/agent ở root repo (chỉ root, không che file .tmp_* trong src/tests)
+/.tmp_*
 
 # Editor directories and files
 .vscode/*

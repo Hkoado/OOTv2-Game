@@ -79,14 +79,57 @@
   API), không thể qua REST. Không được tắt trigger ngoài dọn dẹp có kiểm soát.
 - `npm test` **372/372 pass**, `npm run build` pass sau thay đổi.
 
+### Review + apply hàng đợi official của Khoa (24/10/2026)
+
+- Nhận `origin/dev` (`96f6231`, merge `e6ad2af`) gồm `officialWorker`, `officialJobs`, `officialExecution`,
+  `officialOrchestration`, `officialKnockout` và migration `20261026090000_official_worker_jobs.sql`.
+- **Review SQL (Huy):** RPC có fence đúng (`for update skip locked`, lease/generation → `lease_lost`,
+  finish idempotent `already_recorded`/`result_conflict`, `unique(round_pk, game_key)`, `reap`, `notify pgrst`).
+  Nhưng bảng `mvp_official_jobs`/`job_attempts` (và `rounds`/`games` từ migration cũ) đang cấp
+  `INSERT/UPDATE` cho `service_role` ⇒ PostgREST có thể ghi đè `status/result` bỏ qua fence.
+- **Đã thêm** `supabase/migrations/20261026110000_official_grants_hardening.sql`: `service_role` chỉ còn
+  `SELECT` trên 4 bảng; browser không có quyền. Không đổi schema/RPC.
+- **Đã apply** `20261026090000` + `20261026110000` bằng `db:apply-migrations -- --apply --smoke`
+  (**OK 2/2**, smoke rollback PASS). Kiểm chứng: 2 bảng + 8 RPC tồn tại;
+  `has_table_privilege('service_role', …, 'UPDATE'|'INSERT') = false`, `SELECT = true`, `anon = false`;
+  REST `GET` jobs 200 nhưng `PATCH`/`POST` → **403 `42501`**. Counts dữ liệu không đổi
+  (`tournaments=2, participants=16, matches=4, official_rounds=0`).
+- `npm test` **395/395 pass**, `npm run build` pass; `db:check-github` không còn 404/5xx.
+- **Dọn repo:** 7 file nháp `.tmp_*` do commit trước vô tình thêm vào đã được xoá khỏi git + thêm `/.tmp_*`
+  vào `.gitignore` (nội dung chỉ là output git/docs/test, không có secret).
+- **Cần Khoa nối tiếp:** worker hiện chỉ xử lý `mvp_official_jobs`; **manual final chưa có consumer**.
+  Producer đã có (`mvp_manual_final_*` + `snapshot_json` + `mvp_manual_final_claim/finish/release`,
+  client `server/shared/manualFinalJobs.js`) — đề nghị mở rộng `officialWorker` nhận thêm kind manual.
+  Ghi chú “manual chưa có producer” trong `docs/handoff/Khoa.md` đã lỗi thời.
+- **Còn lại của Huy:** API route cho official orchestration/knockout (`publishNextGame`, `roundProgress`,
+  `groupStandings`, `freezeGroupRound`, `cancel/requeue job`, knockout/bracket/tickets), test route + smoke;
+  sau đó drill 2 worker trên VM.
+
+### API route vòng chính thức K3 (24/10/2026)
+
+- Thêm `server/routes/official.js`, mount trong `server/shared/router.js`; **admin-only từng route**
+  (không dùng middleware toàn cục để không chặn nhầm route khác).
+- Endpoint (chi tiết DTO ở docs/19 §7): `GET .../official/progress|standings|bracket|tickets`,
+  `POST .../official/publish|freeze|bracket/open`, `POST /official/jobs/:jobId/cancel|requeue` (reason 5..400).
+- Nguyên tắc: resolve `group` round theo event ở server (client không truyền roundId), DTO bracket
+  whitelist (không lộ `snapshot`, `artifactKey`, plan nội bộ), không tự tạo ván/kết quả.
+- Kiểm thử: route test **6/6 PASS** (`data/officialRoutes.test.mjs`, gitignored theo quy tắc “không push
+  file test tự sinh”) — auth 403 team/anonymous, DTO progress/standings, publish/freeze, bracket whitelist,
+  cancel/requeue + actor, 404 `round_not_found`.
+- Smoke API thật (admin tạm trên project đã apply): **12/12 PASS** — 401 anonymous, 404 `round_not_found`
+  cho 7 endpoint khi event chưa mở vòng, 400 `reason_required`, 404 `job_not_found` (domain error), 403 thiếu CSRF.
+- `npm test` **399/399 pass**, `npm run build` pass (route test nằm ngoài `tests/` nên không đổi con số).
+- Bảo: nối UI theo docs/19 §7; Khoa: không cần đổi service, route chỉ gọi export hiện có.
+
 ### Việc của người khác (không tự làm thay)
 
 - Bảo: nối UI mục “Chung kết thủ công” theo DTO mục 6.3 của docs/19; migration **đã apply** nên có thể
   nối API thật ngay, fixture chỉ dùng để chạy song song trước khi nối.
   Góp ý nhỏ còn lại (không chặn): reload `detail` sau khi đổi trạng thái đợt, và map `blocker_details`
   nếu UI muốn hiện theo đội.
-- Khoa: nối worker vào queue chung (`server/shared/manualFinalJobs.js`), giữ luật “lỗi hạ tầng ≠ forfeit”,
-  dùng cùng Campus/budget; không tạo runner thứ hai.
+- Bảo: nối panel vòng chính thức với route mục 7 docs/19 (progress/standings/publish/freeze/bracket/
+  tickets + cancel/requeue job có lý do); không tự tính kết quả/bracket ở client.
+- Khoa: nối worker manual final (producer đã có) + chạy VM/2-worker thật; không tạo runner thứ hai.
 - Operator: rehearsal DB/VM + restore rehearsal trước khi đóng gate RC.
 
 ## Trạng thái mới nhất

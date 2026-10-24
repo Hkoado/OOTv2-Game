@@ -14,6 +14,9 @@ Nhóm map vào exports/routes/schema thật trước khi code từng boundary; k
 - Cookie phiên: `HttpOnly`, `SameSite=strict`, `Secure` khi HTTPS; **path `/api`** (không chỉ `/api/local`) vì
   `/api/live/*` cũng dùng `requireSession`. Khi đổi path phải xoá cookie path cũ (`/api/local`) lúc login/logout,
   nếu không browser gửi cookie cũ trước và phiên mới bị che.
+- Bảng runtime chỉ ghi qua RPC `SECURITY DEFINER` có fence (lease/generation/chain): `service_role` **chỉ được
+  `SELECT`** trên `mvp_official_rounds/games/jobs/job_attempts` và `mvp_manual_final_*`; cấp `INSERT/UPDATE`
+  bảng sẽ cho PostgREST bỏ qua fence (ví dụ PATCH thẳng `status='succeeded'` hoặc `result`).
 - Idempotency cho request retry; optimistic version cho draft; transaction cho khóa/chọn/claim/finish.
 - Dùng error envelope/code hiện có, bổ sung code có test nếu thiếu. UI phân biệt forbidden,
   conflict/frozen, validation, infrastructure; không suy thành công từ HTTP 202 hay trạng thái process.
@@ -71,7 +74,7 @@ và consumer đã xác nhận. Chỉ đánh VERIFIED khi đã tích hợp và c�
 | Boundary | Owner chốt | Mapping/test/consumer | Trạng thái |
 | --- | --- | --- | --- |
 | Intake/readiness/publication | Huy, Bảo xác nhận | `PUT/GET/DELETE /api/local/events/:id/repository`, `POST/GET .../submissions/from-github`, `GET /repo-sync-jobs/:id`, `GET /broadcasts/:matchId`; test `githubIntakeApi`, `uploadDisabled`, `publication`; Postgres smoke `db:h4` 30/30 | VERIFIED (mock + DB smoke; browser chưa) |
-| Snapshot/schedule/job/result/standings | Khoa + Huy, Bảo xác nhận DTO | `server/shared/officialSchedule.js` + RPC `mvp_official_*`, `server/lib/officialGroups.js`; test `officialSchedule`, `officialGroups`, `officialBracket`, `officialRounds` | PARTIAL — code/test có, worker Campus/VM chưa nghiệm thu |
+| Snapshot/schedule/job/result/standings | Khoa + Huy, Bảo xác nhận DTO | `officialSchedule.js` + RPC `mvp_official_*`; `officialJobs.js` (claim/heartbeat/finish/fail/requeue/reap) sau `20261026090000`; grants siết bởi `20261026110000` (service_role chỉ `SELECT`, REST PATCH/POST → 403 `42501`); **route mục 7** (`server/routes/official.js`); test `officialSchedule`, `officialGroups`, `officialBracket`, `officialRounds`, `officialWorker` + route test 6/6 | PARTIAL — API route có, **UI Bảo chưa nối**, VM/2 worker chưa nghiệm thu |
 | Manual intake/lock/judging | Huy + Khoa, Bảo xác nhận | Xem mục 6: route `/api/local/manual-finals/*`, RPC `mvp_manual_final_*`; test `manualFinalApi` (9), `manualFinalDrill` (5), `supabaseSchema` (+1); **migration đã apply 24/10/2026** (project OTTv2-G5) + drill PASS | IMPLEMENTED + APPLIED; UI/worker chưa nối (Bảo/Khoa) |
 | Worker install/control/readiness | Khoa | Có scaffolding, cần sửa và nghiệm thu VM | NOT VERIFIED |
 
@@ -154,5 +157,42 @@ API không chạy Python; `storage_path`/lease token không nằm trong DTO; int
   `20261025100000_cutoff_capture.sql`; `npm run db:manual` chạy drill trên schema đã apply (ROLLBACK).
   `apply-migrations.js` đã có 2 migration này trong PLAN. Consumer manual **đã có code + contract
   test**; browser E2E/VM acceptance và chạy worker trên DB thật vẫn **NOT RUN**.
+
+
+## 7. Mapping vòng chính thức K3 — API route (Huy, 24/10/2026)
+
+Nguồn: `server/routes/official.js` (mount trong `server/shared/router.js`), bọc service của Khoa
+(`officialOrchestration`, `officialKnockout`). **Admin-only toàn bộ** (kết quả/bảng còn kín trước công bố).
+
+| Method + path | Body | Trả về |
+| --- | --- | --- |
+| `GET /api/local/events/:id/official/progress` | — | `{round_id, roundId, eventId, round, frozen, games:{total,finished}, jobs:{total,byStatus,failed[]}, pending}` |
+| `GET /api/local/events/:id/official/standings` | — | `{event_id, round_id, complete, games, series, tieBreakers, groups, qualifiers}` |
+| `POST /api/local/events/:id/official/publish` | — | `{round_id, status:'published'|'pending'|'frozen', game}` |
+| `POST /api/local/events/:id/official/freeze` | `{expected_games?}` | `{round_id, frozen, expectedGames}` |
+| `GET /api/local/events/:id/official/bracket` | — | DTO bracket (xem dưới) |
+| `POST /api/local/events/:id/official/bracket/open` | — | `202 {status:'opened'|'advanced', matchId, roundId, game}` hoặc `200 {status:'bracket_complete'|'blocked'}` |
+| `GET /api/local/events/:id/official/tickets` | — | `{event_id, round_id, ranking, tickets}` (409 `bracket_incomplete` nếu chưa xong) |
+| `POST /api/local/official/jobs/:jobId/cancel` | `{reason}` (5..400) | `{job_id, alreadyCancelled, reason}` |
+| `POST /api/local/official/jobs/:jobId/requeue` | `{reason}` (5..400) | `{job_id, status, reason}` |
+
+**DTO bracket** (whitelist, không lộ snapshot/artifact key):
+
+```json
+{ "event_id": "uuid", "round_id": "uuid", "schema_version": "campus-knockout.v1", "level": "weekly",
+  "seed": 42, "expected": 4, "resolved": 1, "complete": false,
+  "waiting": null, "next": {"match_id":"sf2","stage":"semifinal","round_id":"ko:semifinal:2","opened":false},
+  "qualifiers": [{"participant_id":"uuid","group_name":"A","seed":1,"rank":1}],
+  "series": [{"match_id":"sf1","stage":"semifinal","round_id":"ko:semifinal:1","complete":true,
+              "reason":"winner","winner_participant_id":"uuid","loser_participant_id":"uuid",
+              "administrative":false,"games_played":2}] }
+```
+
+- Mọi request resolve `group` round theo `:id` event ở server; client không truyền `roundId` tuỳ ý.
+- `round_not_found` (404) khi event chưa mở vòng bảng; `reason_required` (400) cho cancel/requeue;
+  `admin_required` (403) cho đội/anonymous; lỗi domain của DB giữ mã như `job_not_found`, `bad_lease`,
+  `group_incomplete`, `bracket_incomplete`.
+- Không route nào tự tạo ván/kết quả; `publish` chỉ enqueue đúng ván đã pin qua chain, worker Khoa ghi
+  accepted result bằng RPC fence.
 
 Các quyết định sản phẩm đã chốt trong docs/18 không được thay đổi khi điền bảng này.

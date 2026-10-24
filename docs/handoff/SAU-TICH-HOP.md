@@ -21,7 +21,12 @@ không áp dụng. Nhóm tự checkpoint/tích hợp, user nghiệm thu một RC
 
 - [ ] Khoa: worker Campus riêng, snapshot/hash/runtime/budget, accepted attempt fencing result/log/replay;
   hai worker/crash/retry/stale/duplicate không tính đôi, infra không forfeit.
+  → **Huy 24/10 (phần DB/review):** migration `20261026090000` (queue official) **đã apply** cùng hardening
+  `20261026110000` (service_role chỉ `SELECT`; REST PATCH/POST → 403 `42501`); test 395/395. VM/2 worker thật,
+  crash/retry trên VM: **NOT RUN** (Khoa).
 - [ ] Khoa: group/standings/tie/knockout/extra/tranh ba/bye/DQ/walkover/vé đúng; màu lưu trước chạy.
+  → **Huy 24/10 (phần API):** route admin cho progress/standings/publish/freeze/bracket/tickets +
+  cancel/requeue job đã có (`docs/19` §7), route test 6/6 + smoke 12/12. UI Bảo + VM/2 worker: **NOT RUN**.
 - [ ] Khoa: sandbox VM thật, resources/network/filesystem/cleanup/attestation, không secret vào bot;
   WSL/mock không thay production acceptance.
 - [ ] Khoa: Windows khác không chạy API, installer/start/stop/reboot/update hỏng/rollback đã thử;
