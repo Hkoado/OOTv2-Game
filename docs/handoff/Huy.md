@@ -1,5 +1,50 @@
 # Kết quả Huy — Backend / GitHub / privacy
 
+## Đợt 24/10/2026 — Backend Chung kết thủ công + rà gate API/DB (RC)
+
+- Phạm vi: toàn gói backend theo [docs/18](../18-CHOT-HOAN-THIEN-VA-NGHIEM-THU.md) và
+  [contract](../19-CONTRACT-TICH-HOP.md), **không chỉ H1**. Áp dụng cho module mới; không sửa
+  engine/runner của Khoa, không sửa UI của Bảo, giữ Campus v2 + Supabase-only + online GitHub capture.
+- Code mới: `server/services/manualFinal.js`, `server/routes/manualFinal.js`,
+  `server/shared/manualFinalJobs.js`, migration `supabase/migrations/20261026100000_manual_final.sql`,
+  mount tại `/api/local/manual-finals` trong `server/shared/router.js` (admin-only, CSRF, no-store).
+- Bảo mật/provenance: intake `manual_final` tách khỏi GitHub; không giả receipt/SHA; hash + thời gian +
+  actor do server ghi; `storage_path` và lease token **không** trả trong DTO; source chỉ tải qua route
+  admin riêng (`/submissions/:sid/source`, kiểm lại sha256/byte_size trước khi trả).
+- Ghi DB có nguyên tử/fence ở SQL: chọn/khóa/pair/cancel/claim/finish/release là RPC `SECURITY DEFINER`
+  (`set search_path=''`), cấm REST sửa bytes/hash/snapshot/result (revoke cả `service_role` rồi cấp
+  column-level grant), audit append-only, một ván chỉ một kết quả accepted.
+- Upload không dùng cờ `OOTV2_ALLOW_ONLINE_UPLOAD`; đội online vẫn bị `upload_disabled` (đã test lại).
+
+### Bằng chứng đã chạy (exit 0)
+
+| Lệnh | Kết quả |
+| --- | --- |
+| `npm test` | **367/367 pass**, 0 skip (baseline 353 + 14 test mới) |
+| `node --test tests/manualFinalApi.test.js` | 9/9 — quyền/CSRF/IDOR, upload/dup, chọn/khóa, pair idempotent, cancel/rerun, finish fence/duplicate, release retry, replay/download |
+| `node --test tests/manualFinalDrill.test.js` | 4/4 — drill luôn một transaction + ROLLBACK, chặn COMMIT |
+| `node --test tests/supabaseSchema.test.js` | 10/10 — +1 test tĩnh cho migration manual final |
+| `npm run build` | pass (Vite, ~15s) |
+| `npm run db:manual` | **PASS** trên project `.env` (`wsyfcgurnrowcuefwynx`): migration + drill trong 1 transaction, **ROLLBACK**; kiểm RLS/grant, chọn/khóa, pair idempotent, finish fence, duplicate finish, cancel/rerun, close guard, audit append-only. Sau drill đọc lại `information_schema` → **không có** bảng `mvp_manual_final_*` (không apply gì). |
+
+### NOT RUN / blocker (không đổi thành PASS)
+
+- **Migration chưa apply remote** (`20261026100000`). Chưa có bảng manual final trên project; UI/worker
+  chưa dùng được cho tới khi operator apply qua migration history đúng thứ tự + chạy
+  `supabase/tests/manual_final.sql` trên project đích.
+- Worker Khoa chưa consume `claimManualFinalJobs`/`finishManualFinalJob`; chưa có VM/sandbox thật
+  cho job `match`/`validate`.
+- Browser E2E, load 50/100/200 viewer, backup/restore rehearsal: **NOT RUN** trong đợt này.
+- `npm audit`/secret scan lại chưa chạy sau đợt này (không thêm dependency mới).
+
+### Việc của người khác (không tự làm thay)
+
+- Bảo: nối UI mục “Chung kết thủ công” theo DTO mục 6.3 của docs/19; dùng fixture versioned trước,
+  sau đó nối API thật khi migration đã apply.
+- Khoa: nối worker vào queue chung (`server/shared/manualFinalJobs.js`), giữ luật “lỗi hạ tầng ≠ forfeit”,
+  dùng cùng Campus/budget; không tạo runner thứ hai.
+- Operator: apply migration + rehearsal DB/VM trước khi đóng gate RC.
+
 ## Trạng thái mới nhất
 
 - Trạng thái: **H1/H2/H3 DONE — đã VERIFIED trên Postgres thật** (10/10 migration + smoke PASS,

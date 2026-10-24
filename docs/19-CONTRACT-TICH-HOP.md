@@ -67,9 +67,63 @@ và consumer đã xác nhận. Chỉ đánh VERIFIED khi đã tích hợp và c�
 
 | Boundary | Owner chốt | Mapping/test/consumer | Trạng thái |
 | --- | --- | --- | --- |
-| Intake/readiness/publication | Huy, Bảo xác nhận | Chưa đối chiếu đầy đủ trong đợt giao việc này | NOT VERIFIED |
-| Snapshot/schedule/job/result/standings | Khoa + Huy, Bảo xác nhận DTO | Chưa đối chiếu đầy đủ trong đợt giao việc này | NOT VERIFIED |
-| Manual intake/lock/judging | Huy + Khoa, Bảo xác nhận | Chức năng cần triển khai theo phạm vi mới | NOT IMPLEMENTED |
+| Intake/readiness/publication | Huy, Bảo xác nhận | `PUT/GET/DELETE /api/local/events/:id/repository`, `POST/GET .../submissions/from-github`, `GET /repo-sync-jobs/:id`, `GET /broadcasts/:matchId`; test `githubIntakeApi`, `uploadDisabled`, `publication`; Postgres smoke `db:h4` 30/30 | VERIFIED (mock + DB smoke; browser chưa) |
+| Snapshot/schedule/job/result/standings | Khoa + Huy, Bảo xác nhận DTO | `server/shared/officialSchedule.js` + RPC `mvp_official_*`, `server/lib/officialGroups.js`; test `officialSchedule`, `officialGroups`, `officialBracket`, `officialRounds` | PARTIAL — code/test có, worker Campus/VM chưa nghiệm thu |
+| Manual intake/lock/judging | Huy + Khoa, Bảo xác nhận | Xem mục 6: route `/api/local/manual-finals/*`, RPC `mvp_manual_final_*`; test `manualFinalApi` (9), `manualFinalDrill` (4), `supabaseSchema` (+1); rehearsal DB `npm run db:manual` PASS (BEGIN…ROLLBACK) | IMPLEMENTED (mock + DB rehearsal); migration **chưa apply**, UI/worker chưa nối |
 | Worker install/control/readiness | Khoa | Có scaffolding, cần sửa và nghiệm thu VM | NOT VERIFIED |
+
+
+## 6. Mapping Chung kết thủ công — đã implement 24/10/2026 (Huy)
+
+Nguồn: `server/services/manualFinal.js`, `server/routes/manualFinal.js`, `server/shared/manualFinalJobs.js`,
+migration `supabase/migrations/20261026100000_manual_final.sql`, drill `supabase/tests/manual_final.sql`.
+
+Nguyên tắc: **admin-only toàn bộ**, không dùng `OOTV2_ALLOW_ONLINE_UPLOAD`, không giả receipt/SHA GitHub,
+API không chạy Python; `storage_path`/lease token không nằm trong DTO; intake mode `manual_final` gắn ở
+đợt/vòng và không trộn với online.
+
+### 6.1 Route (prefix `/api/local/manual-finals`, `requireSession` + `requireLocalAdmin` + CSRF)
+
+| Method + path | Body | Trả về |
+| --- | --- | --- |
+| `GET /` | — | `{events:[eventView]}` |
+| `POST /` | `{name, level, round_no?, team_ids[2..56], map, seed?}` | `201` event detail (draft) |
+| `GET /:id` | — | `{event, teams, submissions, matches, jobs, readiness, audit[20]}` |
+| `POST /:id/status` | `{status:'intake'|'locked'|'closed', reason?}` | event detail |
+| `POST /:id/close` | `{reason?}` | event detail (closed) |
+| `POST /:id/submissions` | multipart `file` (`.py`, 1..262144 B) + field `team_id` | `201 {duplicate:false, submission}`; trùng bytes → `200 {duplicate:true}` |
+| `GET /:id/submissions/:sid/source` | — | `text/x-python` + `X-Source-Sha256`, `no-store` |
+| `POST /:id/submissions/:sid/select` | — | `{select:{team_id, submission_id, sha256, selected_at}}` |
+| `POST /:id/lock` | `{team_id}` | `{lock:{team_id, submission_id, sha256, locked_at, already_locked}}` |
+| `POST /:id/matches` | `{red_team_id, blue_team_id, series_id, game_no?, seed?, note?}` | `202 {pair:{match_id, job_id, snapshot_hash, idempotent:false}}`; gọi lặp → `200 idempotent:true` |
+| `GET /:id/matches/:mid/replay` | — | `{match, replay}` — chỉ khi đã accepted |
+| `POST /:id/matches/:mid/cancel` | `{reason}` (5..500) | `{cancel:{status:'canceled', previous_status, already_canceled}}` |
+| `POST /:id/matches/:mid/rerun` | `{reason}` (5..500) | `202 {rerun:{match_id, rerun_of, snapshot_hash, idempotent}}` |
+
+
+### 6.2 RPC (chỉ `service_role`, đã revoke PUBLIC/anon/authenticated)
+
+| RPC | Vai trò |
+| --- | --- |
+| `mvp_manual_final_select(uuid,uuid)` | chọn 1 phiên bản; chặn khi đợt chưa `intake`, bài chưa `valid`, hoặc đội đã khóa |
+| `mvp_manual_final_lock(uuid,uuid,uuid)` | khóa bài đã chọn của đội; khóa lặp idempotent |
+| `mvp_manual_final_pair(jsonb,uuid)` | tạo match + job trong 1 transaction, idempotent theo key, không đọc "bài mới nhất" |
+| `mvp_manual_final_cancel(uuid,uuid,text)` | hủy trận chưa accepted + hủy job chờ + audit; bắt buộc lý do |
+| `mvp_manual_final_claim(text,integer,integer)` | worker claim 1..5 job với lease token + generation (`for update skip locked`) |
+| `mvp_manual_final_finish(uuid,uuid,integer,jsonb)` | ghi kết quả/validation có fence; duplicate → `already_finished`; stale → `lease_lost` |
+| `mvp_manual_final_release(uuid,uuid,integer,text,integer)` | retry cùng input + backoff, quá số lần → `infra_fault` |
+
+### 6.3 DTO và mã lỗi cho Bảo
+
+- `submissionView`: `{id,event_id,team_id,round_no,source_kind:'manual_final',filename,sha256,byte_size,status,error_code,error_message,received_at,received_by,selected,selected_at,locked,locked_at}` — **không có** `storage_path`.
+- `matchView`: `{id,series_id,game_no,red,blue,seed,map_hash,snapshot_hash,color_policy,status,result,reason,ply_count,error_code,error_message,requested_at,started_at,finished_at,canceled_at,cancel_reason,rerun_of,replay_available,can_cancel,can_rerun}`.
+- `readiness`: `{teams,locked_teams,pending_validations,matches:{queued,running,finished,bot_fault,infra_fault,canceled},can_lock_round,can_close,blockers[]}`.
+- Mã lỗi ổn định: `admin_required`, `csrf_required`, `event_not_open`, `event_not_locked`, `teams_not_locked`, `jobs_pending`, `bad_transition`, `submission_not_valid`, `submission_locked`, `not_selected`, `red_submission_not_locked`, `blue_submission_not_locked`, `same_team`, `result_conflict`, `rerun_not_allowed`, `reason_required`, `result_not_ready`, `artifact_integrity`, `scope_denied`, `bad_extension`, `binary_file`, `bad_encoding`, `file_too_large`.
+
+### 6.4 Bàn giao cho Khoa (worker) và Bảo (UI)
+
+- Khoa: `claimManualFinalJobs({worker,limit,leaseSeconds})` → job `validate` (tải artifact từ `storage_path` trong DTO worker, chạy syntax + protocol smoke) hoặc job `match` (chạy Campus trên `snapshot`); trả qua `finishManualFinalJob` / `releaseManualFinalJob`. Cùng sandbox/budget/engine, không runner thứ hai, không lookup latest.
+- Bảo: mọi route admin-only; chỉ hiển thị trạng thái/lý do; nạp file bằng multipart + `x-csrf-token`; không có form nhập điểm tay; không mở upload online cho đội.
+- Migration **chưa apply** trên project: `npm run db:manual` chỉ rehearsal (BEGIN…ROLLBACK). Trước khi UI/worker dùng thật phải apply qua migration history khi có phép.
 
 Các quyết định sản phẩm đã chốt trong docs/18 không được thay đổi khi điền bảng này.

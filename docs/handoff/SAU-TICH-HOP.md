@@ -9,8 +9,14 @@ không áp dụng. Nhóm tự checkpoint/tích hợp, user nghiệm thu một RC
 
 - [ ] Cả ba: baseline SHA chung bảo toàn working tree, mapping concrete API/RPC/job/DTO/error/version
   trong docs/19, producer/consumer tests; ghép sớm giải nhỏ bằng runtime chính thức.
+  → **Huy 24/10:** đã điền bảng mapping docs/19 mục 5 + mục 6 (manual final route/RPC/DTO/mã lỗi);
+  phần online/worker vẫn chờ Khoa/Bảo xác nhận.
 - [ ] Huy: schema/history project đích đúng, migration additive được phép, backup/restore đã thử;
   DB/RLS/grants/Storage/auth/CSRF/IDOR/cutoff/provenance/concurrency integration thật.
+  → **Huy 24/10:** migration `20261026100000_manual_final.sql` **chưa apply**; rehearsal
+  `npm run db:manual` PASS (RLS/grants/chọn-khóa/pair/fence/duplicate/cancel-rerun/close/audit)
+  trong 1 transaction đã ROLLBACK. Backup/restore rehearsal và apply remote: **NOT RUN** (cần phép).
+
 - [ ] Khoa: worker Campus riêng, snapshot/hash/runtime/budget, accepted attempt fencing result/log/replay;
   hai worker/crash/retry/stale/duplicate không tính đôi, infra không forfeit.
 - [ ] Khoa: group/standings/tie/knockout/extra/tranh ba/bye/DQ/walkover/vé đúng; màu lưu trước chạy.
@@ -24,15 +30,27 @@ không áp dụng. Nhóm tự checkpoint/tích hợp, user nghiệm thu một RC
   → publication/viewer, không sửa DB để vượt bước thiếu.
 - [ ] Cả ba: Chung kết thủ công E2E admin tạo đợt/vòng → nạp bot → validation → chọn/khóa
   → chọn cặp/chấm → điểm/lý do/replay → BTC xác nhận đi tiếp; dùng cùng runner/sandbox.
+  → **Huy 24/10:** backend + RPC + drill DB đã có; **thiếu** worker consume (Khoa) và UI (Bảo),
+  nên E2E trình duyệt **NOT RUN**.
 - [ ] Huy/Bảo/Khoa: manual scoped event/round/team admin-only, source/hash/actor/server time;
   pending/invalid/lock race đúng; sau khóa không thay bài; online không nhận manual provenance giả.
+  → **Huy 24/10 DONE ở mức API/DB:** test `manualFinalApi` 9/9 (403 đội/anonymous, CSRF, scope,
+  upload sai, dup idempotent, pending không khóa, sau khóa không đổi, provenance `manual_final`).
 - [ ] Cả ba: manual cancel/rerun có reason/audit giữ lịch sử; infra retry cùng input;
   không form nhập tay thay engine result, không mở upload online toàn cục, mặc định BTC-only.
+  → **Huy 24/10 DONE ở mức API/DB:** `cancel` bắt buộc lý do + audit, `finished` không hủy được,
+  `rerun` giữ `rerun_of`/snapshot hash, `release` retry cùng input rồi `infra_fault`;
+  router manual không dùng cờ upload toàn cục.
 - [ ] Bảo/Khoa: counts 35/40/48/50, benchmark worker và viewer 50/100/200 có môi trường/P95/error/resource;
   không coi in-process simulation là nghiệm thu hạ tầng triển khai.
 - [ ] Cả ba: full tests/build/diff, replay/rules cũ, backup/artifact/recovery; security/dependency/secret-history/license review.
+  → **Huy 24/10 (phần Huy):** `npm test` **367/367 pass** (0 skip), `npm run build` pass,
+  `git diff --check` sạch; replay/rules cũ không đổi (không sửa engine). Backup/restore DB,
+  security/secret-history review lại và license: **NOT RUN**.
 - [ ] Huy tổng hợp, mỗi owner ký: một RC SHA, evidence commands/exit/PASS/FAIL/NOT RUN,
   Bảo review script, Khoa worker runbook, Huy schema/env/deploy checklist; không để user nối code.
+  → **Chưa đạt RC:** thiếu bằng chứng Khoa (VM/worker/2-worker) và Bảo (browser/theme/load);
+  thiếu apply migration + E2E manual thật. Huy đã cập nhật handoff/contract, chưa ký thay người khác.
 - [ ] Supabase và VM sẵn sàng trước bàn giao. User tự deploy Vercel; HTTPS/cookie/routing production
   smoke sau deploy là checkpoint môi trường riêng, không giả đã chạy trước deploy.
 

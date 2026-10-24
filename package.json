@@ -31,6 +31,7 @@
     "db:apply-migrations": "node tools/cli/apply-migrations.js",
     "db:sql": "node tools/cli/db-sql.js",
     "db:h4": "node tools/cli/h4-drill.js",
+    "db:manual": "node tools/cli/manual-final-drill.js",
     "db:k2": "node tools/cli/k2-schedule-drill.js",
     "db:k2-open": "node tools/cli/k2-open-round.js",
     "db:cutoff": "node tools/cli/github-cutoff-drill.js",

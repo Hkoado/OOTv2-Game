@@ -5,7 +5,7 @@
  */
 
 import { once } from 'node:events';
-import { scryptSync } from 'node:crypto';
+import { randomUUID, scryptSync } from 'node:crypto';
 
 export const PASSWORD = 'mat-khau-kiem-thu-12';
 export const ADMIN_ID = '11111111-1111-4111-8111-111111111111';
@@ -52,6 +52,7 @@ export function fakeBackend(store) {
   const matchRow = (row, key, raw) => {
     const [op, ...rest] = String(raw).split('.');
     const value = rest.join('.');
+    if (op === 'not') return !matchRow(row, key, value);
     if (op === 'eq') return String(row[key]) === value;
     if (op === 'gt') return Number(row[key]) > Number(value);
     if (op === 'lte') return Number(row[key]) <= Number(value);
@@ -62,8 +63,28 @@ export function fakeBackend(store) {
   return async (url, options = {}) => {
     const target = new URL(String(url));
     if (target.origin !== 'https://example.invalid') throw new Error(`Test không được gọi host lạ: ${target.origin}`);
-    // Storage: upload bot trả 200; tải bot không dùng trong test này.
-    if (target.pathname.startsWith('/storage/v1/object/')) return json({ Key: target.pathname });
+    // Storage private: POST lưu bytes, GET trả lại đúng bytes (storeVerifiedSource kiểm round-trip).
+    if (target.pathname.startsWith('/storage/v1/object/')) {
+      const key = target.pathname.split('/').pop();
+      const objects = store.__storage || (store.__storage = new Map());
+      const method = (options.method || 'GET').toUpperCase();
+      if (method === 'POST') {
+        const body = Buffer.isBuffer(options.body) ? options.body : Buffer.from(String(options.body || ''));
+        objects.set(key, body);
+        return json({ Key: `ootv2-bots/${key}` });
+      }
+      const stored = objects.get(key);
+      if (!stored) return new Response('not found', { status: 404 });
+      return new Response(stored, { status: 200, headers: { 'content-length': String(stored.length) } });
+    }
+    // RPC: test cung cấp handler mô phỏng transaction SQL (xem tests/helpers/manualFinalFake.js).
+    if (target.pathname.startsWith('/rest/v1/rpc/')) {
+      const name = target.pathname.slice('/rest/v1/rpc/'.length);
+      const handler = store.__rpc?.[name];
+      if (!handler) throw new Error(`RPC chưa được mock trong test: ${name}`);
+      const payload = options.body ? JSON.parse(String(options.body)) : {};
+      return json(await handler(payload, store));
+    }
     const table = target.pathname.replace('/rest/v1/mvp_', '').replace('/rest/v1/', '');
     const method = (options.method || 'GET').toUpperCase();
     const params = [...target.searchParams];
@@ -80,6 +101,9 @@ export function fakeBackend(store) {
       const incoming = JSON.parse(String(options.body));
       const created = (Array.isArray(incoming) ? incoming : [incoming]).map((row) => {
         const saved = { ...row };
+        // Postgres defaults: uuid PK + identity cho bảng audit (fake không có DEFAULT).
+        if (saved.id === undefined && table !== 'manual_final_audit') saved.id = randomUUID();
+        if (saved.id === undefined) saved.id = rowsInTable.length + 1;
         rowsInTable.push(saved);
         return saved;
       });
@@ -116,6 +140,7 @@ export async function startPortal(t, store) {
   });
   return { base: `http://127.0.0.1:${server.address().port}` };
 }
+
 
 export async function login(base, username) {
   const response = await globalThis.fetch(`${base}/api/local/login`, {

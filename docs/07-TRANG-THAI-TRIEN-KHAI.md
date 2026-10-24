@@ -1,5 +1,21 @@
 # Trạng thái triển khai Campus — 23/10/2026
 
+## Backend Chung kết thủ công + rehearsal DB — 24/10/2026 (Huy)
+
+- Thêm module admin-only “Chung kết thủ công”: `server/services/manualFinal.js`,
+  `server/routes/manualFinal.js` (mount `/api/local/manual-finals`), `server/shared/manualFinalJobs.js`
+  (contract worker cho Khoa) và migration `20261026100000_manual_final.sql`.
+- 6 bảng mới (`mvp_manual_final_events/teams/submissions/matches/jobs/audit`) + 7 RPC
+  `mvp_manual_final_*`; quyền hẹp theo cột (không UPDATE trên bài/trận), audit append-only,
+  `service_role` bị revoke trước khi cấp lại, một ván chỉ một kết quả accepted.
+- Upload `.py` UTF-8 1..262144 B, hash/actor/thời gian do server; `storage_path` không ra DTO;
+  tải source chỉ admin và kiểm lại hash. Không dùng cờ `OOTV2_ALLOW_ONLINE_UPLOAD`.
+- Test: `npm test` **367/367 pass**; `npm run build` pass; `npm run db:manual` **PASS** (migration +
+  drill trong 1 transaction rồi ROLLBACK trên project `.env`); sau drill không có bảng
+  `mvp_manual_final_*` ⇒ **migration chưa apply**.
+- **Chưa** nối UI/worker, chưa browser E2E, chưa backup/restore rehearsal. Không tự push/apply remote
+  theo quyết định hiện hành; chi tiết: [handoff Huy](handoff/Huy.md), [contract](19-CONTRACT-TICH-HOP.md).
+
 ## Đã nối DB thật + smoke PASS — 24/10/2026
 
 - Cấp `SUPABASE_ACCESS_TOKEN` (PAT) trong `.env`; apply **10/10** migration qua Management API

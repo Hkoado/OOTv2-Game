@@ -15,6 +15,7 @@ import { rows, uuid } from './client.js';
 import { isAllowedOrigin } from '../lib/origin.js';
 import config from '../config.js';
 import { onlineUploadDecision } from './uploadPolicy.js';
+import { manualFinalRouter } from '../routes/manualFinal.js';
 import { EMPTY_MAP } from '../../src/game/maps.js';
 
 const forbidden=()=>new HttpError(403,'scope_denied','Không có quyền truy cập dữ liệu này.');
@@ -70,6 +71,8 @@ export function sharedRouter() {
   router.use(accounts.requireSession);
   router.get('/me',(req,res)=>res.json({account:req.account,csrf:req.session.csrf}));
   router.post('/logout',async(req,res)=>{await accounts.logout(req.session);res.clearCookie(accounts.COOKIE_NAME,clearCookieOptions(req));res.json({ok:true});});
+  // Chung kết thủ công (BTC-only): module riêng, không mở cổng upload online của đội.
+  router.use('/manual-finals', manualFinalRouter());
   router.put('/profile',async(req,res)=>res.json({account:await accounts.updateProfile(req.account.id,req.body||{})}));
   router.get('/teams',requireLocalAdmin,async(req,res)=>{
     const [a,p]=await Promise.all([accounts.listAccounts(),participants.listParticipants()]);res.json({accounts:a,participants:p});

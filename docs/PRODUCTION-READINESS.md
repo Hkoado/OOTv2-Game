@@ -9,6 +9,10 @@ hệ thống có kết nối là bắt buộc; bundle/sync/giải hoàn toàn kh
 Checklist hiện hành: [SAU-TICH-HOP](handoff/SAU-TICH-HOP.md). Evidence cũ theo môi trường
 không đóng gate mới, không chứng minh chức năng manual finals đã có.
 
+**Cập nhật 24/10/2026 — backend Chung kết thủ công (Huy):** đã có route/RPC/migration + drill
+(`npm run db:manual`) PASS trong một transaction có ROLLBACK; `npm test` 367/367, build pass.
+Migration **chưa apply**, UI/worker chưa nối, browser/VM/backup **NOT RUN** ⇒ **RC chưa đạt**.
+
 **Chưa đủ điều kiện mở chấm bot công khai.** Public source repository và vận hành
 dịch vụ nhận code không tin cậy là hai mốc riêng biệt. Không bỏ gate Start để demo.
 
