@@ -272,7 +272,7 @@ export default function LocalCore({ theme, onToggleTheme }) {
       /* đăng xuất local: bỏ qua lỗi mạng */
     }
     expireSession('Đã đăng xuất khỏi cổng giải đấu.');
-  }, [expireSession]);
+  }, [expireSession, openReplayPayload]);
 
   const refresh = useCallback(async () => {
     try {

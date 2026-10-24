@@ -119,3 +119,4 @@ test('buildReplayFrames: từ chối an toàn khi dữ liệu rỗng', () => {
   assert.equal(buildReplayFrames(null).frames.length, 0);
   assert.equal(buildReplayFrames(undefined).frames.length, 0);
 });
+
