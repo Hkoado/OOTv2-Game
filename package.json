@@ -48,7 +48,8 @@
     "db:cutoff": "node tools/cli/github-cutoff-drill.js",
     "github:cutoff": "node tools/cli/github-cutoff-sync.js",
     "github:worker": "node tools/cli/github-cutoff-worker.js --drain",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "db:schema-drill": "node tools/cli/worker-schema-drill.js"
   },
   "dependencies": {
     "express": "^5.3.0",

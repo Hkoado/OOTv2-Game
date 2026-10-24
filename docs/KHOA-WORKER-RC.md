@@ -16,6 +16,18 @@
 Migration mới `20261026130000_manual_worker_heartbeat.sql` (đổi tên từ `20261026120000_…` vì trùng version
 với `ko_round_roster_guard`; file chưa từng apply remote nên đổi tên an toàn). **Huy đã apply trên DB thật
 `ftzockzolisecnyhlwej` ngày 24/10** (prosrc `claim`/`finish`/`release` đã vá, RPC heartbeat chỉ service_role).
+
+**Phản hồi "Chốt schema":** `docs/HUY-KHOA-CHOT-SCHEMA-WORKER.md` (catalog/grants/ledger, contract RPC đọc từ
+`pg_proc`, thứ tự guard cho probe health, drill `worker-schema-drill` 17/17). Hai việc liên quan trực tiếp
+đến worker:
+- `20261026150000_official_lease_fencing.sql` — official heartbeat/finish/fail **từ chối lease đã hết hạn**
+  (trước đó bản `26090000` vẫn cho ghi kết quả sau khi lease hết nếu chưa bị reclaim). Cùng luật với manual.
+- `20261026160000_official_write_hardening.sql` — `service_role` **không còn DELETE** trên
+  `mvp_official_rounds/games/broadcasts` (REST DELETE: 204 → 403 `42501`); INSERT/UPDATE cần cho publication
+  vẫn giữ. Drill dọn dữ liệu bằng owner/Management API, không bằng service key.
+- `worker-health.js`: probe `mvp_github_claim` với `p_worker:''` thực tế trả `400/P0001 bad_worker`
+  (guard worker chạy trước guard lease); official/manual claim trả JSONB HTTP 200 và official claim
+  **clamp** `p_lease_seconds` 30..3600 nên không có `bad_lease`.
 Apply theo migration history, trước consumer mới. Không sửa migration manual gốc.
 RPC heartbeat `mvp_manual_final_heartbeat(uuid,uuid,integer,integer)` chỉ service_role,
 kiểm running/token/generation/expiry; false `lease_lost` không hồi sinh lease hết hạn.
