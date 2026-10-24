@@ -235,9 +235,17 @@ test double tại lớp `fetch`, Supabase/Storage/engine trusted-dev là thật.
 `series_invalid: Invalid color result` sau ván phụ đầu tiên. Sửa: lọc kết quả theo `mainGames` trước khi pin;
 regression test `tests/officialKnockoutResolve.test.js` (4 main + 2 phụ → thắng theo seed).
 
-**DB thật `ftzockzolisecnyhlwej`:** token mới đã có quyền; đã apply **19 migration** bằng
+**DB thật `ftzockzolisecnyhlwej`:** token mới đã có quyền; đã apply **21 migration** bằng
 `node tools/cli/apply-migrations.js --bootstrap --apply --smoke` (smoke PASS, dữ liệu rỗng), gồm cả
-`20261026130000_manual_worker_heartbeat` (đổi tên từ `…120000` vì trùng version) và
-`20261026140000_official_broadcast`. `db:verify` + `db:check-github` + `db:manual` PASS trên project thật.
+`20261026130000_manual_worker_heartbeat` (đổi tên từ `…120000` vì trùng version),
+`20261026140000_official_broadcast`, `20261026150000_official_lease_fencing` (heartbeat/finish/fail từ chối
+lease đã hết hạn) và `20261026160000_official_write_hardening` (bỏ DELETE của service_role trên ván/vòng).
+`db:verify` + `db:check-github` + `db:manual` PASS trên project thật.
+
+**Chốt schema với Khoa (24/10):** xem `docs/HUY-KHOA-CHOT-SCHEMA-WORKER.md` — bảng catalog/grants/ledger,
+contract RPC thực tế từ `pg_proc`, thứ tự guard cho probe health, và drill
+`tools/cli/worker-schema-drill.js --allow-project=<ref>` **PASS 17/17** (claim đồng thời, heartbeat fencing,
+reclaim, worker cũ bị fence, duplicate finish, retry cap, 0-ply accepted, REST 403, dọn sạch). Ledger mới
+`public.ootv2_schema_migrations` có **21 dòng** version+name+sha256.
 
 Các quyết định sản phẩm đã chốt trong docs/18 không được thay đổi khi điền bảng này.

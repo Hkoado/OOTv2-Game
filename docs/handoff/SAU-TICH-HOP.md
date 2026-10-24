@@ -35,11 +35,13 @@ không áp dụng. Nhóm tự checkpoint/tích hợp, user nghiệm thu một RC
   các action online nối API thật, viewer clock/cursor/reconnect không leak tương lai/kết quả kín.
 - [ ] Cả ba: online E2E repo → cutoff → receipt/snapshot → chấm → standings/knockout/vé
   → publication/viewer, không sửa DB để vượt bước thiếu.
-  → **Huy 24/10:** DB thật `ftzockzolisecnyhlwej` đã bootstrap **19 migration** (smoke PASS, dữ liệu rỗng);
-  E2E dev **PASS 13/13** — knockout complete 4/4 + vé 2 (sửa bug pin ván phụ `nextSeriesGame`, có test hồi quy);
-  publication official có backend mới (`20261026140000` + `server/services/officialBroadcasts.js` + 3 route)
-  và đã E2E trên DB thật bằng fixture tạm rồi xoá sạch. Còn NOT RUN: browser E2E, VM/2-worker, restore,
-  UI viewer publication.
+  → **Huy 24/10:** DB thật `ftzockzolisecnyhlwej` đã bootstrap **21 migration** (smoke PASS, dữ liệu rỗng,
+  ledger `ootv2_schema_migrations` 21 dòng); E2E dev **PASS 13/13** — knockout complete 4/4 + vé 2 (sửa bug pin
+  ván phụ `nextSeriesGame`, có test hồi quy); publication official có backend mới (`20261026140000` +
+  `server/services/officialBroadcasts.js` + 3 route) và đã E2E trên DB thật bằng fixture tạm rồi xoá sạch.
+  **Chốt schema Huy ↔ Khoa:** `docs/HUY-KHOA-CHOT-SCHEMA-WORKER.md` + drill `worker-schema-drill` 17/17, đã vá
+  fencing lease official (`…150000`) và DELETE của service_role (`…160000`). Còn NOT RUN: browser E2E,
+  VM/2-worker thật, restore, UI viewer publication.
 - [ ] Cả ba: Chung kết thủ công E2E admin tạo đợt/vòng → nạp bot → validation → chọn/khóa
   → chọn cặp/chấm → điểm/lý do/replay → BTC xác nhận đi tiếp; dùng cùng runner/sandbox.
   → **Huy 24/10:** backend + RPC + migration **đã apply**; **thiếu** worker consume (Khoa) và UI (Bảo),

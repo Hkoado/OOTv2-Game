@@ -4,8 +4,10 @@ import {
   Award,
   CheckCircle2,
   ChevronRight,
+  Eye,
   GitCommit,
   Play,
+  Radio,
   RotateCcw,
   ShieldAlert,
   Snowflake,
@@ -29,6 +31,8 @@ import {
   requeueOfficialJob,
   syncGithubCutoff,
 } from './officialRoundApi.js';
+import OfficialBroadcastDialog from './OfficialBroadcastDialog.jsx';
+import OfficialGameViewer from './OfficialGameViewer.jsx';
 
 const shortHash = (value) => (value ? `${String(value).slice(0, 10)}…` : '—');
 
@@ -68,6 +72,10 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
   const [jobReason, setJobReason] = useState('');
   const [jobReasonError, setJobReasonError] = useState('');
   const [submittingJobAction, setSubmittingJobAction] = useState(false);
+
+  // Official Broadcast & Viewer Modals (§7 Publication)
+  const [broadcastModal, setBroadcastModal] = useState(null); // { open: boolean, roundPk: string, gameKey: string, game: object }
+  const [viewerModal, setViewerModal] = useState(null); // { open: boolean, roundPk: string, gameKey: string, game: object }
 
   // Map participantId -> name
   const teamNames = useMemo(() => {
@@ -121,7 +129,6 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
         setTickets(tk);
       }
     } catch (err) {
-      // 404/409 are expected when not ready yet
       if (err?.status !== 404 && err?.status !== 409) {
         setError(err.message || 'Lỗi khi tải dữ liệu mục.');
       }
@@ -390,15 +397,59 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
               {/* Next Game or Pending Game Alert */}
               {progress?.pending ? (
                 <Alert tone="warning" title={`Ván đang chờ kết quả: ${progress.pending.gameKey}`}>
-                  Bảng {progress.pending.groupName || '—'} · Ván {progress.pending.gameNo || '—'}:{' '}
-                  <strong>{getTeamName(progress.pending.redParticipantId)}</strong> (Đỏ) vs{' '}
-                  <strong>{getTeamName(progress.pending.blueParticipantId)}</strong> (Xanh) · Seed: {progress.pending.seed}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div>
+                      Bảng {progress.pending.groupName || '—'} · Ván {progress.pending.gameNo || '—'}:{' '}
+                      <strong>{getTeamName(progress.pending.redParticipantId)}</strong> (Đỏ) vs{' '}
+                      <strong>{getTeamName(progress.pending.blueParticipantId)}</strong> (Xanh) · Seed: {progress.pending.seed}
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button
+                        type="button"
+                        className="tt-btn tt-btn--sm"
+                        onClick={() => setViewerModal({ roundPk: round.roundId, gameKey: progress.pending.gameKey, game: progress.pending })}
+                      >
+                        <Eye size={12} style={{ marginRight: '3px' }} />
+                        Xem phát sóng (Live)
+                      </button>
+                      <button
+                        type="button"
+                        className="tt-btn tt-btn--sm tt-btn--ghost"
+                        onClick={() => setBroadcastModal({ roundPk: round.roundId, gameKey: progress.pending.gameKey, game: progress.pending })}
+                      >
+                        <Radio size={12} style={{ marginRight: '3px' }} />
+                        Lịch phát
+                      </button>
+                    </div>
+                  </div>
                 </Alert>
               ) : round.next ? (
                 <Alert tone="info" title={`Ván kế tiếp trong lịch: ${round.next.gameKey}`}>
-                  Bảng {round.next.groupName} · Ván {round.next.gameNo}:{' '}
-                  <strong>{round.next.red?.name || getTeamName(round.next.redParticipantId)}</strong> (Đỏ) vs{' '}
-                  <strong>{round.next.blue?.name || getTeamName(round.next.blueParticipantId)}</strong> (Xanh)
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div>
+                      Bảng {round.next.groupName} · Ván {round.next.gameNo}:{' '}
+                      <strong>{round.next.red?.name || getTeamName(round.next.redParticipantId)}</strong> (Đỏ) vs{' '}
+                      <strong>{round.next.blue?.name || getTeamName(round.next.blueParticipantId)}</strong> (Xanh)
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button
+                        type="button"
+                        className="tt-btn tt-btn--sm"
+                        onClick={() => setViewerModal({ roundPk: round.roundId, gameKey: round.next.gameKey, game: round.next })}
+                      >
+                        <Eye size={12} style={{ marginRight: '3px' }} />
+                        Xem phát sóng (Live)
+                      </button>
+                      <button
+                        type="button"
+                        className="tt-btn tt-btn--sm tt-btn--ghost"
+                        onClick={() => setBroadcastModal({ roundPk: round.roundId, gameKey: round.next.gameKey, game: round.next })}
+                      >
+                        <Radio size={12} style={{ marginRight: '3px' }} />
+                        Lịch phát
+                      </button>
+                    </div>
+                  </div>
                 </Alert>
               ) : (
                 <Alert tone="info">Không còn ván kế tiếp trong lịch hoặc vòng đấu đã kết thúc.</Alert>
@@ -452,7 +503,7 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                               type="button"
                               className="tt-btn tt-btn--sm"
                               onClick={() => {
-                                setJobModal({ type: 'requeue', jobId: fJob.jobId, gameKey: fJob.gameKey });
+                                setJobModal({ type: 'requeue', jobId: fJob.gameKey, gameKey: fJob.gameKey });
                                 setJobReason('');
                                 setJobReasonError('');
                               }}
@@ -464,7 +515,7 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                               type="button"
                               className="tt-btn tt-btn--sm tt-btn--danger"
                               onClick={() => {
-                                setJobModal({ type: 'cancel', jobId: fJob.jobId, gameKey: fJob.gameKey });
+                                setJobModal({ type: 'cancel', jobId: fJob.gameKey, gameKey: fJob.gameKey });
                                 setJobReason('');
                                 setJobReasonError('');
                               }}
@@ -568,7 +619,21 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
 
                   {bracket.next && (
                     <Alert tone="info" title={`Series kế tiếp: ${bracket.next.match_id}`}>
-                      Giai đoạn: <strong>{STAGE_LABELS[bracket.next.stage] || bracket.next.stage}</strong> · Vòng: {bracket.next.round_id}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div>
+                          Giai đoạn: <strong>{STAGE_LABELS[bracket.next.stage] || bracket.next.stage}</strong> · Vòng: {bracket.next.round_id}
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button
+                            type="button"
+                            className="tt-btn tt-btn--sm"
+                            onClick={() => setViewerModal({ roundPk: bracket.next.round_id, gameKey: `${bracket.next.match_id}:main:1`, game: bracket.next })}
+                          >
+                            <Eye size={12} style={{ marginRight: '3px' }} />
+                            Xem phát sóng (Live)
+                          </button>
+                        </div>
+                      </div>
                     </Alert>
                   )}
 
@@ -590,7 +655,7 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
 
                   <h3 style={{ fontSize: '1rem', fontWeight: 600, marginTop: '0.5rem' }}>Các trận đấu Knockout</h3>
                   <DataTable
-                    columns={['Giai đoạn', 'Mã trận', 'Ván đã đấu', 'Đội thắng', 'Lý do kết thúc']}
+                    columns={['Giai đoạn', 'Mã trận', 'Ván đã đấu', 'Đội thắng', 'Kết quả', 'Phát sóng']}
                     label="Danh sách series knockout"
                   >
                     {(bracket.series || []).map((s) => (
@@ -614,6 +679,30 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                             <Badge tone="neutral">Đang chờ</Badge>
                           )}
                         </td>
+                        <td>
+                          {s.round_id ? (
+                            <div style={{ display: 'flex', gap: '0.25rem' }}>
+                              <button
+                                type="button"
+                                className="tt-btn tt-btn--sm tt-btn--ghost"
+                                onClick={() => setViewerModal({ roundPk: s.round_id, gameKey: `${s.match_id}:main:1`, game: s })}
+                                title="Xem luồng phát sóng trực tiếp"
+                              >
+                                <Eye size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                className="tt-btn tt-btn--sm tt-btn--ghost"
+                                onClick={() => setBroadcastModal({ roundPk: s.round_id, gameKey: `${s.match_id}:main:1`, game: s })}
+                                title="Đặt lịch phát sóng"
+                              >
+                                <Radio size={12} />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="tt-muted">—</span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </DataTable>
@@ -622,29 +711,76 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
             </div>
           )}
 
-          {/* TAB 4: TICKETS */}
+          {/* TAB 4: TICKETS (Strict structure: { awarded: [], reserves: [], vacant: n }) */}
           {activeTab === 'tickets' && (
-            <div className="tt-stack">
+            <div className="tt-stack" style={{ gap: '1rem' }}>
               {!tickets ? (
                 <Alert tone="info" title="Chưa có phân bổ vé chung kết">
-                  Nhánh knockout chưa hoàn tất để phân bổ vé theo điều lệ.
+                  Nhánh knockout chưa hoàn tất để phân bổ vé theo điều lệ giải.
                 </Alert>
               ) : (
                 <>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-primary, #3182ce)' }}>
-                    <Award size={16} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} />
-                    Danh sách vé phân bổ chính thức
-                  </h3>
-                  <DataTable columns={['Hạng', 'Đội nhận vé', 'Loại vé / Suất', 'Lý do cấp']} label="Bảng vé">
-                    {(tickets.tickets || []).map((t, idx) => (
-                      <tr key={t.participantId || idx}>
-                        <td><strong>#{t.rank || idx + 1}</strong></td>
-                        <td>{getTeamName(t.participantId)}</td>
-                        <td><Badge tone="primary">{t.ticketType || 'Vé Chung kết'}</Badge></td>
-                        <td>{t.reason || 'Thành tích thi đấu'}</td>
-                      </tr>
-                    ))}
-                  </DataTable>
+                  {/* Vacant warning if any */}
+                  {Number(tickets?.tickets?.vacant) > 0 && (
+                    <Alert tone="warning" title="Suất vé còn trống">
+                      Hiện tại có <strong>{tickets.tickets.vacant}</strong> suất vé chưa được phân bổ do thiếu đội đủ điều kiện xếp hạng.
+                    </Alert>
+                  )}
+
+                  {/* Awarded Tickets Table */}
+                  <div className="tt-stack" style={{ gap: '0.5rem' }}>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-success, #38a169)' }}>
+                      <Award size={16} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} />
+                      Danh sách vé chính thức ({tickets?.tickets?.awarded?.length || 0} vé)
+                    </h3>
+                    <DataTable columns={['Thứ hạng', 'Đội nhận vé', 'Hạt giống', 'Loại suất']} label="Bảng vé chính thức">
+                      {(tickets?.tickets?.awarded || []).map((t, idx) => (
+                        <tr key={t.participantId || idx}>
+                          <td><strong>#{t.rank || idx + 1}</strong></td>
+                          <td><strong>{getTeamName(t.participantId)}</strong></td>
+                          <td>#{t.seed ?? '—'}</td>
+                          <td><Badge tone="success">Vé Chính thức</Badge></td>
+                        </tr>
+                      ))}
+                    </DataTable>
+                  </div>
+
+                  {/* Reserves Table */}
+                  {Array.isArray(tickets?.tickets?.reserves) && tickets.tickets.reserves.length > 0 && (
+                    <div className="tt-stack" style={{ gap: '0.5rem', marginTop: '0.5rem' }}>
+                      <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-primary, #3182ce)' }}>
+                        Danh sách suất dự bị ({tickets.tickets.reserves.length} đội)
+                      </h3>
+                      <DataTable columns={['Thứ hạng', 'Đội dự bị', 'Hạt giống', 'Trạng thái']} label="Bảng suất dự bị">
+                        {tickets.tickets.reserves.map((r, idx) => (
+                          <tr key={r.participantId || idx}>
+                            <td>#{r.rank}</td>
+                            <td>{getTeamName(r.participantId)}</td>
+                            <td>#{r.seed ?? '—'}</td>
+                            <td><Badge tone="neutral">Dự bị ưu tiên {idx + 1}</Badge></td>
+                          </tr>
+                        ))}
+                      </DataTable>
+                    </div>
+                  )}
+
+                  {/* Full Ranking Table if available */}
+                  {Array.isArray(tickets?.ranking) && tickets.ranking.length > 0 && (
+                    <div className="tt-stack" style={{ gap: '0.5rem', marginTop: '0.5rem' }}>
+                      <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>
+                        Bảng xếp hạng Knockout đầy đủ ({tickets.ranking.length} đội)
+                      </h3>
+                      <DataTable columns={['Thứ hạng', 'Đội thi', 'Hạt giống ban đầu']} label="Bảng xếp hạng đầy đủ">
+                        {tickets.ranking.map((row) => (
+                          <tr key={row.participantId}>
+                            <td><strong>#{row.rank}</strong></td>
+                            <td>{getTeamName(row.participantId)}</td>
+                            <td>#{row.seed ?? '—'}</td>
+                          </tr>
+                        ))}
+                      </DataTable>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -769,6 +905,33 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
             </form>
           </div>
         </div>
+      )}
+
+      {/* DIALOG: Schedule Official Game Broadcast */}
+      {broadcastModal && (
+        <OfficialBroadcastDialog
+          roundPk={broadcastModal.roundPk}
+          gameKey={broadcastModal.gameKey}
+          game={broadcastModal.game}
+          open={Boolean(broadcastModal)}
+          onClose={() => setBroadcastModal(null)}
+          onScheduled={() => {
+            setNotice(`Đã cập nhật lịch phát sóng cho ván ${broadcastModal.gameKey}.`);
+            loadSectionData('progress');
+          }}
+        />
+      )}
+
+      {/* VIEWER: Official Game Stream Viewer */}
+      {viewerModal && (
+        <OfficialGameViewer
+          roundPk={viewerModal.roundPk}
+          gameKey={viewerModal.gameKey}
+          game={viewerModal.game}
+          map={round?.snapshot?.maps?.primary || event?.competition?.primaryMap}
+          onClose={() => setViewerModal(null)}
+          admin={admin}
+        />
       )}
     </Panel>
   );

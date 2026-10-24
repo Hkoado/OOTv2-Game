@@ -141,9 +141,16 @@
   `scope_denied` → dọn sạch, đếm lại 0). Trên dev drill tự `SKIP` vì dev chưa có bảng này.
 - **Còn NOT RUN**: browser E2E (Bảo), VM/2-worker thật (Khoa), restore rehearsal, và **UI viewer** cho
   publication official — Bảo nối theo contract `docs/19` §7.
-- `npm test` **430/430**, `npm run build` pass, `git diff --check` sạch.
-- **RC: chưa ký.** Các gate còn lại thuộc Bảo (browser/UI) và Khoa (VM, restore); phần DB/API/E2E của Huy
-  đã xong và có log.
+- `npm test` **431/431**, `npm run build` pass, `git diff --check` sạch.
+- **Chốt schema Huy ↔ Khoa** (`docs/HUY-KHOA-CHOT-SCHEMA-WORKER.md`): catalog/grants/ledger MATCH trên
+  project thật; phát hiện + vá 2 lỗ (fencing lease official `20261026150000`, DELETE của service_role
+  `20261026160000`); drill `tools/cli/worker-schema-drill.js` **PASS 17/17**; ledger
+  `public.ootv2_schema_migrations` 21 dòng (thêm `--record-history` cho `apply-migrations`).
+  Guard order đã xác nhận: `mvp_github_claim` trả `400/P0001 bad_worker` trước `bad_lease` (probe
+  `worker-health.js` đang kỳ vọng sai); official/manual claim trả JSONB HTTP 200 (`bad_worker`), official
+  claim **clamp** lease 30..3600 nên không có `bad_lease`.
+- **RC: chưa ký.** Các gate còn lại thuộc Bảo (browser/UI, load 50/100/200, UI viewer publication) và Khoa
+  (VM/2-worker thật, sandbox, restore); schema/DB/API/E2E của Huy đã xong và có log.
 
 
 ### Việc của người khác (không tự làm thay)

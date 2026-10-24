@@ -18,6 +18,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -45,6 +46,8 @@ const apply = args.includes('--apply');
 const smoke = args.includes('--smoke');
 /** Dự án chính thức mới chỉ có foundation: cho phép apply các migration tạo bảng runtime. */
 const bootstrap = args.includes('--bootstrap');
+/** Ghi lịch sử version/name/checksum vào `public.ootv2_schema_migrations` (kể cả bản đã apply trước đó). */
+const recordHistory = args.includes('--record-history');
 const onlyArg = args.find((value) => value.startsWith('--only='));
 const only = onlyArg ? new Set(onlyArg.slice('--only='.length).split(',').map((v) => v.trim()).filter(Boolean)) : null;
 
@@ -269,6 +272,48 @@ PLAN.push({
 });
 
 
+PLAN.push({
+  version: '20261026150000',
+  file: 'supabase/migrations/20261026150000_official_lease_fencing.sql',
+  why: 'Huy/Khoa chốt schema: heartbeat/finish/fail official từ chối lease đã hết hạn',
+  exists: async () => {
+    // Không lộ qua PostgREST; đọc thân hàm bằng Management API.
+    if (!accessToken || !projectRef) return false;
+    try {
+      const found = await managementRows(
+        "select (select prosrc like '%lease_until > clock_timestamp()%' from pg_proc where proname='mvp_official_heartbeat_job') as hb,"
+        + " (select prosrc like '%j.lease_until <= clock_timestamp()%' from pg_proc where proname='mvp_official_finish_job') as fin,"
+        + " (select prosrc like '%j.lease_until <= clock_timestamp()%' from pg_proc where proname='mvp_official_fail_job') as fail"
+      );
+      return found?.[0]?.hb === true && found?.[0]?.fin === true && found?.[0]?.fail === true;
+    } catch {
+      return false;
+    }
+  },
+});
+
+
+PLAN.push({
+  version: '20261026160000',
+  file: 'supabase/migrations/20261026160000_official_write_hardening.sql',
+  why: 'Huy/Khoa chốt schema: service_role không xoá được ván/vòng/lịch phát official',
+  exists: async () => {
+    if (!accessToken || !projectRef) return false;
+    try {
+      const found = await managementRows(
+        "select has_table_privilege('service_role','public.mvp_official_games','DELETE') as games_del,"
+        + " has_table_privilege('service_role','public.mvp_official_rounds','DELETE') as rounds_del,"
+        + " has_table_privilege('service_role','public.mvp_official_broadcasts','DELETE') as bc_del"
+      );
+      return found?.[0]?.games_del === false && found?.[0]?.rounds_del === false
+        && found?.[0]?.bc_del === false;
+    } catch {
+      return false;
+    }
+  },
+});
+
+
 const readSql = (relative) => readFileSync(path.join(root, relative), 'utf8');
 
 /** Management API không hiểu meta-command `\echo`; bỏ các dòng đó trước khi gửi. */
@@ -349,6 +394,57 @@ async function preflight() {
 }
 
 
+/**
+ * Ledger version/name/checksum cho mọi lần apply. Cùng hình dạng với bảng mà bundle
+ * `freshDatabaseBundle` tạo, để project mới và project đã có lịch sử đọc giống nhau.
+ * `applied_at` của các dòng backfill là thời điểm ghi nhận, không phải thời điểm apply gốc.
+ */
+const LEDGER_DDL = `
+create table if not exists public.ootv2_schema_migrations (
+  version text primary key,
+  name text not null,
+  sha256 text not null,
+  applied_at timestamptz not null default now()
+);
+alter table public.ootv2_schema_migrations enable row level security;
+revoke all on public.ootv2_schema_migrations from public, anon, authenticated;
+grant select on public.ootv2_schema_migrations to service_role;`;
+
+function ledgerEntry(item) {
+  const fileName = item.file.split('/').at(-1);
+  const sql = readSql(item.file).replace(/\r\n/g, '\n');
+  return { version: item.version, name: fileName.slice(15, -4),
+    sha256: createHash('sha256').update(sql).digest('hex') };
+}
+
+async function writeLedger(transport, item, note = '') {
+  const entry = ledgerEntry(item);
+  await transport.run(`${LEDGER_DDL}
+insert into public.ootv2_schema_migrations(version, name, sha256)
+values ('${entry.version}', '${entry.name}', '${entry.sha256}')
+on conflict (version) do nothing;
+${note ? `update public.ootv2_schema_migrations set name = '${entry.name}', sha256 = '${entry.sha256}'
+where version = '${entry.version}' and (name <> '${entry.name}' or sha256 <> '${entry.sha256}');` : ''}`);
+  return entry;
+}
+
+/** Backfill: chỉ ghi cho migration mà probe `exists()` đã xác nhận object tồn tại. */
+async function backfillHistory(transport) {
+  console.log('\n→ ghi lịch sử cho các migration đã có (backfill version/name/checksum)');
+  let recorded = 0;
+  for (const item of PLAN) {
+    if (only && !only.has(item.version)) continue;
+    if (!(await item.exists())) continue;
+    const entry = await writeLedger(transport, item, 'verify');
+    console.log(`   ledger ${entry.version} ${entry.name} sha256:${entry.sha256.slice(0, 12)}…`);
+    recorded += 1;
+  }
+  const result = await restGet('/rest/v1/ootv2_schema_migrations?select=version');
+  const total = Array.isArray(result.body) ? result.body.length : '?';
+  console.log(`OK   ledger: ${recorded} bản ghi đồng bộ, tổng ${total} dòng.`);
+}
+
+
 async function main() {
   console.log(`Supabase: ${url}`);
   const channel = accessToken && projectRef ? 'Management API' : dbUrl ? 'psql (SUPABASE_DB_URL)' : 'CHƯA CÓ';
@@ -375,8 +471,8 @@ async function main() {
 
   if (!pending.length) {
     console.log('\nTất cả migration trong kế hoạch đã áp dụng.');
+    const transport = apply ? pickTransport() : null;
     if (smoke && apply) {
-      const transport = pickTransport();
       if (!transport) {
         console.error('\nKhông có kênh DDL để chạy smoke test (cần SUPABASE_ACCESS_TOKEN hoặc psql + SUPABASE_DB_URL).');
         process.exit(2);
@@ -391,6 +487,8 @@ async function main() {
         process.exit(5);
       }
     }
+    if (recordHistory && transport) await backfillHistory(transport);
+    if (recordHistory && !apply) console.log('(--record-history chỉ ghi khi có --apply.)');
     return;
   }
   if (!apply) {
@@ -421,7 +519,14 @@ async function main() {
     const ok = await confirmApplied(item);
     console.log(`${ok ? 'OK  ' : 'FAIL'} ${item.version}${ok ? '' : ' — object đại diện chưa thấy (PostgREST schema cache?)'}`);
     if (!ok) process.exit(4);
+    try {
+      const entry = await writeLedger(transport, item);
+      console.log(`     ledger ${entry.version} ${entry.name} sha256:${entry.sha256.slice(0, 12)}…`);
+    } catch (error) {
+      console.warn(`     ledger: bỏ qua (${error.message}) — migration đã apply, chỉ thiếu bản ghi lịch sử.`);
+    }
   }
+  if (recordHistory) await backfillHistory(transport);
   console.log('\nHoàn tất: các migration còn thiếu đã apply và kiểm tra lại.');
   if (smoke) {
     console.log(`\n→ smoke PostgreSQL qua ${transport.name} (transaction + ROLLBACK)`);
