@@ -1,5 +1,20 @@
 # Kết quả Khoa — Scheduler / worker / runtime
 
+## 24/10/2026 — tiếp tục sau pull Huy / elevated Windows
+
+- `doctor` chạy elevated: PASS. `.env` project hiện `ftzockzolisecnyhlwej`; health read-only
+  cho manual/GitHub tables + manual claim/heartbeat reachability PASS, bucket private/256 KiB
+  PASS. GitHub claim health call nhận guard `400/P0001`; không claim job.
+- Migration history live chỉ ghi `campus_foundation` trong khi catalog có manual heartbeat,
+  GitHub RPC/tables. History/catalog mismatch cần Huy/operator đối chiếu; không apply migration.
+- User cho phép tạo `OOTv2-Judge` ở `D:\OOTv2-VM` (4 CPU/4 GiB/Default Switch). Chưa tạo VM:
+  Noble image download connection reset, `.part` chưa đủ/không hợp lệ. Key ed25519 empty-passphrase
+  verify PASS; fingerprint console: `SHA256:BjbXTSsCId9+zf/pYbp8fKkcpjwKZAjeh9Vr6b88B6s`;
+  chưa pin known_hosts, chưa SSH/install worker.
+- Phát hiện PowerShell native arg bug ở ssh-keygen; sửa local `New-JudgeVM.ps1`, thêm
+  `tests/workerVmProvisioning.test.js`. Cần sửa/kiểm provisioning retry policy và clean partial
+  image có xác minh rồi mới chạy lại. Xem `docs/KHOA-WORKER-RC.md`.
+
 ## Cập nhật hiện hành 24/10/2026 — heartbeat manual / 0-ply / service judge
 
 Xem `docs/KHOA-WORKER-RC.md`: thay các ghi chú lịch sử bên dưới về “chờ Huy heartbeat”

@@ -25,20 +25,27 @@ New-Item -ItemType Directory -Force $Directory | Out-Null
 if ((Get-PSDrive -Name $Directory.Substring(0,1)).Free -lt 45GB) { throw 'At least 45 GiB free required' }
 $key = Join-Path $Directory 'judge_ed25519'
 if (-not (Test-Path $key)) {
-  # `-N '""'` is the only form Windows PowerShell delivers to ssh-keygen as an
-  # empty passphrase; the verification below proves the key really is usable.
-  & ssh-keygen.exe -t ed25519 -f $key -N '""' -C 'ootv2-local-judge'
-  if ($LASTEXITCODE -ne 0) { throw 'SSH key generation failed' }
+  $psi = New-Object System.Diagnostics.ProcessStartInfo
+  $psi.FileName = (Get-Command ssh-keygen.exe -ErrorAction Stop).Source
+  $psi.UseShellExecute = $false
+  $psi.Arguments = '-t ed25519 -f "' + $key + '" -N "" -C ootv2-local-judge'
+  $keygen = New-Object System.Diagnostics.Process
+  $keygen.StartInfo = $psi
+  [void]$keygen.Start()
+  $keygen.WaitForExit()
+  if ($keygen.ExitCode -ne 0) { throw 'SSH key generation failed' }
 }
-& ssh-keygen.exe -y -P '' -f $key | Out-Null
+& ssh-keygen.exe -y -f $key | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'SSH key is not usable non-interactively (passphrase set?). Remove it and retry.' }
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 & icacls.exe $key /inheritance:r /grant:r "${identity}:(R,W)" '*S-1-5-18:(F)' | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Cannot restrict private key ACL' }
 function WslPath([string]$Path) {
-  $result = & wsl.exe -d $WslDistribution -- wslpath -a $Path
-  if ($LASTEXITCODE -ne 0) { throw 'wslpath failed' }
-  return ($result | Select-Object -Last 1).Trim()
+  $fullPath = [IO.Path]::GetFullPath($Path)
+  if ($fullPath -notmatch '^([A-Za-z]):\\(.+)$') { throw 'Expected an absolute local drive path' }
+  $drive = $Matches[1].ToLowerInvariant()
+  $tail = $Matches[2].Replace('\', '/')
+  return "/mnt/$drive/$tail"
 }
 $prepare = WslPath (Join-Path $PSScriptRoot 'prepare-image.sh')
 $linuxDirectory = WslPath $Directory

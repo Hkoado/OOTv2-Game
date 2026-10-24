@@ -2,12 +2,13 @@
 
 ## Quyết định người dùng trong phiên này
 
-- Huy tiếp tục E2E online repo → cutoff → round → knockout → publication và tổng hợp gate RC.
+- Huy đã pull phần E2E; hiện Huy đang migrate DB và chỉnh luật hoà. Khoa chỉ nghiệm thu
+  provisioning/runtime, không sửa/migrate thay phần đó.
 - Khoa tự hoàn thiện runtime/provisioning, không chờ Huy/Bảo viết heartbeat manual.
 - Bot lỗi ngay setup: lưu accepted win/loss và replay 0-ply do engine xác định.
   Lỗi hạ tầng vẫn không được forfeit.
-- Dùng Hyper-V trên máy Windows này. Phiên hiện tại không elevated; `Get-VM` bị từ chối.
-  Không tự nâng quyền, tạo VM hay chuyển credential trong phiên này.
+- Dùng Hyper-V trên máy Windows này. Phiên hiện tại elevated; `doctor` đạt, nhưng VM
+  chưa được tạo. Provisioning dừng do download Ubuntu image bị reset; `.part` không hợp lệ.
 - Người dùng chốt **project trong `.env`**, chỉ kiểm readiness; không copy schema từ G5,
   không tự apply migration hay claim job remote.
 
@@ -54,9 +55,20 @@ Không overwrite config có sẵn. Không gửi private key/token vào chat. Kh�
 Phải chốt project DB đích trước khi chuyển env (handoff cũ ghi .env và .envdev khác project).
 
 Readiness `.env` đã kiểm chỉ đọc: credential cấu hình được và bucket private/262144 bytes
-đạt, nhưng bảng intake/manual và claim/heartbeat RPC trả 404/PGRST202. Do đó chưa thể
-start judge trên project này. Không apply hay copy schema. Cần operator duyệt migration
-history cho đúng project trước khi chạy worker thật.
+đạt; intake/manual tables và claim/heartbeat RPC hiện trả kết quả reachable. Catalog cho
+thấy heartbeat/manual RPC đã deployed, nhưng migration history chỉ có `campus_foundation`;
+trạng thái history không khớp catalog và cần operator/Huy đối chiếu trước khi chạy job thật.
+GitHub health probe trả `400/P0001` (bad_worker guard), chưa được coi là thiếu schema.
+Không apply migration hay claim job.
+
+## Tiến độ provisioning 24/10/2026
+
+- `doctor`: PASS (elevated, Hyper-V module/switch, Ubuntu WSL, 116 GiB trống, env allowlist).
+- Chưa tồn tại VM/VHDX. SSH key ed25519 tạo được, empty-passphrase verify PASS; fingerprint
+  console `SHA256:BjbXTSsCId9+zf/pYbp8fKkcpjwKZAjeh9Vr6b88B6s`. Chưa pin vào known_hosts.
+- Fix thử nghiệm script bắt được: Windows PowerShell làm mất empty argv của ssh-keygen. Test
+  regression mới thêm. Download Noble image từ cloud-images.ubuntu.com bị reset ở vài MiB;
+  `.part` không hợp lệ, không tạo VM. Dọn file dở trước lần retry có kiểm soát.
 
 ## Gate còn phải nghiệm thu (không coi NOT RUN là PASS)
 
