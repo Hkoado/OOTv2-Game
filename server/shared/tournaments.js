@@ -144,9 +144,13 @@ export async function advanceTournament(id) {
   const byId=new Map(entries.map((e)=>[e.id,e]));let next,games=[];
   if (stage==='group') {
     const {groups}=standingsFrom(data);next='semifinal_running';
+    if (!groups?.A?.[0]?.entry_id || !groups?.A?.[1]?.entry_id || !groups?.B?.[0]?.entry_id || !groups?.B?.[1]?.entry_id) {
+      return { advanced: false, status: event.status };
+    }
     games=[...seriesGames(event,'semifinal','sf1',byId.get(groups.A[0].entry_id),byId.get(groups.B[1].entry_id)),...seriesGames(event,'semifinal','sf2',byId.get(groups.B[0].entry_id),byId.get(groups.A[1].entry_id))];
   } else if (stage==='semifinal') {
     const winners=seriesFrom(data,'semifinal').map((s)=>byId.get(s.winner_entry_id)).sort((a,b)=>a.seed_order-b.seed_order);
+    if (!winners[0] || !winners[1]) return { advanced: false, status: event.status };
     next='final_running';games=seriesGames(event,'final','final',winners[0],winners[1]);
   } else next='finished';
   const advanced=await rpc('mvp_stage_commit',{p_id:id,p_expected:event.status,p_next:next,p_games:games});
