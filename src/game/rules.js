@@ -9,6 +9,7 @@ import {
   coordsToSquare,
 } from './constants.js';
 import { canStep } from './geometry.js';
+import { blockedForPiece } from './terrain.js';
 
 /**
  * Kiểm tra xem một nước đi có hợp lệ hay không theo luật OTTv2
@@ -22,7 +23,7 @@ export function getValidMoves(pieces, pieceId, map = null) {
 
   const { col, row } = squareToCoords(piece.square);
   const validMoves = [];
-  const blocked = new Set(map?.blocked || []);
+  const blocked = blockedForPiece(map, piece.type);
   const occupants = new Map(Object.values(pieces).filter((p) => p.alive).map((p) => [p.square, p]));
 
   // 8 hướng di chuyển như quân Vua (tối đa 1 ô)

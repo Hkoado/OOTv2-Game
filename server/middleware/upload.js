@@ -8,7 +8,7 @@ import { badRequest } from '../lib/httpError.js';
  * đã hợp lệ, nên không để lại file rác khi upload sai.
  * - Tên file do server sinh (`<uuid>.py`), KHÔNG dùng `originalname`.
  * - MIME chỉ là tín hiệu phụ nên chỉ kiểm tra đuôi `.py`.
- * - Đúng 1 file ở trường `file`, tối đa 64 KiB.
+ * - Đúng 1 file ở trường `file`, tối đa `config.limits.maxSourceBytes` (256 KiB).
  */
 const memory = multer.memoryStorage();
 

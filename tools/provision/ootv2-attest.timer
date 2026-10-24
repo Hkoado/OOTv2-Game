@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh OOTv2 sandbox attestation
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=12h
+Persistent=true
+Unit=ootv2-attest.service
+
+[Install]
+WantedBy=timers.target

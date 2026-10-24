@@ -1,13 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { rows, request, sharedEnabled } from '../server/shared/client.js';
+import { rows, request, assertSharedConfig } from '../server/shared/client.js';
 import { hashBuffer, materialize } from '../server/shared/artifacts.js';
 import { standingsFrom, seriesFrom } from '../server/shared/tournaments.js';
 
-test('shared client: test mode stays offline; pagination keeps one select', async () => {
-  assert.equal(sharedEnabled, false);
+test('shared client: thiếu cấu hình Supabase thì dừng ngay; pagination giữ một select', async () => {
   const original = globalThis.fetch;
   const oldUrl = process.env.SUPABASE_URL, oldKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  delete process.env.SUPABASE_URL;
+  delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  assert.throws(() => assertSharedConfig(), /SUPABASE_URL/u);
   process.env.SUPABASE_URL = 'https://example.invalid';
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-only';
   const calls = [];

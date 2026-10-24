@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "map.v2",
+  "width": 9,
+  "height": 9,
+  "setupZoneRule": "diagonal-28-v1",
+  "cornerRule": "block-if-both-orthogonals-blocked",
+  "rulesVersion": "ott-campus.v2",
+  "id": "campus-four-terrains",
+  "revision": 1,
+  "bases": {
+    "red": "a1",
+    "blue": "i9"
+  },
+  "blocked": [],
+  "terrains": {
+    "b2": "fire",
+    "c2": "water",
+    "b3": "bush",
+    "c3": "chasm",
+    "d4": "bush",
+    "e4": "fire",
+    "d5": "water",
+    "e5": "chasm",
+    "f5": "water",
+    "e6": "fire",
+    "f6": "bush",
+    "g7": "chasm",
+    "h7": "bush",
+    "g8": "water",
+    "h8": "fire"
+  }
+}

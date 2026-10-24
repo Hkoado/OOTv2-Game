@@ -1,143 +1,592 @@
-import React, { useRef, useState } from 'react';
-import { Download, Lock, UploadCloud } from 'lucide-react';
-import { Alert, Badge, DataTable, Field, Panel } from './TournamentUi.jsx';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { campusBotDownload } from './campusBotDownload.js';
 import {
-  botState, formatDateTime, shortSha, submissionFreeze, submissionState, teamBotState,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  Download,
+  GitBranch,
+  Github,
+  Lock,
+  RefreshCw,
+  ShieldAlert,
+  ShieldCheck,
+  UploadCloud,
+} from 'lucide-react';
+import { Alert, Badge, DataTable, Field, Panel, Spinner } from './TournamentUi.jsx';
+import {
+  botState,
+  formatDateTime,
+  shortSha,
+  submissionFreeze,
+  submissionState,
+  teamBotState,
+  validateRepository,
 } from './tournamentView.js';
+import {
+  formatCommitSha,
+  formatReceipt,
+  humanizeIntakeError,
+  syncStatusInfo,
+} from './githubSyncState.js';
+import {
+  fetchLatestGithubSubmission,
+  fetchRepositoryConnection,
+  fetchRepoSyncJob,
+  requestGithubSubmission,
+  revokeRepositoryConnection,
+  saveRepositoryConnection,
+} from './githubApi.js';
 
-const MAX_BYTES = 64 * 1024;
+const MAX_BYTES = 256 * 1024;
 
-export default function SubmissionsPage({ account, events, teams, submissions, teamFilter, onSelectTeam, actions, busy }) {
+export default function SubmissionsPage({
+  account,
+  events = [],
+  teams = [],
+  submissions = [],
+  teamFilter = '',
+  onSelectTeam,
+  actions,
+  busy,
+}) {
   const isAdmin = account.role === 'admin';
   const formRef = useRef(null);
-  const [error, setError] = useState('');
-  const frozen = submissionFreeze(events);
-  const bot = botState(submissions);
-  const selectedTeam = teams.find((team) => team.id === teamFilter) || null;
-  const targetId = isAdmin ? teamFilter : account.participant_id;
-  const canUpload = Boolean(targetId) && (isAdmin || !frozen);
+  const pollTimerRef = useRef(null);
 
-  async function handleUpload(event) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const file = form.elements.file?.files?.[0];
-    if (!file) {
-      setError('Chọn một file .py trước khi nộp.');
+  // Selected event (default to first active event or first event)
+  const [selectedEventId, setSelectedEventId] = useState(() => {
+    const active = events.find((e) => e.status !== 'finished');
+    return active ? active.id : events[0]?.id || '';
+  });
+
+  // Keep selectedEventId valid if events list changes
+  useEffect(() => {
+    if (!selectedEventId && events.length > 0) {
+      const active = events.find((e) => e.status !== 'finished');
+      setSelectedEventId(active ? active.id : events[0].id);
+    }
+  }, [events, selectedEventId]);
+
+  const selectedEvent = useMemo(
+    () => events.find((e) => e.id === selectedEventId) || null,
+    [events, selectedEventId]
+  );
+
+  const selectedTeam = useMemo(
+    () => teams.find((team) => team.id === teamFilter) || null,
+    [teams, teamFilter]
+  );
+
+  const targetId = isAdmin ? teamFilter : account.participant_id;
+
+  // Local state for GitHub Intake
+  const [connection, setConnection] = useState(null);
+  const [connectionLoading, setConnectionLoading] = useState(false);
+  const [repoInput, setRepoInput] = useState('');
+  const [branchInput, setBranchInput] = useState('main');
+  const [repoError, setRepoError] = useState('');
+  const [receipt, setReceipt] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncNotice, setSyncNotice] = useState(null);
+
+  const frozen = submissionFreeze(events);
+  const isEventFrozen = selectedEvent && selectedEvent.status !== 'draft';
+  const bot = botState(submissions);
+
+  // Load connection and latest receipt whenever selectedEvent or targetId changes
+  const loadGithubStatus = useCallback(async () => {
+    if (!selectedEventId || !targetId) {
+      setConnection(null);
+      setReceipt(null);
       return;
     }
-    if (!/\.py$/i.test(file.name)) {
-      setError('Chỉ nhận đúng một file Python (.py). Không nhận ZIP, package hay URL.');
+    setConnectionLoading(true);
+    setSyncNotice(null);
+    try {
+      const conn = await fetchRepositoryConnection(selectedEventId, isAdmin ? targetId : null);
+      setConnection(conn);
+      if (conn?.repository) {
+        setRepoInput(conn.repository);
+        setBranchInput(conn.branch || 'main');
+      } else if (!isAdmin && account.repository) {
+        setRepoInput(account.repository);
+        setBranchInput(account.branch || 'main');
+      }
+
+      const latest = await fetchLatestGithubSubmission(selectedEventId, isAdmin ? targetId : null);
+      if (latest?.receipt) {
+        setReceipt(formatReceipt(latest.receipt));
+      } else {
+        setReceipt(null);
+      }
+    } catch {
+      // Fallback silently if offline or endpoint not reachable
+      setConnection(null);
+      setReceipt(null);
+    } finally {
+      setConnectionLoading(false);
+    }
+  }, [selectedEventId, targetId, isAdmin, account.repository, account.branch]);
+
+  useEffect(() => {
+    loadGithubStatus();
+    return () => {
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    };
+  }, [loadGithubStatus]);
+
+  // Handle repository registration or update
+  async function handleSaveRepository(e) {
+    e.preventDefault();
+    setRepoError('');
+    setSyncNotice(null);
+    const repoTrimmed = repoInput.trim();
+    const branchTrimmed = branchInput.trim() || 'main';
+
+    if (!selectedEventId) {
+      setRepoError('Đội của bạn chưa được ghi danh vào giải đấu nào.');
       return;
     }
-    if (file.size > MAX_BYTES) {
-      setError(`File ${Math.ceil(file.size / 1024)} KiB vượt giới hạn 64 KiB.`);
+
+    const err = validateRepository(repoTrimmed);
+    if (err) {
+      setRepoError(err);
       return;
     }
-    setError('');
-    const ok = await actions.uploadBot(targetId, file);
-    if (ok) form.reset();
+
+    try {
+      const updated = await saveRepositoryConnection(selectedEventId, {
+        repository: repoTrimmed,
+        branch: branchTrimmed,
+        team: isAdmin ? targetId : null,
+      });
+      setConnection(updated);
+      setSyncNotice({
+        tone: updated?.approved ? 'success' : 'warning',
+        message: updated?.approved
+          ? 'Đã cập nhật repository và được phê duyệt.'
+          : 'Đã gửi đăng ký repository. Repository đang chờ BTC phê duyệt quyền truy cập.',
+      });
+    } catch (error) {
+      setRepoError(humanizeIntakeError(error.code, error.message));
+    }
   }
+
+  // Admin approves repository connection
+  async function handleApproveRepository() {
+    if (!connection || !targetId || !selectedEventId) return;
+    setSyncNotice(null);
+    try {
+      const updated = await saveRepositoryConnection(selectedEventId, {
+        repository: connection.repository,
+        branch: connection.branch,
+        team: targetId,
+      });
+      setConnection(updated);
+      setSyncNotice({ tone: 'success', message: 'Đã phê duyệt quyền repository cho đội.' });
+    } catch (error) {
+      setSyncNotice({ tone: 'danger', message: humanizeIntakeError(error.code, error.message) });
+    }
+  }
+
+  // Admin revokes repository approval
+  async function handleRevokeRepository() {
+    if (!targetId || !selectedEventId) return;
+    if (typeof window !== 'undefined' && window.confirm && !window.confirm('Bạn có chắc chắn muốn thu hồi phê duyệt repository này? Mọi tác vụ đồng bộ đang chờ sẽ bị hủy.')) {
+      return;
+    }
+    setSyncNotice(null);
+    try {
+      const revoked = await revokeRepositoryConnection(selectedEventId, targetId);
+      setConnection(revoked);
+      setSyncNotice({ tone: 'warning', message: 'Đã thu hồi phê duyệt repository của đội.' });
+      const latest = await fetchLatestGithubSubmission(selectedEventId, isAdmin ? targetId : null);
+      if (latest?.receipt) {
+        setReceipt(formatReceipt(latest.receipt));
+      }
+    } catch (error) {
+      setSyncNotice({ tone: 'danger', message: humanizeIntakeError(error.code, error.message) });
+    }
+  }
+
+  // Request GitHub sync & poll job status
+  async function handleRequestSync() {
+    if (!selectedEventId || !targetId) return;
+    setSyncing(true);
+    setSyncNotice(null);
+
+    try {
+      const res = await requestGithubSubmission(selectedEventId, {
+        team: isAdmin ? targetId : null,
+      });
+
+      if (res?.receipt) {
+        const formatted = formatReceipt(res.receipt);
+        setReceipt(formatted);
+      }
+
+      const jobId = res?.job?.id;
+      if (jobId && ['resolving', 'fetching', 'checking'].includes(res?.receipt?.status)) {
+        pollJob(jobId);
+      } else {
+        setSyncing(false);
+      }
+    } catch (error) {
+      setSyncing(false);
+      setSyncNotice({
+        tone: 'danger',
+        message: humanizeIntakeError(error.code, error.message),
+      });
+    }
+  }
+
+  function pollJob(jobId) {
+    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    pollTimerRef.current = setTimeout(async () => {
+      try {
+        const jobData = await fetchRepoSyncJob(jobId);
+        if (jobData?.receipt) {
+          const updatedReceipt = formatReceipt(jobData.receipt);
+          setReceipt(updatedReceipt);
+
+          if (['resolving', 'fetching', 'checking'].includes(updatedReceipt.status)) {
+            pollJob(jobId);
+            return;
+          }
+        }
+      } catch {
+        // Polling error: will terminate polling
+      }
+      setSyncing(false);
+      actions.refresh();
+    }, 2500);
+  }
+
+  const receiptStatus = receipt ? syncStatusInfo(receipt.status) : null;
+  const isApproved = connection?.approved === true;
+  const canSync = isApproved && !isEventFrozen && (!frozen || isAdmin) && Boolean(targetId);
 
   return (
     <>
       <header className="tt-page-head">
         <div>
-          <p className="tt-eyebrow">{isAdmin ? 'Ban tổ chức · nhận bài' : 'Đội thi · bài nộp'}</p>
-          <h1 className="tt-page-title">{isAdmin ? 'Bài nộp & kiểm tra bot' : 'Bot & bài nộp'}</h1>
+          <p className="tt-eyebrow">{isAdmin ? 'Ban tổ chức · nhận bài & duyệt repo' : 'Đội thi · nộp bài GitHub'}</p>
+          <h1 className="tt-page-title">{isAdmin ? 'Quản lý bài nộp & đồng bộ GitHub' : 'Bot & đồng bộ GitHub'}</h1>
           <p className="tt-page-lead">
-            Hệ thống chỉ nhận một file Python dùng thư viện chuẩn. Server lưu file với tên sinh tự động, tính
-            SHA-256 và chạy smoke test; bot không được quyền quyết định kết quả trận.
+            Chế độ nộp bài chính thức: Đội đăng ký repository GitHub và branch; BTC duyệt quyền; server ghi nhận
+            commit SHA và kiểm tra tự động. Không yêu cầu upload mã nguồn thủ công qua web.
           </p>
         </div>
-        <a className="tt-btn" href="/api/sample-bot" download="sample_bot.py">
+        <a className="tt-btn" href={campusBotDownload} download="bot.py">
           <Download size={16} aria-hidden="true" />
           Tải bot mẫu
         </a>
       </header>
 
-      {frozen && !isAdmin && (
-        <Alert tone="warning" title={`Bài nộp đang khóa · ${frozen.name}`}>
-          Đội đang thi trong giải chạy. Chờ giải kết thúc để nộp phiên bản mới; server cũng chặn thao tác này.
+      {/* Warning if team is not enrolled in any tournament */}
+      {!isAdmin && events.length === 0 && (
+        <Alert tone="warning" title="Chưa được ghi danh vào giải đấu">
+          Đội của bạn hiện chưa được Ban tổ chức xếp vào giải đấu nào. Bài nộp bot được quản lý theo từng giải đấu cụ thể; vui lòng liên hệ BTC để được thêm vào giải trước khi nộp bot.
         </Alert>
       )}
 
+      {/* Warning if tournament is running/frozen */}
+      {isEventFrozen && (
+        <Alert tone="warning" title={`Bài nộp đang khóa · ${selectedEvent.name}`}>
+          Giải đấu đã bắt đầu hoặc quá hạn nộp bài. Bài nộp của các đội tham gia đã được đóng băng cho giải này.
+        </Alert>
+      )}
+
+      {/* Admin: Select Team Filter */}
       {isAdmin && (
         <Panel
-          title="Chọn đội cần xem"
-          subtitle="Admin có thể nộp hộ khi đội gặp sự cố, không bị khóa bởi vòng đang chạy."
+          title="Chọn đội cần thao tác"
+          subtitle="Admin có thể xem trạng thái repo, duyệt quyền truy cập và đồng bộ bài thay cho đội."
           actions={selectedTeam ? <Badge tone={teamBotState(selectedTeam).tone}>{teamBotState(selectedTeam).label}</Badge> : null}
         >
-          <Field label="Đội">
-            <select value={teamFilter} onChange={(event) => onSelectTeam(event.target.value)}>
-              <option value="">— Chọn đội —</option>
+          <Field label="Đội thi đấu">
+            <select value={teamFilter} onChange={(e) => onSelectTeam(e.target.value)}>
+              <option value="">— Chọn đội thi đấu —</option>
               {teams.map((team) => (
                 <option key={team.id} value={team.id}>
-                  {team.name}{team.latest_valid_submission_id ? '' : ' (chưa có bot hợp lệ)'}
+                  {team.name}
+                  {team.latest_valid_submission_id ? ' (đã có bot hợp lệ)' : ' (chưa có bot hợp lệ)'}
                 </option>
               ))}
             </select>
           </Field>
-          {!selectedTeam && <p className="tt-muted">Chọn một đội để xem lịch sử và nộp bài thay.</p>}
+          {!selectedTeam && <p className="tt-muted">Vui lòng chọn một đội để kiểm tra hoặc phê duyệt repository.</p>}
         </Panel>
       )}
 
+      {/* Event Selection if multiple events exist */}
+      {events.length > 1 && (
+        <Panel title="Giải đấu áp dụng" subtitle="Bài nộp và quyền repository được quản lý riêng theo từng giải đấu.">
+          <Field label="Giải đấu">
+            <select value={selectedEventId} onChange={(e) => setSelectedEventId(e.target.value)}>
+              {events.map((ev) => (
+                <option key={ev.id} value={ev.id}>
+                  {ev.name} ({ev.status === 'draft' ? 'Đang mở nộp' : 'Đã khóa/đang chạy'})
+                </option>
+              ))}
+            </select>
+          </Field>
+        </Panel>
+      )}
+
+      {/* Status Highlights */}
       <section className="tt-stats" aria-label="Trạng thái bài nộp">
         <div className={`tt-stat tt-stat--${bot.hasValid ? 'success' : 'warning'}`}>
           <span className="tt-stat__label">Bot hợp lệ</span>
           <strong className="tt-stat__value">{bot.hasValid ? 'Có' : 'Chưa'}</strong>
-          <span className="tt-stat__hint">{bot.validCount} bài vượt kiểm tra</span>
+          <span className="tt-stat__hint">{bot.validCount} bản vượt kiểm tra</span>
         </div>
         <div className="tt-stat">
-          <span className="tt-stat__label">Tổng bài đã nhận</span>
-          <strong className="tt-stat__value">{bot.total}</strong>
-          <span className="tt-stat__hint">{bot.failedCount} bài lỗi</span>
+          <span className="tt-stat__label">Repository GitHub</span>
+          <strong className="tt-stat__value tt-stat__value--small">
+            {connection ? (isApproved ? 'Đã duyệt' : 'Chờ duyệt') : 'Chưa liên kết'}
+          </strong>
+          <span className="tt-stat__hint">{connection ? connection.branch || 'main' : 'Chưa đăng ký'}</span>
         </div>
         <div className="tt-stat">
-          <span className="tt-stat__label">Bài mới nhất</span>
-          <strong className="tt-stat__value tt-stat__value--small">{bot.latest ? formatDateTime(bot.latest.created_at) : '—'}</strong>
-          <span className="tt-stat__hint">{bot.latest ? `SHA ${shortSha(bot.latest.sha256)}` : 'Chưa có dữ liệu'}</span>
+          <span className="tt-stat__label">Commit mới nhất</span>
+          <strong className="tt-stat__value tt-stat__value--small">
+            {receipt?.shortSha ? receipt.shortSha : '—'}
+          </strong>
+          <span className="tt-stat__hint">{receipt?.statusMeta?.label || 'Chưa đồng bộ'}</span>
         </div>
       </section>
 
+      {/* Main GitHub Intake Section */}
       <div className="tt-grid tt-grid--2 tt-grid--form">
-        <Panel title="Nộp bot" subtitle="Nộp bài mới không xóa lịch sử; hệ thống dùng bài hợp lệ mới nhất khi giải bắt đầu.">
-          <form className="tt-form" ref={formRef} onSubmit={handleUpload}>
-            <Field label="File bot (.py)" hint="Tối đa 64 KiB. Validation chạy code trên máy BTC, không có sandbox.">
-              <input type="file" name="file" accept=".py" required disabled={!canUpload || busy?.upload} />
-            </Field>
-            {error && <Alert tone="danger">{error}</Alert>}
-            <div className="tt-form__actions">
-              <button type="submit" className="tt-btn tt-btn--primary" disabled={!canUpload || busy?.upload}>
-                {frozen && !isAdmin ? <Lock size={16} aria-hidden="true" /> : <UploadCloud size={16} aria-hidden="true" />}
-                {busy?.upload ? 'Đang kiểm tra…' : 'Nộp & kiểm tra bot'}
-              </button>
-              {!canUpload && <span className="tt-muted">Cần chọn đội và mở khóa vòng đấu trước khi nộp.</span>}
-            </div>
-          </form>
+        {/* Panel 1: Repository Connection & Sync CTA */}
+        <Panel
+          title="Kết nối GitHub & Đồng bộ"
+          subtitle="Khai báo repository công khai trên github.com và nhánh chứa file bot.py."
+          actions={
+            connection ? (
+              <Badge tone={isApproved ? 'success' : 'warning'}>
+                {isApproved ? 'Đã duyệt' : 'Chờ BTC duyệt'}
+              </Badge>
+            ) : null
+          }
+        >
+          {connectionLoading ? (
+            <Spinner label="Đang kiểm tra trạng thái kết nối GitHub…" />
+          ) : (
+            <>
+              {syncNotice && <Alert tone={syncNotice.tone}>{syncNotice.message}</Alert>}
+
+              <form className="tt-form" onSubmit={handleSaveRepository}>
+                <Field
+                  label="URL Repository GitHub"
+                  hint="Chỉ nhận repository HTTPS dạng https://github.com/owner/repo."
+                  error={repoError}
+                >
+                  <input
+                    type="url"
+                    value={repoInput}
+                    disabled={isEventFrozen || syncing}
+                    onChange={(e) => {
+                      setRepoInput(e.target.value);
+                      setRepoError('');
+                    }}
+                    placeholder="https://github.com/team/ootv2-bot"
+                    required
+                  />
+                </Field>
+
+                <Field label="Nhánh (Branch)" hint="Nhánh chứa file bot.py (mặc định: main).">
+                  <input
+                    type="text"
+                    value={branchInput}
+                    disabled={isEventFrozen || syncing}
+                    onChange={(e) => setBranchInput(e.target.value)}
+                    placeholder="main"
+                    required
+                  />
+                </Field>
+
+                <div className="tt-form__actions">
+                  <button
+                    type="submit"
+                    className="tt-btn"
+                    disabled={!selectedEventId || isEventFrozen || syncing || !targetId}
+                  >
+                    <Github size={16} aria-hidden="true" />
+                    Lưu & Đăng ký repository
+                  </button>
+
+                  {/* Admin Approve Button */}
+                  {isAdmin && connection && !connection.approved && (
+                    <button
+                      type="button"
+                      className="tt-btn tt-btn--success"
+                      onClick={handleApproveRepository}
+                      disabled={syncing}
+                    >
+                      <ShieldCheck size={16} aria-hidden="true" />
+                      Phê duyệt repository này
+                    </button>
+                  )}
+
+                  {/* Admin Revoke Button */}
+                  {isAdmin && connection && connection.approved && (
+                    <button
+                      type="button"
+                      className="tt-btn tt-btn--danger"
+                      onClick={handleRevokeRepository}
+                      disabled={syncing}
+                    >
+                      <ShieldAlert size={16} aria-hidden="true" />
+                      Thu hồi phê duyệt
+                    </button>
+                  )}
+                </div>
+              </form>
+
+              {/* Sync Action & Receipt Status */}
+              <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid var(--tt-border, #e2e8f0)' }}>
+                <h4>Đồng bộ commit mới</h4>
+                <p className="tt-muted" style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>
+                  Hệ thống sẽ lấy commit SHA mới nhất trên nhánh đã duyệt, kiểm tra kích thước, UTF-8 và chạy smoke test.
+                </p>
+
+                <div className="tt-form__actions" style={{ marginBottom: '1rem' }}>
+                  <button
+                    type="button"
+                    className="tt-btn tt-btn--primary"
+                    onClick={handleRequestSync}
+                    disabled={!canSync || syncing}
+                  >
+                    {syncing ? <RefreshCw size={16} className="tt-spin" aria-hidden="true" /> : <GitBranch size={16} aria-hidden="true" />}
+                    {syncing ? 'Đang kiểm tra bot…' : 'Đồng bộ commit mới từ GitHub'}
+                  </button>
+
+                  {!isApproved && connection && (
+                    <span className="tt-muted" style={{ fontSize: '0.85rem' }}>
+                      Cần BTC phê duyệt repository trước khi đồng bộ.
+                    </span>
+                  )}
+                  {isEventFrozen && (
+                    <span className="tt-muted" style={{ fontSize: '0.85rem' }}>
+                      Giải đấu đã đóng nộp bài.
+                    </span>
+                  )}
+                </div>
+
+                {/* Receipt Card Display */}
+                {receipt && (
+                  <div
+                    className="tt-receipt-card"
+                    style={{
+                      background: 'var(--tt-bg-subtle, #f8fafc)',
+                      padding: '1rem',
+                      borderRadius: '8px',
+                      border: '1px solid var(--tt-border, #e2e8f0)',
+                      marginTop: '1rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <strong>Biên nhận đồng bộ (Receipt)</strong>
+                      <Badge tone={receiptStatus.tone}>{receiptStatus.label}</Badge>
+                    </div>
+
+                    <dl className="tt-deflist" style={{ margin: 0, fontSize: '0.9rem' }}>
+                      <div>
+                        <dt>Commit SHA</dt>
+                        <dd>
+                          <code title={receipt.commitSha}>{receipt.shortSha}</code>{' '}
+                          <span className="tt-muted" style={{ fontSize: '0.8rem' }}>({receipt.commitSha})</span>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Nhánh / File</dt>
+                        <dd><code>{receipt.branch}</code> / <code>{receipt.filePath}</code></dd>
+                      </div>
+                      <div>
+                        <dt>Thời điểm</dt>
+                        <dd>{formatDateTime(receipt.resolvedAt)}</dd>
+                      </div>
+                      {receipt.sourceHash && (
+                        <div>
+                          <dt>Hash mã nguồn</dt>
+                          <dd><code>{shortSha(receipt.sourceHash)}</code></dd>
+                        </div>
+                      )}
+                    </dl>
+
+                    <div style={{ marginTop: '0.75rem' }}>
+                      {receipt.status === 'valid' && (
+                        <Alert tone="success" title="Bot hợp lệ">
+                          {receiptStatus.summary}
+                        </Alert>
+                      )}
+                      {receipt.status === 'invalid' && (
+                        <Alert tone="danger" title="Bot không hợp lệ (Lỗi mã nguồn)">
+                          {receipt.error || receiptStatus.summary}
+                          <p style={{ marginTop: '0.35rem', fontSize: '0.85rem' }}>
+                            Đội vui lòng sửa mã nguồn trên GitHub và bấm <strong>Đồng bộ commit mới</strong> để nộp lại.
+                          </p>
+                        </Alert>
+                      )}
+                      {receipt.status === 'infrastructure' && (
+                        <Alert tone="danger" title="Sự cố kết nối / Hạ tầng">
+                          {receipt.error || receiptStatus.summary}
+                          <p style={{ marginTop: '0.35rem', fontSize: '0.85rem' }}>
+                            Đây là sự cố mạng hoặc giới hạn GitHub. Bản bot hợp lệ trước đó vẫn được bảo toàn.
+                          </p>
+                        </Alert>
+                      )}
+                      {['resolving', 'fetching', 'checking'].includes(receipt.status) && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--tt-text-muted)' }}>
+                          <Spinner label={receiptStatus.summary} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </Panel>
 
-        <Panel title="Yêu cầu kỹ thuật" subtitle="Theo protocol MVP, không phải Campus persistent.">
-          <ul className="tt-bullets">
-            <li><strong>Python 3.12+</strong>, chỉ thư viện chuẩn; không cài package.</li>
-            <li>Một file <code>.py</code> duy nhất; không ZIP, không source URL.</li>
-            <li>Bot nhận JSON qua stdin và trả JSON qua stdout; không tự ghi kết quả.</li>
-            <li>Mỗi request là một tiến trình mới; bot không giữ trạng thái giữa các nước.</li>
-            <li>Server giới hạn thời gian, kích thước output và số nước (tối đa 200 plies).</li>
-          </ul>
-          <Alert tone="info" title="Bot mẫu">
-            Dùng <a href="/api/sample-bot" download="sample_bot.py">sample_bot.py</a> làm khung rồi thay phần chọn nước.
-            Đọc thêm tại <code>docs/02_BOT_WORKER_PROTOCOL.md</code>.
-          </Alert>
-        </Panel>
+        {/* Panel 2: Quy định kỹ thuật & Fallback Offline cho Admin */}
+        <div className="tt-stack">
+          <Panel title="Quy định nộp bài GitHub" subtitle="Điều lệ giải Campus và hướng dẫn triển khai.">
+            <ul className="tt-bullets">
+              <li>Mỗi đội liên kết <strong>1 repository GitHub</strong> duy nhất cho mỗi giải đấu.</li>
+              <li>Repository cần để chế độ <strong>Public</strong> (hoặc cấu hình quyền cho ứng dụng BTC).</li>
+              <li>Mã nguồn bot phải đặt tại đường dẫn gốc: <code>bot.py</code>.</li>
+              <li><strong>Python 3.12+</strong>, chỉ sử dụng thư viện chuẩn; không hỗ trợ cài package ngoài.</li>
+              <li>Giới hạn file: tối đa <strong>256 KiB</strong>, mã hóa UTF-8 chuẩn.</li>
+              <li>Mỗi commit SHA mới được tính vào hạn mức quota kiểm tra trong 24 giờ.</li>
+            </ul>
+          </Panel>
+
+          {/* Chi dan sang muc Chung ket thu cong cho Admin */}
+          {isAdmin && (
+            <Panel
+              title="Chung kết thủ công tại phòng thi"
+              subtitle="BTC nạp mã nguồn trực tiếp cho các vòng chung kết tập trung tại mục Quản lý giải đấu."
+            >
+              <p className="tt-muted" style={{ margin: 0 }}>
+                Hệ thống nộp bài tại trang này dành riêng cho chế độ <strong>Online GitHub Intake</strong> (đồng bộ tự động qua commit SHA và biên nhận hợp lệ). Với vòng chung kết thi đấu trực tiếp tại sự kiện, vui lòng sử dụng mục <strong>Chung kết thủ công</strong> trong trang chi tiết giải đấu.
+              </p>
+            </Panel>
+          )}
+        </div>
       </div>
 
+      {/* Panel: History of Submissions */}
       <Panel
-        title="Lịch sử bài nộp"
+        title="Lịch sử các phiên bản bot"
         subtitle={selectedTeam ? selectedTeam.name : isAdmin ? 'Chọn đội để xem lịch sử' : 'Bài nộp của đội bạn'}
         actions={<Badge tone="neutral">{bot.total} bản</Badge>}
       >
         {bot.total ? (
-          <DataTable columns={['Thời điểm', 'SHA-256', 'Trạng thái', 'Lỗi kiểm tra']} label="Lịch sử bài nộp">
+          <DataTable columns={['Thời điểm', 'SHA-256', 'Trạng thái', 'Ghi chú / Lỗi']} label="Lịch sử bài nộp">
             {submissions.map((row) => {
               const state = submissionState(row.status);
               return (
@@ -152,7 +601,9 @@ export default function SubmissionsPage({ account, events, teams, submissions, t
           </DataTable>
         ) : (
           <p className="tt-muted">
-            {isAdmin && !teamFilter ? 'Chọn một đội ở khung phía trên để xem lịch sử bài nộp.' : 'Chưa có bài nộp nào. Nộp file .py đầu tiên để hệ thống kiểm tra.'}
+            {isAdmin && !teamFilter
+              ? 'Chọn một đội ở danh sách phía trên để xem lịch sử bài nộp.'
+              : 'Chưa có bản bot nào được ghi nhận. Hãy liên kết repository GitHub và bấm Đồng bộ commit mới.'}
           </p>
         )}
       </Panel>

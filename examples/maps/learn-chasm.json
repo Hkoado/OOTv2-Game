@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "map.v2",
+  "width": 9,
+  "height": 9,
+  "setupZoneRule": "diagonal-28-v1",
+  "cornerRule": "block-if-both-orthogonals-blocked",
+  "rulesVersion": "ott-campus.v2",
+  "id": "learn-chasm",
+  "revision": 1,
+  "bases": {
+    "red": "a1",
+    "blue": "i9"
+  },
+  "blocked": [],
+  "terrains": {
+    "c3": "chasm",
+    "e4": "chasm",
+    "e6": "chasm",
+    "g7": "chasm"
+  }
+}

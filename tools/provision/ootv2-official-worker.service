@@ -1,0 +1,29 @@
+[Unit]
+Description=OOTv2 official and manual Campus judge (dedicated VM only)
+After=network-online.target ootv2-attest.service
+Wants=network-online.target ootv2-attest.service
+# A judge without a fresh attestation must not start at all; the timer keeps it fresh.
+
+[Service]
+Type=simple
+# Current sandbox launcher requires root for namespaces/cgroups. This service is
+# exclusively for a dedicated judge guest, never the API host or Windows/WSL.
+User=root
+WorkingDirectory=/srv/ootv2/current
+EnvironmentFile=/etc/ootv2/worker.env
+Environment=NODE_ENV=production
+Environment=OOTV2_DATA_DIR=/var/lib/ootv2
+Environment=OOTV2_CAMPUS_SANDBOX=linux-sandbox
+Environment=OOTV2_SANDBOX_RUNNER=/srv/ootv2/current/sandbox/linux/run-bot.sh
+Environment=OOTV2_SANDBOX_ATTESTATION=/run/ootv2-sandbox-attestation.json
+ExecStartPre=/opt/ootv2-node/bin/node --input-type=module -e "import {assertCampusSandboxReady} from './server/judge/campusSandboxFactory.js'; assertCampusSandboxReady()"
+ExecStart=/opt/ootv2-node/bin/node /srv/ootv2/current/server/officialWorker.js --all
+KillSignal=SIGTERM
+KillMode=control-group
+TimeoutStopSec=90
+Restart=on-failure
+RestartSec=10
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

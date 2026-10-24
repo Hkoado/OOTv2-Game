@@ -15,8 +15,20 @@ const STATUS_COPY = {
   offline: { text: 'Chưa kết nối được API local', tone: 'offline', icon: WifiOff },
 };
 
-export default function LoginScreen({ onSubmit, onOffline, busy, error, notice, serverStatus = 'checking', theme, onToggleTheme }) {
+export default function LoginScreen({
+  onSubmit,
+  onOffline,
+  busy,
+  error,
+  notice,
+  serverStatus = 'checking',
+  theme,
+  onToggleTheme,
+  initialUsername = '',
+  initialRemember = false,
+}) {
   const [showPassword, setShowPassword] = useState(false);
+  const [remember, setRemember] = useState(initialRemember === true);
   const status = STATUS_COPY[serverStatus] || STATUS_COPY.checking;
   const StatusIcon = status.icon;
 
@@ -26,6 +38,7 @@ export default function LoginScreen({ onSubmit, onOffline, busy, error, notice, 
     await onSubmit({
       username: form.elements.username.value,
       password: form.elements.password.value,
+      remember,
     });
   }
 
@@ -53,11 +66,15 @@ export default function LoginScreen({ onSubmit, onOffline, busy, error, notice, 
             Viết bot. Vào bảng.<br />Đấu bằng thuật toán.
           </h1>
           <p className="tt-login__lead">
-            Luyện cờ trên cùng một máy, hoặc đăng nhập để tham gia giải đấu bot.
+            Đăng nhập tài khoản đội hoặc ban tổ chức để vào cổng giải đấu, nộp bài bot và theo dõi các trận đấu trực tiếp.
           </p>
 
           <div className="tt-login__board"><GameBoard pieces={previewState.pieces} map={previewMap} title="Bàn luyện tập" readOnly /></div>
-          <button type="button" className="tt-btn tt-btn--info tt-btn--block" onClick={onOffline}>Chơi offline · Không cần đăng nhập</button>
+          <div className="tt-login__choices">
+            <button type="button" className="tt-btn tt-btn--info tt-btn--block" onClick={onOffline}>
+              Chơi offline · Không cần đăng nhập
+            </button>
+          </div>
           <div className={`tt-login__status tt-login__status--${status.tone}`}>
             <StatusIcon size={16} className={serverStatus === 'checking' ? 'tt-spinner__icon' : undefined} aria-hidden="true" />
             <span>{status.text}</span>
@@ -86,7 +103,8 @@ export default function LoginScreen({ onSubmit, onOffline, busy, error, notice, 
                 autoCapitalize="none"
                 spellCheck={false}
                 required
-                autoFocus
+                autoFocus={!initialUsername}
+                defaultValue={initialUsername}
                 disabled={busy}
               />
             </Field>
@@ -111,6 +129,20 @@ export default function LoginScreen({ onSubmit, onOffline, busy, error, notice, 
                 </button>
               </span>
             </Field>
+            <label className="tt-login__remember">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={(event) => setRemember(event.target.checked)}
+                disabled={busy}
+              />
+              <span>
+                <strong>Ghi nhớ tài khoản trên máy này</strong>
+                <span className="tt-small tt-muted">
+                  Chỉ lưu tên đăng nhập (không lưu mật khẩu); phiên đăng nhập giữ tới 30 ngày.
+                </span>
+              </span>
+            </label>
             <button type="submit" className="tt-btn tt-btn--primary tt-btn--block" disabled={busy}>
               {busy ? <Loader2 size={18} className="tt-spinner__icon" aria-hidden="true" /> : <KeyRound size={18} aria-hidden="true" />}
               {busy ? 'Đang xác thực…' : 'Vào giải đấu'}
@@ -129,4 +161,3 @@ export default function LoginScreen({ onSubmit, onOffline, busy, error, notice, 
     </main>
   );
 }
-

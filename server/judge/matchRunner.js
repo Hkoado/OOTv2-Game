@@ -27,7 +27,9 @@ import {
   otherPlayer,
   getPiecesArray,
   replayMatchesResult,
+  mapRequestFields,
 } from './gameAdapter.js';
+import { normalizeMap } from '../../src/game/maps.js';
 
 function emptyReplay(matchId, seed, pieces, result, reason) {
   return {
@@ -41,13 +43,47 @@ function emptyReplay(matchId, seed, pieces, result, reason) {
   };
 }
 
+/** Gọi observer (worker ghi live) mà không để lỗi observer ảnh hưởng kết quả ván. */
+function safeNotify(callback, payload) {
+  if (typeof callback !== 'function') return;
+  try {
+    callback(payload);
+  } catch {
+    /* bỏ qua: dữ liệu live là best-effort */
+  }
+}
+
 /**
  * @param {{ matchId: string, seed: number, red: {name: string, filePath: string},
- *           blue: {name: string, filePath: string}, onProgress?: Function }} options
+ *           blue: {name: string, filePath: string}, map?: object, onProgress?: Function,
+ *           onLive?: (event: {kind: 'initial', initialPieces: object[], seed: number}
+ *                            | {kind: 'move', ply: number, event: object}) => void,
+ *           onBotOutput?: (chunk: {side: 'red'|'blue', stream: 'stdout'|'stderr', text: string}) => void }} options
  * @returns {Promise<{result: string, reason: string, winner: string|null, ply_count: number,
  *                    replay: object, notes: string[]}>}
  */
-export async function runMatch({ matchId, seed, red, blue, onProgress }) {
+export async function runMatch({ matchId, seed, red, blue, map, onProgress, onLive, onBotOutput }) {
+  // Snapshot map do giải/worker chốt, không lấy từ bot.
+  const mapFields = mapRequestFields(map ? normalizeMap(map) : null);
+  if (mapFields.map?.schemaVersion === 'map.v2') {
+    throw new Error('map_runner_unavailable: map.v2 requires the Campus runner');
+  }
+  const outcome = await runMatchInternal({
+    matchId,
+    seed,
+    red,
+    blue,
+    map: mapFields.map || null,
+    onProgress,
+    onLive,
+    onBotOutput,
+  });
+  // Cùng một map/hash cho setup, move và replay của ván này.
+  if (mapFields.map) outcome.replay = { ...outcome.replay, ...mapFields };
+  return outcome;
+}
+
+async function runMatchInternal({ matchId, seed, red, blue, map, onProgress, onLive, onBotOutput }) {
   const notes = [];
   const bots = {
     [PLAYERS.RED]: red,
@@ -55,7 +91,15 @@ export async function runMatch({ matchId, seed, red, blue, onProgress }) {
   };
 
   const callBot = (player, payload, timeoutMs) =>
-    runBotRequest({ filePath: bots[player].filePath, payload, timeoutMs });
+    runBotRequest({
+      filePath: bots[player].filePath,
+      payload,
+      timeoutMs,
+      onOutput:
+        typeof onBotOutput === 'function'
+          ? (chunk) => onBotOutput({ side: player, stream: chunk.stream, text: chunk.text })
+          : undefined,
+    });
 
   try {
     let state = createTournamentGame(matchId);
@@ -63,7 +107,7 @@ export async function runMatch({ matchId, seed, red, blue, onProgress }) {
     // --- Setup Đỏ trước ---
     const redSetup = await callBot(
       PLAYERS.RED,
-      buildSetupRequest(state, PLAYERS.RED, seed),
+      buildSetupRequest(state, PLAYERS.RED, seed, map),
       config.limits.setupTimeoutMs
     );
     if (!redSetup.ok) {
@@ -94,7 +138,7 @@ export async function runMatch({ matchId, seed, red, blue, onProgress }) {
     // --- Setup Xanh (thấy đội hình Đỏ) ---
     const blueSetup = await callBot(
       PLAYERS.BLUE,
-      buildSetupRequest(state, PLAYERS.BLUE, seed),
+      buildSetupRequest(state, PLAYERS.BLUE, seed, map),
       config.limits.setupTimeoutMs
     );
     if (!blueSetup.ok) {
@@ -125,15 +169,20 @@ export async function runMatch({ matchId, seed, red, blue, onProgress }) {
     const initialPieces = getPiecesArray(state);
     const events = [];
 
+    // Mốc công khai: khán giả thấy đúng thế trận hai đội đã xếp trước nước đầu tiên.
+    safeNotify(onLive, { kind: 'initial', initialPieces, seed });
+
     return await playLoop({
       state,
       events,
       initialPieces,
       matchId,
       seed,
+      map,
       callBot,
       notes,
       onProgress,
+      onLive,
     });
   } catch (error) {
     // Lỗi ngoài dự kiến của engine/runner: không được làm chết worker.
@@ -180,7 +229,7 @@ function buildFinished(matchId, seed, initialPieces, events, result, reason, not
 }
 
 /** Vòng lặp nước đi: engine kiểm tra từng nước, giới hạn MAX_PLIES. */
-async function playLoop({ state, events, initialPieces, matchId, seed, callBot, notes, onProgress }) {
+async function playLoop({ state, events, initialPieces, matchId, seed, map, callBot, notes, onProgress, onLive }) {
   let current = state;
 
   for (let ply = 1; ply <= MAX_PLIES; ply += 1) {
@@ -200,7 +249,7 @@ async function playLoop({ state, events, initialPieces, matchId, seed, callBot, 
 
     const live = await callBot(
       player,
-      buildMoveRequest(current, player, seed, ply),
+      buildMoveRequest(current, player, seed, ply, map),
       config.limits.moveTimeoutMs
     );
     if (!live.ok) {
@@ -231,6 +280,7 @@ async function playLoop({ state, events, initialPieces, matchId, seed, callBot, 
     current = applied.state;
     events.push({ ply, ...applied.event });
     if (onProgress) onProgress({ ply, event: applied.event });
+    safeNotify(onLive, { kind: 'move', ply, event: applied.event });
 
     if (current.phase === GAME_PHASES.FINISHED && current.winner) {
       const reason = determineWinReason(current, current.winner);

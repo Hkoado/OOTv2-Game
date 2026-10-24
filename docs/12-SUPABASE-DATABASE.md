@@ -1,23 +1,124 @@
 # Supabase: nền tảng DB quản lý giải
 
 Ngày 22/10/2026. Project đã được người dùng xác nhận: **OTTv2-G5**, ref `wsyfcgurnrowcuefwynx`.
-Migration đã áp dụng: `20261022122359`, tên `campus_foundation`.
+Migration đã áp dụng: **10/10** file trong `supabase/migrations` (apply 24/10/2026 qua Management API,
+smoke PostgreSQL PASS) — xem mục “DB thật” trong [Hướng dẫn vận hành](runbook/BAN-TO-CHUC.md).
 
 ## Phạm vi
 
 Foundation Campus vẫn độc lập. Runtime MVP hiện dùng các bảng `mvp_*` trong cùng
 project, không chuyển dữ liệu lịch sử sang luật Campus. Không mở thực thi bot công khai.
 
-Lựa chọn Supabase theo yêu cầu mới thay cho quyết định SQLite-only **ở lớp schema
-online và runtime MVP**; SQLite chỉ giữ cho legacy/offline/test và backup.
+Lựa chọn Supabase theo yêu cầu mới thay cho quyết định SQLite-only **ở toàn bộ runtime**:
+từ 23/10/2026 SQLite đã bị bỏ hẳn (schema, driver, CLI import và test harness).
 Không thêm SDK, ORM hoặc dependency. Service-role key chỉ dùng backend, không in/commit.
 Migration DDL dùng kết nối quản trị đã xác thực.
+
+## Bỏ SQLite — Supabase là DB duy nhất (23/10/2026)
+
+- Migration mới **`20261023120000_live_stream.sql`** tạo `mvp_match_events`,
+  `mvp_match_bot_output`, `mvp_worker_state` (RLS + chỉ `service_role`), phục vụ `/api/live`.
+  **Phải chạy migration này trước khi chấm trận đầu tiên**; nếu chưa, API trả
+  `503 live_not_ready` kèm tên migration.
+- Đã xoá `better-sqlite3`, `server/db.js`, các service/route legacy, `OOTV2_DB_DRIVER`,
+  `OOTV2_DB_PATH`, `OOTV2_ADMIN_KEY`, `tools/cli/{live-demo,reset-live-demo,migrate-shared-db}.js`.
+  Runtime, worker và công cụ chỉ dùng `server/shared/*`.
+- `tools/cli/verify-shared-db.js` giờ là smoke Supabase thuần (health, đếm bảng, login/CSRF/logout),
+  không đọc file `.sqlite` nữa. Chạy `npm run db:verify`.
+- Thiếu `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` → `assertSharedConfig()` ném lỗi ngay khi boot
+  (`server/index.js`, `server/worker.js`); không có driver dự phòng.
+
+
+## Map snapshot theo ván (24/10/2026)
+## GitHub intake H1 — repo approval + job/receipt (24/10/2026)
+
+- Migration **`20261024130000_github_intake.sql`** (additive, **đã apply 24/10/2026**): 3 bảng private
+  `mvp_repo_connections` (repo/branch đã duyệt theo giải+đội), `mvp_repo_sync_jobs` (lease/attempt/
+  available_at/error_category), `mvp_github_receipts` (trạng thái cho UI + `source_hash`/`submission_id`).
+  RLS bật, `REVOKE` khỏi `PUBLIC/anon/authenticated`, chỉ `service_role` đọc/ghi.
+- RPC `mvp_repo_connection_upsert` (đăng ký/duyệt, unique `(event, repo_id)` chống dùng chéo đội) và
+  `mvp_github_intake` (cutoff/freeze/membership/quota/idempotency bằng `clock_timestamp()`), trả envelope
+  `{ok, created?, connection?|receipt?, job?, error?}` để API map mã lỗi mà không lộ chi tiết SQL.
+- API chỉ resolve `repository id` + HEAD `commit SHA` qua `api.github.com` (`server/services/githubRepo.js`),
+  kiểm host/protocol/redirect/size/timeout, token chỉ ở header. Không clone, không tải `bot.py`,
+  không chạy git/Python; worker BTC (H2) sẽ tải blob đúng SHA.
+- Route + DTO đã chốt: xem [Hướng dẫn vận hành](runbook/BAN-TO-CHUC.md) và
+  [Hướng dẫn vận hành](runbook/BAN-TO-CHUC.md). UI B2 dùng `receipt`/`job` view này trực tiếp.
+- Bảo mật: receipt chỉ trả whitelist (không `storage_path`, không token, không raw lỗi GitHub);
+  team chỉ đọc job/receipt của mình, admin đọc mọi đội; giải đã chạy thì `event_frozen`/`frozen`.
+
+
+
+- Migration **`20261024120000_mvp_match_map_snapshot.sql`** thêm `mvp_matches.map_json` (MapV1 đã
+  chuẩn hoá) và `mvp_matches.map_hash` (hash canonical bỏ `id`/`revision`), rồi thay
+  `mvp_stage_commit` để mọi ván mới bắt buộc có snapshot hợp lệ (`bad_game_map` nếu thiếu/sai dạng).
+  **Phải chạy migration này trước khi bắt đầu giải mới**; chưa chạy thì API trả lỗi RPC vì cột chưa có.
+- `server/shared/tournaments.js` chốt snapshot ngay khi lên lịch (`seriesGames`) cho cả vòng bảng,
+  bán kết và chung kết; sửa map của giải sau đó không làm lệch ván đã tạo.
+- `server/shared/worker.js` đọc snapshot của ván, tính lại hash (`server/contracts/mapSnapshot.js`);
+  snapshot hỏng hoặc hash lệch ⇒ lỗi hạ tầng: release lease, **không chạy bot** với map khác.
+  Ván tạo trước migration (`NULL`) dùng map hiện tại của giải.
+- `runMatch({ map })` gửi cùng `map`/`map_hash` trong request `setup`, `move` và ghi vào `replay_json`.
+- API danh sách trận trả thêm `map_hash` để đối soát; trường này vẫn không lộ source bot hay hash bài.
+
+
+## Worker contract GitHub + sửa FK (24/10/2026)
+
+- Migration **`20261024160000_github_jobs_worker.sql`** thêm `mvp_repo_sync_jobs.generation` và 5 RPC:
+  `mvp_github_claim` (queued/lease hết hạn, `SKIP LOCKED`, tăng attempt + generation),
+  `mvp_github_heartbeat`, `mvp_github_progress` (`fetching|checking`), `mvp_github_finish`
+  (submission + receipt + job trong một transaction), `mvp_github_release` (retry backoff 15s×attempt,
+  tối đa 300s; vượt attempts → `infra_fault`). Mọi UPDATE so `lease_token` + `generation` +
+  `lease_until > clock_timestamp()` nên worker cũ không ghi đè kết quả mới.
+- **Bugfix**: `previous_valid_submission_id` phải là `submission_id` của receipt `valid`
+  (FK trỏ `mvp_submissions(id)`) và bỏ qua receipt chưa có submission. Sửa tại chỗ ở
+  `20261024130000_github_intake.sql` + `CREATE OR REPLACE` trong migration mới cho DB đã lỡ apply.
+- `finish` valid tạo `mvp_submissions` với `participant_id` lấy từ job (không tin payload), kiểm
+  `storage_path` `<uuid>.py` và `sha256 = source_hash`; invalid/infrastructure không tạo submission.
+- Client contract: `server/shared/githubJobs.js`; test `tests/githubJobs.test.js` 5/5 (mock fetch).
+
+## Worker contract hardening (24/10/2026)
+
+- Migration **`20261024170000_github_jobs_hardening.sql`** (**đã apply 24/10/2026**): thay `mvp_github_claim`
+  (thêm `p_max_attempts`, hủy reclaim khi worker crash), `mvp_github_finish` (trả envelope
+  `{ok, applied, already_finished, job, receipt}`; kiểm submission có sẵn đúng đội/`valid`/`sha256`),
+  `mvp_github_release` (**bắt buộc `lease_until > clock_timestamp()`**), `mvp_repo_connection_upsert`
+  (thu hồi/đổi repo → hủy job chờ, receipt chưa kết thúc `frozen`) và mới `mvp_repo_connection_revoke`.
+- **Thứ tự migration**: `20261022125205` → `20261023160000` → `20261024120000` → `20261024130000`
+  → `20261024150000` → `20261024160000` → `20261024170000` → `20261024180000` → `20261025090000`.
+  Rollback: `DROP FUNCTION` các hàm vừa thay rồi `DROP TABLE` `mvp_github_receipts`,
+  `mvp_repo_sync_jobs`, `mvp_repo_connections` (chỉ khi chưa có dữ liệu thật).
+- **Bắt buộc khi apply `20261024170000`**: `DROP FUNCTION IF EXISTS public.mvp_github_finish(uuid,uuid,integer,jsonb)`
+  (đổi return type `boolean → jsonb`, nếu không PostgreSQL báo `42P13`) và
+  `DROP FUNCTION IF EXISTS public.mvp_github_claim(text,integer)` (overload 2 tham số cũ sẽ che bản 3 tham số).
+  Trong `mvp_github_claim` không được đặt alias bảng trùng biến `j` (`42702` ambiguous).
+- **PostgreSQL test**: `supabase/tests/github_intake.sql` (transaction + ROLLBACK) — **PASS 24/10/2026**
+  qua Management API (`npm run db:apply-migrations -- --apply --smoke`), dùng được cả
+  `psql "$OOTV2_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f ...` trên project disposable.
+- API phía đội/admin không đổi DTO receipt/job; chỉ thêm `DELETE /events/:id/repository` (admin) và lỗi
+  `409 repo_sync_pending` khi start lúc còn job intake chưa xong.
+
+
+## Broadcast schedule H3 (24/10/2026)
+
+- Migration **`20261024150000_broadcast_schedule.sql`** tạo `mvp_match_broadcasts`
+  (`match_id` PK, `starts_at`, `ply_interval_ms` 250–60000, `release_mode window|full`,
+  `state scheduled|canceled|ended`), RLS + chỉ `service_role`.
+- `server/shared/publication.js` tính `visible_plies` bằng giờ server và là nguồn duy nhất cho
+  `GET /events/:id/broadcasts`, `GET /broadcasts/:matchId`, admin schedule/cancel, đồng thời lọc
+  `/api/live`, replay, log bot và standings/bracket của đội.
+- `/api/live` **yêu cầu đăng nhập** (401 khi ẩn danh) và chỉ trả ván đã công bố; `Cache-Control:
+  private, no-store`.
+
 
 ## Runtime MVP dùng chung — 22/10/2026
 
 - Migration `20261022125205_shared_mvp_runtime_tables` và
   `20261022125322_shared_mvp_runtime_functions` đã áp dụng, 9 bảng bật RLS,
   chỉ service_role có quyền; 13 bảng Campus không thay đổi.
+- Quan sát chấm bài (Mức 2): migration `20261022150000_judge_monitor` thêm bảng
+  `mvp_match_logs` (RLS, chỉ service_role đọc/ghi; API vẫn gate `requireLocalAdmin`).
+  Chưa áp dụng thì trang Chấm bài vẫn hiển thị tiến độ nhưng trả `logs_available: false`.
 - Đã nhập 9 participants, 2 accounts, 1 tournament, 7 entries; không có submission/match.
   Password hash giữ nguyên, bỏ session cũ: mọi người đăng nhập lại.
 - SQLite có ID TEXT không phải UUID (`draft-bay-doi`): CLI ánh xạ tất định sang UUID,
@@ -31,14 +132,12 @@ Migration DDL dùng kết nối quản trị đã xác thực.
   DB clock, token-fenced finish và attempt history; lỗi hạ tầng retry sau 30 giây.
 - API vẫn loopback; mỗi máy tin cậy dùng cùng credential backend. Bot subprocess
   không phải sandbox; không cấp key cho đội/bot, không mở upload công khai.
-- Thiếu kết nối DB báo lỗi, không fallback SQLite. `OOTV2_DB_DRIVER=sqlite` chỉ
-  dành legacy/offline; Node test runner tự dùng SQLite, test client dùng mock fetch.
+- Thiếu kết nối DB báo lỗi, không fallback. Node test runner không còn mở DB cục bộ:
+  test dùng mock `fetch` (PostgREST giả lập), xem `tests/liveStream.test.js`.
 
-Từ `d:\OOTv2-Game`: chạy `node tools/cli/setup-shared-storage.js`,
-`node tools/cli/migrate-shared-db.js` (dry-run), rồi `--apply` sau khi dừng writer cũ.
-Không chạy setup/import cho mỗi máy mới; máy mới chỉ cần .env và API/worker.
-`node tools/cli/verify-shared-db.js` kiểm số lượng/hash và HTTP auth/CSRF/logout,
-tạo admin tạm và cleanup; chạy khi chưa có writer khác để đối chiếu số lượng import.
+Từ `d:\OOTv2-Game`: chạy `node tools/cli/setup-shared-storage.js` một lần cho bucket,
+sau đó mỗi máy mới chỉ cần `.env` + `npm run dev:api` + `npm run dev:worker`.
+`npm run db:verify` kiểm health, số lượng bảng và HTTP auth/CSRF/logout (tạo admin tạm rồi cleanup).
 Chưa nghiệm thu concurrency nhiều máy thực, browser hai máy, giải shared 30 ván
 end-to-end, hoặc sandbox OS; không coi smoke DB là các nghiệm thu này.
 

@@ -1,14 +1,53 @@
 import config from '../config.js';
 import { HttpError } from '../lib/httpError.js';
 
-export const sharedEnabled = process.env.OOTV2_DB_DRIVER !== 'sqlite' && !process.env.NODE_TEST_CONTEXT;
+/** Project ref đích mà môi trường này được phép ghi (`OOTV2_EXPECTED_PROJECT_REF`). */
+const getExpectedProjectRef = () => (process.env.OOTV2_EXPECTED_PROJECT_REF || '').trim().toLowerCase();
+/** Chỉ áp cho URL Supabase thật; test double/PostgREST tự dựng (example.invalid) được bỏ qua. */
+const SUPABASE_HOST_RE = /\.supabase\.(co|in)$/u;
+
+/** Rút project ref từ `https://<ref>.supabase.co` (null nếu không phải URL Supabase). */
+export function projectRefOf(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  return parsed.hostname.match(/^([a-z0-9]{20})\.supabase\.(co|in)$/u)?.[1] ?? null;
+}
+
+/**
+ * Kiểm tra cấu hình Supabase mà không gọi mạng (dùng lúc boot để fail fast).
+ * Nếu `OOTV2_EXPECTED_PROJECT_REF` được đặt, project trong `SUPABASE_URL` phải khớp:
+ * chặn trường hợp `.env` bị trộn key/URL của hai project (dễ ghi drill vào DB chính thức).
+ * Guard chỉ áp cho host `*.supabase.co|in`; test double dùng host khác không bị chặn.
+ */
+export function assertSharedConfig() {
+  connection();
+}
 
 function connection() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('Thiếu SUPABASE_URL hoặc SUPABASE_SERVICE_ROLE_KEY trong .env. Dùng OOTV2_DB_DRIVER=sqlite chỉ cho test/offline legacy.');
-  const parsed = new URL(url);
+  if (!url || !key) {
+    throw new Error('Thiếu SUPABASE_URL hoặc SUPABASE_SERVICE_ROLE_KEY trong .env. Driver SQLite đã bị bỏ.');
+  }
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error('SUPABASE_URL không phải URL hợp lệ.');
+  }
   if (parsed.protocol !== 'https:') throw new Error('Supabase URL phải dùng HTTPS.');
+  const expected = getExpectedProjectRef();
+  if (expected && SUPABASE_HOST_RE.test(parsed.hostname)) {
+    const ref = projectRefOf(url);
+    if (ref !== expected) {
+      throw new Error(`SUPABASE_URL trỏ project "${ref ?? 'unknown'}" nhưng OOTV2_EXPECTED_PROJECT_REF=`
+        + `"${expected}". Sửa .env trước khi chạy để không ghi nhầm DB.`);
+    }
+  }
   return { url: parsed.origin, key };
 }
 
@@ -21,12 +60,16 @@ export async function request(endpoint, { method = 'GET', body, headers = {}, ra
       body: body === undefined ? undefined : Buffer.isBuffer(body) ? body : JSON.stringify(body),
       signal: AbortSignal.timeout(20000),
     });
-  } catch { throw new HttpError(503, 'database_unavailable', 'Không kết nối được DB chung. Không tự chuyển sang SQLite.'); }
+  } catch { throw new HttpError(503, 'database_unavailable', 'Không kết nối được DB chung. Không có driver dự phòng.'); }
   if (!response.ok) {
     const detail = await response.json().catch(() => ({}));
     const code = detail.code;
     if (code === '23505') throw new HttpError(409, 'duplicate_record', 'Dữ liệu trùng hoặc đang có giải hoạt động.');
     if (code === '40001') throw new HttpError(409, 'event_conflict', 'Dữ liệu đã thay đổi. Hãy tải lại.');
+    // Trigger/RPC ném domain code dạng `capture_mismatch` (P0001): giữ mã cho UI thay vì 503 chung.
+    if (code === 'P0001' && typeof detail.message === 'string' && /^[a-z][a-z0-9_]{2,60}$/u.test(detail.message)) {
+      throw new HttpError(409, detail.message, 'DB từ chối thao tác nghiệp vụ. Kiểm tra dữ liệu/provenance rồi thử lại.');
+    }
     throw new HttpError(response.status >= 500 ? 503 : 400, 'shared_db_error', 'Thao tác DB chung thất bại. Kiểm tra migration/cấu hình hoặc dữ liệu đầu vào.');
   }
   if (raw) return Buffer.from(await response.arrayBuffer());
@@ -53,4 +96,4 @@ export function uuid(value) {
   return value;
 }
 export async function health() { await rows('imports', 'limit=1'); return { driver: 'supabase', profile: 'mvp.v1', workerLeases: true }; }
-export const cacheRoot = config.submissionsDir;
+export const cacheRoot = config.artifactCacheDir;

@@ -31,7 +31,7 @@ function OverviewHead({ account, isAdmin, onNavigate }) {
         <h1 className="tt-page-title">{isAdmin ? 'Bảng điều khiển giải đấu' : `Xin chào, ${account.name}`}</h1>
         <p className="tt-page-lead">
           {isAdmin
-            ? 'Theo dõi đội, bài nộp và tiến độ 30 ván. Mọi thao tác khóa bài hay bắt đầu giải đều do server xác thực.'
+            ? 'Thiết lập giải tuần, tháng, kỳ theo điều lệ; theo dõi đội, bài nộp và tiến độ. Giải chính thức chưa bật chấm bằng scheduler MVP.'
             : 'Nộp bot, theo dõi bảng đấu và xem lại từng ván. Bot của đội được khóa khi giải bắt đầu.'}
         </p>
       </div>

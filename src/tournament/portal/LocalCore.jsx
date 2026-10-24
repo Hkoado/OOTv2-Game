@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { apiRequest, isSessionError, resetApiState } from './portalApi.js';
 import { parseHashRoute, routeHash } from './tournamentView.js';
+import { readRememberedAccount, saveRememberedAccount } from './rememberAccount.js';
 import LoginScreen from './LoginScreen.jsx';
 import TournamentWorkspace from './TournamentWorkspace.jsx';
 import OfflinePlay from './OfflinePlay.jsx';
+import LivePage from './live/LivePage.jsx';
+import { parseLiveHash } from './live/liveView.js';
 
 const EMPTY_BUSY = {
   login: false,
@@ -35,6 +38,8 @@ export default function LocalCore({ theme, onToggleTheme }) {
   const [serverStatus, setServerStatus] = useState('checking');
   const [replay, setReplay] = useState(CLOSED_REPLAY);
   const [route, setRoute] = useState({ page: 'overview', eventId: null });
+  const [remembered, setRemembered] = useState(() => readRememberedAccount(typeof window === 'undefined' ? null : window.localStorage));
+  const [liveHash, setLiveHash] = useState(() => window.location.hash);
 
   const accountRef = useRef(null);
   const routeRef = useRef(route);
@@ -52,6 +57,14 @@ export default function LocalCore({ theme, onToggleTheme }) {
   }, []);
 
   useEffect(() => () => window.clearTimeout(toastTimer.current), []);
+
+  // Trang khán giả `#/live` độc lập với đăng nhập; theo dõi hash để điều hướng nhẹ
+  // không cần thêm react-router.
+  useEffect(() => {
+    const onHashChange = () => setLiveHash(window.location.hash);
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   const setPending = useCallback((key, value) => {
     setBusy((current) => ({ ...current, [key]: value }));
@@ -227,15 +240,20 @@ export default function LocalCore({ theme, onToggleTheme }) {
     }
   }, [handleError, notify, setPending]);
 
-  const signIn = useCallback(async ({ username, password }) => {
+  const signIn = useCallback(async ({ username, password, remember = false }) => {
     setLoginError('');
     setLoginNotice('');
     setPending('login', true);
     try {
-      const data = await apiRequest('/login', { method: 'POST', body: { username, password } });
+      const data = await apiRequest('/login', {
+        method: 'POST',
+        body: { username, password, remember: remember === true },
+      });
       setServerStatus('online');
       setAccount(data.account);
       setRoute(parseHashRoute(window.location.hash, data.account.role));
+      saveRememberedAccount(window.localStorage, data.account.username, remember === true);
+      setRemembered(readRememberedAccount(window.localStorage));
     } catch (error) {
       setLoginError(error.message || 'Đăng nhập thất bại.');
       if (!error.status || error.status >= 500) {
@@ -254,7 +272,7 @@ export default function LocalCore({ theme, onToggleTheme }) {
       /* đăng xuất local: bỏ qua lỗi mạng */
     }
     expireSession('Đã đăng xuất khỏi cổng giải đấu.');
-  }, [expireSession]);
+  }, [expireSession, openReplayPayload]);
 
   const refresh = useCallback(async () => {
     try {
@@ -332,7 +350,7 @@ export default function LocalCore({ theme, onToggleTheme }) {
     const data = await apiRequest(`/events/${encodeURIComponent(eventId)}`);
     setDetail(data);
     await loadRoleData();
-  }, 'Đã lưu đội và map của giải.'), [loadRoleData, runAction]);
+  }, 'Đã lưu thiết lập của giải.'), [loadRoleData, runAction]);
 
   const startEvent = useCallback((eventId) => runAction('start', async () => {
     await apiRequest(`/events/${encodeURIComponent(eventId)}/start`, { method: 'POST' });
@@ -341,7 +359,20 @@ export default function LocalCore({ theme, onToggleTheme }) {
     setDetail(data);
   }, 'Giải đã bắt đầu. Bài nộp của các đội tham gia đã bị khóa.'), [loadRoleData, runAction]);
 
-  const openReplay = useCallback(async (matchId) => {
+  const openReplayPayload = useCallback((data) => {
+    if (!data || !data.replay) {
+      setReplay({ open: true, state: 'error', data: null, error: 'Dữ liệu replay không hợp lệ.' });
+      return;
+    }
+    setReplay({ open: true, state: 'ready', data, error: '' });
+  }, []);
+
+  const openReplay = useCallback(async (target) => {
+    if (typeof target === 'object' && target !== null && target.replay) {
+      openReplayPayload(target);
+      return;
+    }
+    const matchId = target;
     setReplay({ open: true, state: 'loading', data: null, error: '' });
     try {
       const data = await apiRequest(`/matches/${encodeURIComponent(matchId)}/replay`);
@@ -354,9 +385,21 @@ export default function LocalCore({ theme, onToggleTheme }) {
       }
       setReplay({ open: true, state: 'error', data: null, error: error.message || 'Không tải được replay.' });
     }
-  }, [expireSession]);
+  }, [expireSession, openReplayPayload]);
 
   const closeReplay = useCallback(() => setReplay(CLOSED_REPLAY), []);
+
+  const liveRoute = parseLiveHash(liveHash);
+  if (liveRoute.live) {
+    return (
+      <LivePage
+        account={account}
+        matchId={liveRoute.matchId}
+        theme={theme}
+        onToggleTheme={onToggleTheme}
+      />
+    );
+  }
 
   if (!account && offline) return <OfflinePlay onBack={() => setOffline(false)} />;
   if (!account) {
@@ -370,6 +413,8 @@ export default function LocalCore({ theme, onToggleTheme }) {
         serverStatus={serverStatus}
         theme={theme}
         onToggleTheme={onToggleTheme}
+        initialUsername={remembered.username}
+        initialRemember={remembered.remember}
       />
     );
   }
@@ -396,8 +441,9 @@ export default function LocalCore({ theme, onToggleTheme }) {
       onDismissToast={() => setToast(null)}
       replay={replay}
       onOpenReplay={openReplay}
+      onOpenReplayPayload={openReplayPayload}
       onCloseReplay={closeReplay}
-      actions={{ refresh, saveProfile, createTeam, resetPassword, uploadBot, createEvent, saveEvent, startEvent }}
+      actions={{ refresh, saveProfile, createTeam, resetPassword, uploadBot, createEvent, saveEvent, startEvent, onSessionExpired: expireSession }}
     />
   );
 }

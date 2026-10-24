@@ -1,6 +1,7 @@
 import { RULES_VERSION } from '../../src/game/maps.js';
 import { createCampusGame, applyCampusSetup, applyCampusMove, adjudicateCampusBotFault, campusStateHash } from '../judge/campusEngine.js';
 import { contentHash } from '../contracts/canonical.js';
+import { TERRAIN_RULES_VERSION } from '../../src/game/terrain.js';
 
 // Engine-only transcript for M1 tooling. Production replay.v1 also needs the M2
 // supervisor's runtime/source provenance, bounded private transcript and faults.
@@ -23,7 +24,7 @@ export function recordCampusReplay(config, actions) {
     return { seq: index + 1, action: structuredClone(action), resultingStateHash: campusStateHash(state) };
   });
   const record = {
-    schemaVersion: ENGINE_REPLAY_VERSION, rulesVersion: RULES_VERSION,
+    schemaVersion: ENGINE_REPLAY_VERSION, rulesVersion: state.rulesVersion,
     config: { id: state.roomId, seed: state.seed, map: state.map }, mapHash: state.mapHash,
     initialStateHash, events, result: state.result, terminationReason: state.terminationReason,
   };
@@ -32,7 +33,8 @@ export function recordCampusReplay(config, actions) {
 
 export function verifyCampusReplay(replay) {
   try {
-    if (replay.schemaVersion !== ENGINE_REPLAY_VERSION || replay.rulesVersion !== RULES_VERSION) throw new Error('Unsupported replay/rules version');
+    if (replay.schemaVersion !== ENGINE_REPLAY_VERSION || ![RULES_VERSION, TERRAIN_RULES_VERSION].includes(replay.rulesVersion)
+      || replay.rulesVersion !== replay.config?.map?.rulesVersion) throw new Error('Unsupported replay/rules version');
     const { contentHash: expectedHash, ...content } = replay;
     if (contentHash(content) !== expectedHash) throw new Error('Replay content hash mismatch');
     let state = createCampusGame(replay.config);

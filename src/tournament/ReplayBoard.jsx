@@ -44,12 +44,12 @@ export default function ReplayBoard({ match, replay }) {
       <div className="replay-viewer__head">
         <div>
           <h4 className="replay-viewer__title">
-            {match.red.name} <span className="tt-muted">(Đỏ)</span> vs {match.blue.name}{' '}
-            <span className="tt-muted">(Xanh)</span>
+            {match?.red?.name || match?.red_team?.name || 'Đỏ'} <span className="tt-muted">(Đỏ)</span> vs{' '}
+            {match?.blue?.name || match?.blue_team?.name || 'Xanh'} <span className="tt-muted">(Xanh)</span>
           </h4>
           <p className="replay-viewer__meta">
-            {labelOf(RESULT_LABELS, match.result)} · {labelOf(REASON_LABELS, match.reason)} ·{' '}
-            {match.ply_count ?? 0} nước · seed {match.seed}
+            {labelOf(RESULT_LABELS, match?.result)} · {labelOf(REASON_LABELS, match?.reason)} ·{' '}
+            {match?.ply_count ?? (frames.length > 1 ? frames.length - 1 : 0)} nước · seed {match?.seed ?? replay?.config?.seed ?? '—'}
           </p>
         </div>
       </div>
@@ -62,7 +62,7 @@ export default function ReplayBoard({ match, replay }) {
         </p>
       )}
 
-      <div className="replay-board-layout"><GameBoard pieces={frame?.pieces} lastMove={frame?.lastMove} map={replay?.map} readOnly /></div>
+      <div className="replay-board-layout"><GameBoard pieces={frame?.pieces} lastMove={frame?.lastMove} map={replay?.map || replay?.config?.map} readOnly /></div>
 
       <div className="replay-controls">
         <button

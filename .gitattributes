@@ -1,0 +1,7 @@
+# Shell scripts must stay LF even on Windows checkouts.
+*.sh text eol=lf
+sandbox/linux/*.sh text eol=lf
+sandbox/**/*.py text eol=lf
+tools/**/*.ps1 text eol=crlf
+tools/provision/*.service text eol=lf
+tools/provision/*.timer text eol=lf

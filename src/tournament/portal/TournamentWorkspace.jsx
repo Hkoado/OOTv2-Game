@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  BookOpen, ChevronRight, LayoutDashboard, LogOut, Menu, Moon, Sun, Trophy, UploadCloud, Users, X,
+  BookOpen, ChevronRight, LayoutDashboard, LogOut, Menu, Moon, Sun, Trophy, UploadCloud, Users, X, Activity, Radio,
 } from 'lucide-react';
 import { navTitle, tournamentNavigation, isEventRunning, initials } from './tournamentView.js';
 import { Badge } from './TournamentUi.jsx';
@@ -11,6 +11,7 @@ import TeamsPage from './TeamsPage.jsx';
 import SubmissionsPage from './SubmissionsPage.jsx';
 import EventsPage from './EventsPage.jsx';
 import EventDetailPage from './EventDetailPage.jsx';
+import JudgePage from './JudgePage.jsx';
 import GuidePage from './GuidePage.jsx';
 
 const ICONS = {
@@ -18,6 +19,7 @@ const ICONS = {
   team: Users,
   bot: UploadCloud,
   events: Trophy,
+  judge: Activity,
   guide: BookOpen,
 };
 
@@ -44,6 +46,7 @@ export default function TournamentWorkspace({
   onDismissToast,
   replay,
   onOpenReplay,
+  onOpenReplayPayload,
   onCloseReplay,
   actions,
 }) {
@@ -144,6 +147,15 @@ export default function TournamentWorkspace({
             <strong>{navTitle(account.role, route.page)}</strong>
           </div>
           <div className="tt-topbar__right">
+            <a
+              href="#/live"
+              className="tt-btn tt-btn--ghost tt-btn--sm"
+              title="Xem trực tiếp trận đấu"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+            >
+              <Radio size={16} aria-hidden="true" />
+              <span>Trực tiếp</span>
+            </a>
             {activeEvent ? (
               <button
                 type="button"
@@ -181,14 +193,15 @@ export default function TournamentWorkspace({
           {route.page === 'teams' && isAdmin && <TeamsPage {...pageProps} />}
           {route.page === 'bot' && <SubmissionsPage {...pageProps} />}
           {route.page === 'events' && (route.eventId
-            ? <EventDetailPage {...pageProps} eventId={route.eventId} onOpenReplay={onOpenReplay} />
+            ? <EventDetailPage {...pageProps} eventId={route.eventId} onOpenReplay={onOpenReplay} onOpenReplayPayload={onOpenReplayPayload} />
             : <EventsPage {...pageProps} />)}
+          {route.page === 'judge' && isAdmin && <JudgePage actions={actions} onOpenReplay={onOpenReplay} />}
           {route.page === 'guide' && <GuidePage account={account} />}
         </main>
 
         <footer className="tt-foot">
           <span>OOTv2 · Giải đấu bot Oẳn Tù Tì 9×9</span>
-          <span>Dữ liệu local SQLite · không có sandbox cấp hệ điều hành · chỉ dùng cho thành viên tin cậy</span>
+          <span>Dữ liệu Supabase (DB chung) · không có sandbox cấp hệ điều hành · chỉ dùng cho thành viên tin cậy</span>
         </footer>
       </div>
 

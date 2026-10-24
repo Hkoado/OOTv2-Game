@@ -4,6 +4,7 @@
  */
 import {
   MATCH_STATUS_LABELS,
+  REASON_LABELS,
   RESULT_LABELS,
   STAGE_LABELS,
   SUBMISSION_STATUS_LABELS,
@@ -43,6 +44,7 @@ const ADMIN_NAV = Object.freeze([
   { id: 'teams', title: 'Đội & tài khoản', icon: 'team' },
   { id: 'bot', title: 'Bài nộp', icon: 'bot' },
   { id: 'events', title: 'Quản lý giải', icon: 'events' },
+  { id: 'judge', title: 'Chấm bài', icon: 'judge' },
   { id: 'guide', title: 'Luật & vận hành', icon: 'guide' },
 ]);
 
@@ -189,6 +191,22 @@ export function nextMatchForTeam(matches, participantId) {
     list.find((match) => match.status === 'pending' && involved(match)) ||
     null
   );
+}
+
+/** Nhãn tiếng Việt cho lý do kết thúc ván; mã lạ hiển thị nguyên văn để không giấu lỗi. */
+export function reasonLabel(reason, fallback = '—') {
+  if (!reason) return fallback;
+  return REASON_LABELS[reason] || reason;
+}
+
+/** Thời lượng chấm 1 ván: ms → chuỗi ngắn gọn cho bảng/badge. */
+export function formatDuration(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return '—';
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds < 10 ? seconds.toFixed(1) : Math.round(seconds)} s`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes} ph ${Math.round(seconds % 60)} s`;
 }
 
 export function formatDateTime(value) {

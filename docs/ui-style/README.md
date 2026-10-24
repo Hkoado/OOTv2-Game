@@ -2,7 +2,7 @@
 
 Bộ tài liệu này chuyển giao **ngôn ngữ thị giác**, không chuyển giao bố cục demo.
 
-Để gắn vào OTTv2 đã có, bắt đầu từ [mục lục bộ docs](../README.md), [hướng dẫn tích hợp repo](../05-TICH-HOP-UI-VA-REPO.md) và [brief riêng cho repo](REPO-INTEGRATION-BRIEF.md). Hướng dẫn tích hợp chỉ rõ scope CSS, view theo vai trò và dependency backend; không áp ví dụ body toàn cục dưới đây vào game cũ mà chưa kiểm tra.
+Để gắn vào OTTv2 đã có, bắt đầu từ [Hướng dẫn vận hành](../runbook/BAN-TO-CHUC.md), [hướng dẫn tích hợp repo](../05-TICH-HOP-UI-VA-REPO.md) và [Hướng dẫn vận hành](../runbook/BAN-TO-CHUC.md). Hướng dẫn tích hợp chỉ rõ scope CSS, view theo vai trò và dependency backend; không áp ví dụ body toàn cục dưới đây vào game cũ mà chưa kiểm tra.
 
 Đọc theo thứ tự:
 
@@ -10,7 +10,7 @@ Bộ tài liệu này chuyển giao **ngôn ngữ thị giác**, không chuyển
 2. [ASSET-GUIDE.md](ASSET-GUIDE.md): phong cách hình, xử lý alpha, giữ tỷ lệ.
 3. [tokens.json](tokens.json): nguồn token duy nhất, gồm light/dark.
 4. [tokens.css](tokens.css): CSS variables sinh từ JSON, dùng trực tiếp.
-5. [AGENT-BRIEF.md](AGENT-BRIEF.md): prompt có thể giao cho coding agent.
+5. [Hướng dẫn vận hành](../runbook/BAN-TO-CHUC.md): prompt có thể giao cho coding agent.
 
 Chạy `node docs/ui-style/build-tokens.mjs` từ thư mục gốc để sinh lại CSS và kiểm tra các cặp màu chính. Không cần cài thư viện.
 

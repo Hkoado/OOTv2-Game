@@ -15,8 +15,7 @@ test('kit adapter preserves live pieces, zones, bases and actual blocked map', (
   assert.equal(Object.values(options.zones).filter((z) => z === 'red').length, 28);
   assert.equal(Object.values(options.zones).filter((z) => z === 'blue').length, 28);
   assert.deepEqual(options.bases, { a1: 'red', i9: 'blue' });
-  assert.deepEqual(Object.keys(options.terrains), state.map.blocked);
-  assert(Object.values(options.terrains).every((t) => t === 'chasm'));
+  assert.deepEqual(options.terrains, state.map.terrains);
 });
 test('read-only has no callback; blockers never forward moves', () => {
   const clicks = [];

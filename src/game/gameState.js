@@ -175,7 +175,7 @@ export function completeSetupBlue(state, bluePieces) {
 /**
  * Thực hiện nước đi của một người chơi
  */
-export function executeMove(state, playerId, pieceId, targetSquare, { map = null, clock = Date.now } = {}) {
+export function executeMove(state, playerId, pieceId, targetSquare, { map = state.map ?? null, clock = Date.now } = {}) {
   if (state.phase !== GAME_PHASES.PLAYING) {
     throw new Error('Trận đấu chưa bắt đầu hoặc đã kết thúc');
   }

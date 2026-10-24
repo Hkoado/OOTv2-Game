@@ -27,6 +27,8 @@ import {
   executeMove,
 } from '../../src/game/gameState.js';
 import { getValidMoves, getPieceAtSquare } from '../../src/game/rules.js';
+import { normalizeMap } from '../../src/game/maps.js';
+import { mapHash } from '../contracts/canonical.js';
 
 // Re-export các hằng số engine mà tầng tournament hay dùng, để nơi khác chỉ cần
 // import từ adapter (một cửa duy nhất vào engine) và tránh lệch đường dẫn.
@@ -57,6 +59,17 @@ export const RESULTS = {
 
 export function homeSquaresFor(player) {
   return player === PLAYERS.RED ? [...RED_HOME_SQUARES] : [...BLUE_HOME_SQUARES];
+}
+
+/**
+ * Trường map bổ sung (tuỳ chọn) cho request setup/move.
+ * Chỉ gửi khi ván có snapshot map đã chốt; bot cũ bỏ qua field lạ vẫn đúng protocol v1,
+ * còn bot mới đối chiếu được `map_hash` với replay.
+ */
+export function mapRequestFields(map) {
+  if (!map) return {};
+  const snapshot = normalizeMap(map);
+  return { map: snapshot, map_hash: mapHash(snapshot) };
 }
 
 export function isValidSquareName(square) {
@@ -91,12 +104,13 @@ export function getPiecesArray(state) {
 }
 
 /** Request `setup` cho bot. Red luôn được gọi trước; Blue thấy đội hình Red. */
-export function buildSetupRequest(state, player, seed) {
+export function buildSetupRequest(state, player, seed, map) {
   const request = {
     protocol_version: PROTOCOL_VERSION,
     request: 'setup',
     player,
     seed,
+    ...mapRequestFields(map),
     my_pieces: pieceCatalogue(player),
     available_squares: homeSquaresFor(player),
     opponent_pieces: [],
@@ -209,13 +223,14 @@ export function listAllLegalMoves(state, player) {
 }
 
 /** Request `move` gửi cho bot: toàn bộ 18 quân + danh sách nước hợp lệ. */
-export function buildMoveRequest(state, player, seed, turnNumber) {
+export function buildMoveRequest(state, player, seed, turnNumber, map) {
   return {
     protocol_version: PROTOCOL_VERSION,
     request: 'move',
     player,
     seed,
     turn_number: turnNumber,
+    ...mapRequestFields(map),
     pieces: getPiecesArray(state),
     legal_moves: listAllLegalMoves(state, player),
   };

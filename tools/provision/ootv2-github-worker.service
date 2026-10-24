@@ -1,0 +1,33 @@
+[Unit]
+Description=OOTv2 GitHub cutoff intake worker (static validation only, no bot execution)
+Documentation=https://github.com/Hkoado/OOTv2-Game
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ootv2-worker
+Group=ootv2-worker
+WorkingDirectory=/srv/ootv2/current
+EnvironmentFile=/etc/ootv2/worker.env
+Environment=NODE_ENV=production
+Environment=OOTV2_DATA_DIR=/var/lib/ootv2
+ExecStart=/opt/ootv2-node/bin/node /srv/ootv2/current/server/githubWorker.js
+# SIGTERM aborts the in-flight job cleanly; the lease then expires normally.
+KillSignal=SIGTERM
+TimeoutStopSec=90
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=yes
+ReadWritePaths=/var/lib/ootv2
+
+[Install]
+WantedBy=multi-user.target

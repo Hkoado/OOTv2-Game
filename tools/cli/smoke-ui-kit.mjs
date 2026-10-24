@@ -47,11 +47,33 @@ try {
   }
   await click('Chơi offline'); await delay(300);
   assert.equal(await evaluate(`document.querySelectorAll('.ott-square').length`), 81);
+  assert.equal(await evaluate(`document.querySelector('[aria-label="Map mẫu"]').options.length`), 5);
+  await evaluate(`window.confirm = () => true`);
+  for (let index = 0; index < 5; index++) {
+    await evaluate(`(() => { const select = document.querySelector('[aria-label="Map mẫu"]'); select.value = select.options[${index}].value; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+    await delay(120);
+    const download = await evaluate(`JSON.parse(decodeURIComponent(document.querySelector('a[download$=".json"]').href.split(',')[1]))`);
+    assert.equal(download.rulesVersion, 'ott-campus.v2');
+    assert.equal(download.id, ['learn-fire', 'learn-water', 'learn-bush', 'learn-chasm', 'campus-four-terrains'][index]);
+    assert.ok(Object.keys(download.terrains).length > 0);
+    if (index === 4) assert.equal(new Set(Object.values(download.terrains)).size, 4);
+  }
+  report.checks.push('All five v2 terrain maps selectable; JSON downloads contain the displayed terrains');
+  // Fire at b2: Paper must fail, while Rock must still be placeable.
+  await evaluate(`document.querySelector('.tt-offline__pieces button[data-type="paper"]')?.click()`);
+  await delay(80);
+  assert.equal(await evaluate(`document.querySelector('.tt-offline__pieces button[aria-pressed="true"]').dataset.type`), 'paper');
+  await evaluate(`document.querySelector('[data-square="b2"]').click()`); await delay(100);
+  assert.equal(await evaluate(`document.querySelectorAll('.ott-square .ott-piece').length`), 0);
+  await evaluate(`document.querySelector('.tt-offline__pieces button[data-type="rock"]')?.click()`);
+  await delay(80);
   await evaluate(`document.querySelector('[data-square="a1"]').click()`); await delay(100);
   assert.equal(await evaluate(`document.querySelectorAll('.ott-square .ott-piece').length`), 1);
   report.checks.push('Offline setup callback places a real piece');
-  await click('Xếp nhanh'); await click('Xác nhận'); await delay(150);
-  await click('Xếp nhanh'); await click('Xác nhận'); await delay(150);
+  await click('Xếp nhanh'); await delay(150); await click('Xác nhận'); await delay(150);
+  assert.equal(await evaluate(`document.querySelectorAll('.ott-square .ott-piece').length`), 0);
+  report.checks.push('Offline manual setup rejects Paper on Fire; Blue cannot see Red setup on board');
+  await click('Xếp nhanh'); await delay(150); await click('Xác nhận'); await delay(150);
   assert.equal(await evaluate(`document.querySelectorAll('.ott-square .ott-piece').length`), 18);
   report.checks.push('Red then blue setup reaches real game with 18 pieces');
   await evaluate(`document.querySelector('.ott-square .ott-piece[data-team="red"]').closest('button').click()`);

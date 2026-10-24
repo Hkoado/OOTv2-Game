@@ -3,7 +3,9 @@ import { rows, rpc, uuid } from './client.js';
 import { HttpError } from '../lib/httpError.js';
 import { normalizeMap, EMPTY_MAP } from '../../src/game/maps.js';
 import { randomSeed, deriveSeed } from '../judge/rng.js';
-import { GROUP_SEEDS, TIE_BREAKERS } from '../services/tournaments.js';
+import { GROUP_SEEDS, TIE_BREAKERS } from '../lib/tournamentFormat.js';
+import { setupFor, saveOfficialSetup, officialView } from './officialSetup.js';
+import { matchMapSnapshot } from '../contracts/mapSnapshot.js';
 
 const fail = (status,code,message) => new HttpError(status,code,message);
 const stageStatus = {group_running:'group',semifinal_running:'semifinal',final_running:'final'};
@@ -21,7 +23,8 @@ export async function getTournament(id) {
   const {event,entries,matches} = await loadEvent(id);
   const submissions = await rows('submissions','select=id,status');
   const status = new Map(submissions.map((s)=>[s.id,s.status]));
-  return {...event,map:event.map_json?JSON.parse(event.map_json):EMPTY_MAP,
+  const config = await setupFor(id);
+  return {...event,...(config ? officialView({ ...event, entries }, config) : { profile: 'mvp.v1' }),map:event.map_json?JSON.parse(event.map_json):EMPTY_MAP,
     entries:entries.map((e)=>({...e,submission_status:status.get(e.submission_id)||null})),
     match_counts:{total:matches.length,finished:matches.filter((m)=>m.status==='finished').length}};
 }
@@ -36,29 +39,52 @@ function validateIds(ids) {
 function mapValue(map) {
   try { return normalizeMap(map); } catch { throw fail(400,'bad_map','Map không hợp lệ.'); }
 }
-export async function createTournament({name,participantIds=[],map=EMPTY_MAP}) {
+export async function createTournament({name,participantIds=[],competition={}}) {
+  return getTournament(await saveOfficialSetup({ name, participantIds, competition }));
+}
+// Kept only for historical compatibility; portal creates official setups exclusively.
+export async function createLegacyTournament({name,participantIds=[],map=EMPTY_MAP}) {
   if (typeof name!=='string'||name.trim().length<1||name.trim().length>80) throw fail(400,'bad_name','Tên giải phải từ 1 đến 80 ký tự.');
   validateIds(participantIds);
   const event = {id:randomUUID(),name:name.trim(),seed:randomSeed(),created_at:new Date().toISOString(),map_json:JSON.stringify(mapValue(map))};
   await rpc('mvp_draft_save',{p_event:event,p_entries:participantIds.map((id,i)=>({id:randomUUID(),participant_id:id,seed_order:i+1}))});
   return getTournament(event.id);
 }
-export async function updateTournamentDraft(id,{participantIds,map}) {
+export async function updateTournamentDraft(id,{participantIds,map,competition,expectedVersion}) {
   const event = await getTournament(id);
   if (event.status!=='draft') throw fail(409,'event_frozen','Giải đã khóa.');
+  if (event.competition) {
+    if (!Number.isInteger(expectedVersion) || expectedVersion !== event.version) throw fail(409,'event_conflict','Thiết lập đã thay đổi hoặc thiếu phiên bản. Làm mới trước khi lưu.');
+    await saveOfficialSetup({ id, name: event.name, participantIds: participantIds ?? event.entries.map((e)=>e.participant_id),
+      competition: competition ?? event.competition, expected: event.version });
+    return getTournament(id);
+  }
   const ids = participantIds??event.entries.map((e)=>e.participant_id);
   validateIds(ids);
   await rpc('mvp_draft_save',{p_event:{id,map_json:JSON.stringify(mapValue(map??event.map))},p_entries:ids.map((pid,i)=>({id:randomUUID(),participant_id:pid,seed_order:i+1})),p_expected:event.version});
   return getTournament(id);
 }
 function seriesGames(event,stage,series,a,b) {
-  return [[a,b],[b,a]].map(([red,blue],i)=>({id:randomUUID(),stage,series_id:series,game_no:i+1,red_entry_id:red.id,blue_entry_id:blue.id,seed:deriveSeed(event.seed,stage,series,i+1)}));
+  // Snapshot map chốt ngay khi lên lịch: sửa map của giải sau đó không làm lệch ván đã tạo.
+  const snapshot = eventSnapshot(event);
+  return [[a,b],[b,a]].map(([red,blue],i)=>({id:randomUUID(),stage,series_id:series,game_no:i+1,red_entry_id:red.id,blue_entry_id:blue.id,seed:deriveSeed(event.seed,stage,series,i+1),map_json:snapshot.json,map_hash:snapshot.hash}));
+}
+/** Map đã lưu của giải; giải cũ không có `map_json` => bàn mở MVP. */
+function eventMapOf(event) {
+  if (!event||!event.map_json) return undefined;
+  try { return JSON.parse(event.map_json); } catch { throw fail(409,'bad_event_map','Map của giải không đọc được.'); }
+}
+/** Snapshot chuẩn hoá + hash; map hỏng thì chặn lên lịch thay vì tạo ván thiếu dữ liệu. */
+function eventSnapshot(event) {
+  try { return matchMapSnapshot(eventMapOf(event)); }
+  catch { throw fail(409,'bad_event_map','Map của giải không hợp lệ, không thể lên lịch trận.'); }
 }
 export async function startTournament(id) {
   const {event,entries} = await loadEvent(id);
+  if (await setupFor(id)) throw fail(409,'official_scheduler_not_ready','Thiết lập chính thức đã lưu; chưa nối scheduler/snapshot/runner chính thức. Không chạy bằng MVP.');
   if (event.status!=='draft') throw fail(409,'already_started','Giải đã bắt đầu.');
   const map = event.map_json?JSON.parse(event.map_json):EMPTY_MAP;
-  if (map.blocked.length) throw fail(409,'map_runner_unavailable','Worker MVP chưa hỗ trợ ô cản.');
+  if (map.schemaVersion === 'map.v2' || map.blocked.length) throw fail(409,'map_runner_unavailable','Worker MVP chưa hỗ trợ map v2 hoặc ô cản.');
   if (entries.length!==8) throw fail(400,'need_eight_entries','Giải phải có đúng 8 đội.');
   const submissions = await rows('submissions','status=eq.valid&order=created_at.desc,id.desc');
   const snapshots = entries.map((e)=>{
@@ -109,7 +135,7 @@ export async function computeBracket(id) {
 export async function listMatches(id,stage) {
   const data=await loadEvent(id),entries=new Map(data.entries.map((e)=>[e.id,e]));
   const side=(id)=>{const e=entries.get(id);return {entry_id:id,participant_id:e.participant_id,name:e.participant_name,seed_order:e.seed_order};};
-  return data.matches.filter((m)=>!stage||m.stage===stage).map((m)=>({id:m.id,tournament_id:id,stage:m.stage,series_id:m.series_id,game_no:m.game_no,seed:Number(m.seed),status:m.status,result:m.result,reason:m.reason,ply_count:m.ply_count,started_at:m.started_at,finished_at:m.finished_at,red:side(m.red_entry_id),blue:side(m.blue_entry_id)}));
+  return data.matches.filter((m)=>!stage||m.stage===stage).map((m)=>({id:m.id,tournament_id:id,stage:m.stage,series_id:m.series_id,game_no:m.game_no,seed:Number(m.seed),status:m.status,result:m.result,reason:m.reason,ply_count:m.ply_count,map_hash:m.map_hash||null,started_at:m.started_at,finished_at:m.finished_at,red:side(m.red_entry_id),blue:side(m.blue_entry_id)}));
 }
 export async function advanceTournament(id) {
   const data=await loadEvent(id),{event,entries,matches}=data,stage=stageStatus[event.status];
@@ -118,9 +144,13 @@ export async function advanceTournament(id) {
   const byId=new Map(entries.map((e)=>[e.id,e]));let next,games=[];
   if (stage==='group') {
     const {groups}=standingsFrom(data);next='semifinal_running';
+    if (!groups?.A?.[0]?.entry_id || !groups?.A?.[1]?.entry_id || !groups?.B?.[0]?.entry_id || !groups?.B?.[1]?.entry_id) {
+      return { advanced: false, status: event.status };
+    }
     games=[...seriesGames(event,'semifinal','sf1',byId.get(groups.A[0].entry_id),byId.get(groups.B[1].entry_id)),...seriesGames(event,'semifinal','sf2',byId.get(groups.B[0].entry_id),byId.get(groups.A[1].entry_id))];
   } else if (stage==='semifinal') {
     const winners=seriesFrom(data,'semifinal').map((s)=>byId.get(s.winner_entry_id)).sort((a,b)=>a.seed_order-b.seed_order);
+    if (!winners[0] || !winners[1]) return { advanced: false, status: event.status };
     next='final_running';games=seriesGames(event,'final','final',winners[0],winners[1]);
   } else next='finished';
   const advanced=await rpc('mvp_stage_commit',{p_id:id,p_expected:event.status,p_next:next,p_games:games});
