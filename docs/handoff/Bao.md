@@ -2,11 +2,11 @@
 
 ## Trạng thái mới nhất
 
-- Trạng thái: **IN PROGRESS / CHECKPOINT 7** — Hoàn thành module **Chung kết thủ công (Manual Finals Panel)** cho BTC và làm sạch phạm vi nộp bài Online GitHub.
+- Trạng thái: **IN PROGRESS / CHECKPOINT 8** — Nối hoàn chỉnh API backend thật cho **Chung kết thủ công (Manual Finals Panel)**, mở rộng phạm vi cookie phiên sang `/api`, đồng bộ sạch sẽ với `origin/dev`.
 - Phạm vi: B1–B4 và Mục Chung kết thủ công theo quyết định 24/10/2026 trong [phân công Bảo](../assignments/Bao.md).
-- Checkpoint: branch `Frontend-UI` (tách từ đỉnh `dev` mới nhất).
-- Tổng test suite hiện tại: **357/357 bài kiểm thử PASS** (100% thành công, 0 lỗi, 0 skip).
-- Build production: **Vite build sạch** (1653 modules transformed, bundle `dist/` sẵn sàng).
+- Checkpoint: branch `dev` (đã hợp nhất commit mới nhất từ `origin/dev`).
+- Tổng test suite hiện tại: **372/372 bài kiểm thử PASS** (100% thành công, 0 lỗi, 0 skip).
+- Build production: **Vite build sạch** (1654 modules transformed, bundle `dist/` sẵn sàng trong 2.90s).
 
 ---
 
@@ -89,6 +89,13 @@ NOT RUN + lý do:
 ---
 
 ## Lịch sử checkpoint
+
+- 24/10/2026 (Checkpoint 8): **Nối API thật cho Chung kết thủ công & Mở rộng phạm vi Cookie Session**:
+  - Tạo client API [`manualFinalApi.js`](../../src/tournament/portal/manualFinalApi.js) (10 hàm gọi API `/api/local/manual-finals/*` có CSRF & same-origin credentials).
+  - Nối toàn bộ UI [`ManualFinalsPanel.jsx`](../../src/tournament/portal/ManualFinalsPanel.jsx) với backend: nạp file `.py` thật qua multipart FormData, chọn bài chính thức, khóa snapshot đội (`lockManualTeam`), ghép cặp tạo trận (`createManualMatch`), xem Replay và kiểm toán bắt buộc lý do khi can thiệp (`rerunManualMatch`, `cancelManualMatch`).
+  - Mở rộng phạm vi cookie phiên `oot_local_session` từ `path: '/api/local'` sang `path: '/api'` tại [`server/shared/router.js`](../../server/shared/router.js) để các route trực tiếp `/api/live/*` (LivePage) nhận diện đúng phiên đăng nhập H3, giải quyết triệt để lỗi hiển thị sai "Worker offline" khi worker đang chạy.
+  - Đồng bộ nhánh với `origin/dev` (commit `a25aa81` của Huy).
+  - Kết quả kiểm thử: **372/372 tests PASS** (100%), Vite build sạch 1,654 modules (2.90s).
 
 - 24/10/2026 (Checkpoint 7): **Chung kết thủ công (Manual Finals) & Bỏ CTA Upload Online sai scope**:
   - Tạo nhánh `Frontend-UI` độc lập từ `dev`.
