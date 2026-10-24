@@ -1,5 +1,25 @@
 # Kết quả Huy — Backend / GitHub / privacy
 
+## Đợt 25/10/2026 — API Kết quả công bố cho Đội thi (RC online tối giản commit 9e06a8d)
+
+- **Phạm vi:** Hoàn thành Mục 1 được giao tại `docs/20-RC-ONLINE-TOI-GIAN.md` và `docs/assignments/Huy.md`.
+- **Code mới / nâng cấp:**
+  - `server/routes/official.js`: Giữ nguyên toàn bộ 7 route điều hành admin-only; thêm 4 route công bố cho thành viên giải:
+    - `GET /events/:id/official/published/standings`: Yêu cầu session + membership giải; chỉ trả khi vòng bảng đã `frozen`, nếu chưa trả 409 `round_not_published`.
+    - `GET /events/:id/official/published/bracket`: Yêu cầu session + membership giải; chỉ trả khi vòng bảng đã `frozen`.
+    - `GET /events/:id/official/published/tickets`: Yêu cầu session + membership giải; trả vé khi knockout hoàn tất, 409 `tickets_not_published` nếu chưa.
+    - `GET /events/:id/official/published/games`: Danh sách các ván đấu đã lên lịch/đang phát sóng.
+  - `server/services/officialBroadcasts.js`: Thêm hàm `listPublishedOfficialGames`, chỉ lọc các ván có `isPublished(info) = true` cho đội thi, admin thấy toàn bộ.
+  - `server/shared/accounts.js`: `requireSession` tôn trọng session đã gắn trên request, bảo vệ CSRF và phiên đăng nhập.
+  - `docs/19-CONTRACT-TICH-HOP.md`: Bổ sung bảng route DTO cho các endpoint công bố mới.
+- **Bằng chứng kiểm thử:**
+  - `node --test tests/officialPublishedRoutes.test.js`: **9/9 PASS** (kiểm tra anonymous 401, outsider 403, vòng chưa freeze 409, kết quả kín không bị rò rỉ, phân quyền admin).
+  - `node --test tests/officialBroadcast.test.js`: **9/9 PASS** (+1 test cho `listPublishedOfficialGames`).
+  - `npm test`: **462/462 tests PASS** (100%).
+  - `npm run build`: **Pass** (1,656 modules).
+
+---
+
 ## Đợt 24/10/2026 — Backend Chung kết thủ công + rà gate API/DB (RC)
 
 - Phạm vi: toàn gói backend theo [docs/18](../18-CHOT-HOAN-THIEN-VA-NGHIEM-THU.md) và
