@@ -11,6 +11,9 @@ Nhóm map vào exports/routes/schema thật trước khi code từng boundary; k
 - Producer chỉ trả DTO whitelist; UI không nhận service key, token lease, source, storage key hoặc
   snapshot private chỉ để hiển thị trạng thái. Admin tải source nếu nghiệp vụ cho phép là endpoint riêng có ACL.
 - Mọi write kiểm session/CSRF/role/scope tại server. Hidden control không phải authorization.
+- Cookie phiên: `HttpOnly`, `SameSite=strict`, `Secure` khi HTTPS; **path `/api`** (không chỉ `/api/local`) vì
+  `/api/live/*` cũng dùng `requireSession`. Khi đổi path phải xoá cookie path cũ (`/api/local`) lúc login/logout,
+  nếu không browser gửi cookie cũ trước và phiên mới bị che.
 - Idempotency cho request retry; optimistic version cho draft; transaction cho khóa/chọn/claim/finish.
 - Dùng error envelope/code hiện có, bổ sung code có test nếu thiếu. UI phân biệt forbidden,
   conflict/frozen, validation, infrastructure; không suy thành công từ HTTP 202 hay trạng thái process.
@@ -87,7 +90,7 @@ API không chạy Python; `storage_path`/lease token không nằm trong DTO; int
 | Method + path | Body | Trả về |
 | --- | --- | --- |
 | `GET /` | — | `{events:[eventView]}` |
-| `POST /` | `{name, level, round_no?, team_ids[2..56], map, seed?}` | `201` event detail (draft) |
+| `POST /` | `{name, level, round_no?, team_ids[2..56], map, seed?}` | `201` event detail + **top-level `id`/`name`/`status`** (client hiện có dùng ngay sau khi tạo) |
 | `GET /:id` | — | `{event, teams, submissions, matches, jobs, readiness, audit[20]}` |
 | `POST /:id/status` | `{status:'intake'|'locked'|'closed', reason?}` | event detail |
 | `POST /:id/close` | `{reason?}` | event detail (closed) |
@@ -117,7 +120,7 @@ API không chạy Python; `storage_path`/lease token không nằm trong DTO; int
 
 - `submissionView`: `{id,event_id,team_id,round_no,source_kind:'manual_final',filename,sha256,byte_size,status,error_code,error_message,received_at,received_by,selected,selected_at,locked,locked_at}` — **không có** `storage_path`.
 - `matchView`: `{id,series_id,game_no,red,blue,seed,map_hash,snapshot_hash,color_policy,status,result,reason,ply_count,error_code,error_message,requested_at,started_at,finished_at,canceled_at,cancel_reason,rerun_of,replay_available,can_cancel,can_rerun}`.
-- `readiness`: `{teams,locked_teams,pending_validations,matches:{queued,running,finished,bot_fault,infra_fault,canceled},can_lock_round,can_close,blockers[]}`.
+- `readiness`: `{teams,locked_teams,pending_validations,matches:{queued,running,finished,bot_fault,infra_fault,canceled},can_lock_round,can_close,blockers,blocker_details}` — `blockers` là **mảng chuỗi** để UI join trực tiếp; chi tiết máy đọc ở `blocker_details: [{code,team_id,message}]`.
 - Mã lỗi ổn định: `admin_required`, `csrf_required`, `event_not_open`, `event_not_locked`, `teams_not_locked`, `jobs_pending`, `bad_transition`, `submission_not_valid`, `submission_locked`, `not_selected`, `red_submission_not_locked`, `blue_submission_not_locked`, `same_team`, `result_conflict`, `rerun_not_allowed`, `reason_required`, `result_not_ready`, `artifact_integrity`, `scope_denied`, `bad_extension`, `binary_file`, `bad_encoding`, `file_too_large`.
 
 ### 6.4 Bàn giao cho Khoa (worker) và Bảo (UI)

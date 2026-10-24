@@ -19,9 +19,17 @@ import { manualFinalRouter } from '../routes/manualFinal.js';
 import { EMPTY_MAP } from '../../src/game/maps.js';
 
 const forbidden=()=>new HttpError(403,'scope_denied','Không có quyền truy cập dữ liệu này.');
-/** Cookie session: HttpOnly + SameSite=strict, thêm `Secure` khi request đi qua HTTPS. */
-const cookieOptions=(req,maxAge=accounts.SESSION_MS)=>({httpOnly:true,sameSite:'strict',path:'/api',maxAge,secure:req.secure});
-const clearCookieOptions=(req)=>({httpOnly:true,sameSite:'strict',path:'/api',secure:req.secure});
+/**
+ * Cookie session: HttpOnly + SameSite=strict, thêm `Secure` khi request đi qua HTTPS.
+ * Path `/api` (không chỉ `/api/local`) vì `/api/live/*` cũng dùng `requireSession`.
+ * `LEGACY_COOKIE_PATH` là path cũ: phải xoá khi login/logout, nếu không browser còn gửi
+ * cookie cũ (path dài hơn được gửi trước) và phiên mới bị che.
+ */
+const COOKIE_PATH='/api';
+const LEGACY_COOKIE_PATH='/api/local';
+const cookieOptions=(req,maxAge=accounts.SESSION_MS)=>({httpOnly:true,sameSite:'strict',path:COOKIE_PATH,maxAge,secure:req.secure});
+const clearCookieOptions=(req)=>({httpOnly:true,sameSite:'strict',path:COOKIE_PATH,secure:req.secure});
+const legacyClearCookieOptions=(req)=>({httpOnly:true,sameSite:'strict',path:LEGACY_COOKIE_PATH,secure:req.secure});
 export async function checkStage(account,id,stage=null) {
   uuid(id);
   if (account.role==='admin') return;
@@ -65,12 +73,14 @@ export function sharedRouter() {
     const entry=attempts.get(key)||{count:0,until:now+60000};attempts.set(key,entry);
     if (++entry.count>15) throw new HttpError(429,'login_rate_limit','Thử lại sau một phút.');
     const result=await accounts.login(req.body?.username,req.body?.password,{remember:req.body?.remember===true});attempts.delete(key);
+    // Đặt cookie mới trước, rồi xoá cookie path cũ (client cũ có thể còn gửi kèm).
     res.cookie(accounts.COOKIE_NAME,result.token,cookieOptions(req,accounts.sessionTtlMs(result.remember)));
+    res.clearCookie(accounts.COOKIE_NAME,legacyClearCookieOptions(req));
     res.json({account:result.account,csrf:result.csrf,remember:result.remember,session_expires_at:result.session_expires_at});
   });
   router.use(accounts.requireSession);
   router.get('/me',(req,res)=>res.json({account:req.account,csrf:req.session.csrf}));
-  router.post('/logout',async(req,res)=>{await accounts.logout(req.session);res.clearCookie(accounts.COOKIE_NAME,clearCookieOptions(req));res.json({ok:true});});
+  router.post('/logout',async(req,res)=>{await accounts.logout(req.session);res.clearCookie(accounts.COOKIE_NAME,clearCookieOptions(req));res.clearCookie(accounts.COOKIE_NAME,legacyClearCookieOptions(req));res.json({ok:true});});
   // Chung kết thủ công (BTC-only): module riêng, không mở cổng upload online của đội.
   router.use('/manual-finals', manualFinalRouter());
   router.put('/profile',async(req,res)=>res.json({account:await accounts.updateProfile(req.account.id,req.body||{})}));

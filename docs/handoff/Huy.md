@@ -57,10 +57,34 @@
   từ server (`submission_not_valid`, `event_not_open`, `result_conflict`...), không tự tính hash/lock.
 - Huy **không** sửa UI/runner của Bảo/Khoa trong đợt này.
 
+### Hợp nhất hợp đồng với UI Bảo + review cookie + smoke API thật (24/10/2026)
+
+- Nhận `origin/dev` (`918fab1`, `7773e47`): Bảo nối UI thật qua `src/tournament/portal/manualFinalApi.js`
+  (mọi route khớp prefix `/api/local/manual-finals`, không còn nút giả/local-state).
+- Sửa **phía API** để khớp UI đã xong (không sửa file UI của Bảo → tránh conflict):
+  - `POST /manual-finals` trả thêm `id`/`name`/`status` ở top-level (giữ nguyên `{event, teams, …}`);
+    trước đó UI đọc `created.id` nên đợt mới không được chọn.
+  - `readiness.blockers` → **mảng chuỗi** (UI `join('; ')`); giữ chi tiết máy ở `blocker_details`
+    `[{code, team_id, message}]`. Test `manualFinalApi` khoá cả 2 shape.
+- Review thay đổi file dùng chung của Bảo: cookie session đổi `path '/api/local' → '/api'`.
+  Kết luận: **giữ** (vì `/api/live/*` cũng `requireSession`), nhưng bổ sung xoá cookie legacy `/api/local`
+  ở login **và** logout — nếu không, browser gửi cookie path dài trước và phiên mới bị che.
+  Đã ghi vào docs/19 §1.
+- Smoke API **thật** trên DB đã apply (script `data/smoke-manual-api.mjs`, gitignored):
+  admin tạm → login + CSRF → tạo đợt → upload `.py` → upload trùng → mở intake → chặn chọn bài pending →
+  chặn khóa khi chưa chọn → chặn pair khi chưa khóa vòng → chặn nhảy bước trạng thái → chặn thiếu CSRF →
+  dọn sạch. Kết quả **16/16 PASS**; sau smoke counts trở lại `tournaments=2, accounts=11, manual_events=0`.
+- Lưu ý vận hành: audit của manual final là **append-only chặn cả DELETE**; dọn dữ liệu drill/smoke phải
+  tạm `disable trigger mvp_manual_final_audit_guard` trong một transaction rồi bật lại (chỉ owner/Management
+  API), không thể qua REST. Không được tắt trigger ngoài dọn dẹp có kiểm soát.
+- `npm test` **372/372 pass**, `npm run build` pass sau thay đổi.
+
 ### Việc của người khác (không tự làm thay)
 
 - Bảo: nối UI mục “Chung kết thủ công” theo DTO mục 6.3 của docs/19; migration **đã apply** nên có thể
   nối API thật ngay, fixture chỉ dùng để chạy song song trước khi nối.
+  Góp ý nhỏ còn lại (không chặn): reload `detail` sau khi đổi trạng thái đợt, và map `blocker_details`
+  nếu UI muốn hiện theo đội.
 - Khoa: nối worker vào queue chung (`server/shared/manualFinalJobs.js`), giữ luật “lỗi hạ tầng ≠ forfeit”,
   dùng cùng Campus/budget; không tạo runner thứ hai.
 - Operator: rehearsal DB/VM + restore rehearsal trước khi đóng gate RC.

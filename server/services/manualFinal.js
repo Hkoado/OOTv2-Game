@@ -289,7 +289,9 @@ export async function createEvent({ name, level, roundNo = 1, teamIds = [], map,
     actor: actor.id,
     detail: { level, round_no: roundNo, teams: teamIds.length, map_hash: hashedMap },
   });
-  return getEvent(eventId);
+  // Trả kèm `id/name/status` ở top-level để client hiện có dùng ngay sau khi tạo; GET detail giữ nguyên.
+  const detail = await getEvent(eventId);
+  return { ...detail, id: detail.event.id, name: detail.event.name, status: detail.event.status };
 }
 
 
@@ -354,7 +356,9 @@ export async function getEvent(eventId, { auditLimit = 20 } = {}) {
       can_lock_round: event.status === 'intake' && blockers.length === 0,
       can_close: event.status === 'locked' && openMatches.length === 0
         && jobs.every((job) => !['queued', 'running'].includes(job.status)),
-      blockers,
+      // `blockers` là chuỗi hiển thị (UI hiện có join trực tiếp); chi tiết máy đọc ở `blocker_details`.
+      blockers: blockers.map((blocker) => blocker.message),
+      blocker_details: blockers,
     },
     audit: auditRows.map((row) => auditView(row, accountNames)),
   };

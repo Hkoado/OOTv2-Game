@@ -207,12 +207,21 @@ test('tạo đợt: bắt buộc map v2, đủ 2..56 đội tồn tại, runtime
   const event = await createEvent(base, admin);
   assert.equal(event.event.status, 'draft');
   assert.equal(event.event.intake_mode, 'manual_final');
+  assert.equal(event.id, event.event.id, 'POST trả kèm id top-level cho client hiện có');
+  assert.equal(event.name, event.event.name);
+  assert.equal(event.status, 'draft');
   assert.equal(event.event.map_hash.length, 64);
   assert.equal(event.event.runtime.runtimeVersion, 'campus-runtime.v1');
+  assert.equal(event.event.rulesVersion, undefined, 'runtime chỉ nằm trong event.runtime');
   assert.equal(event.event.runtime.rulesVersion, 'ott-campus.v2');
   assert.match(event.event.runtime.runtimeHash, /^[a-f0-9]{64}$/u);
   assert.equal(event.teams.length, 2);
   assert.equal(event.readiness.blockers.length, 2);
+  // `blockers` là chuỗi hiển thị (UI join trực tiếp); chi tiết máy ở `blocker_details`.
+  assert.equal(typeof event.readiness.blockers[0], 'string');
+  assert.match(event.readiness.blockers[0], /chưa khóa bài/u);
+  assert.equal(event.readiness.blocker_details[0].code, 'team_not_locked');
+  assert.ok(event.readiness.blocker_details[0].team_id);
   assert.equal(event.audit[0].action, 'create');
 });
 

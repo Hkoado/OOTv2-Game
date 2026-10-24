@@ -21,8 +21,13 @@
   RPC trả domain error; `db:verify` counts **16/11/2/12/28/4** không đổi; `db:manual` PASS ở chế độ
   đã-apply; `npm test` **372/372 pass**; `npm run build` pass. Dữ liệu trước khi apply được chụp
   vào `data/backup-before-step0.json` (gitignored).
-- **Chưa** nối UI/worker, chưa browser E2E, chưa backup/**restore rehearsal**. Chi tiết:
+- **Chưa** nối worker, chưa browser E2E, chưa backup/**restore rehearsal**. Chi tiết:
   [handoff Huy](handoff/Huy.md), [contract](19-CONTRACT-TICH-HOP.md).
+- **Smoke API thật sau khi Bảo nối UI (24/10/2026):** `data/smoke-manual-api.mjs` (gitignored) chạy trên
+  API local + Supabase đã apply → **16/16 PASS** (tạo đợt, upload/dup, intake, chặn chọn pending/khóa
+  chưa chọn/pair chưa khóa/nhảy trạng thái/thiếu CSRF); dọn sạch, counts trở lại 2 tournaments / 11
+  accounts / 0 manual events. Hợp đồng đã khớp UI: POST trả kèm `id/name/status`, `blockers` là chuỗi +
+  `blocker_details`; cookie session path `/api` kèm xoá cookie legacy `/api/local`.
 
 
 ## Đã nối DB thật + smoke PASS — 24/10/2026
