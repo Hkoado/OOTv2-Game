@@ -45,13 +45,31 @@ const check = (name, ok, detail = '') => {
 };
 
 // ---------- GitHub test double (chỉ api.github.com) ----------
-const SOURCE = readFileSync(`${ROOT}/examples/campus_bot.py`);
-const blobSha = createHash('sha1').update(`blob ${SOURCE.length}\0`).update(SOURCE).digest('hex');
+// Hai chiến thuật khác nhau để ván có thắng/thua (bot mẫu luôn chọn legalMoves[0] ⇒ mọi ván hòa do lặp thế cờ).
+const BASE_SOURCE = readFileSync(`${ROOT}/examples/campus_bot.py`, 'utf8');
+/** Bot mẫu luôn chọn legalMoves[0] ⇒ lặp thế cờ và hòa. Hai biến thể dưới đổi lựa chọn mỗi lượt. */
+const withRotation = (step) => Buffer.from(`${BASE_SOURCE}
+
+_SEQ = 0
+
+
+def move(obs):
+    global _SEQ
+    moves = obs["legalMoves"]
+    if not moves:
+        raise ValueError("no legal moves")
+    _SEQ += 1
+    return moves[(_SEQ * ${step}) % len(moves)]
+`, 'utf8');
+const SOURCES = [withRotation(1), withRotation(2)];
+const gitBlobSha = (buffer) => createHash('sha1').update(`blob ${buffer.length}\0`).update(buffer).digest('hex');
 const repos = [1, 2, 3, 4].map((n) => {
   const name = `e2e-team-${n}`;
+  const source = SOURCES[(n - 1) % SOURCES.length];
   return {
-    n, name, owner: 'ootv2-e2e', repoId: 900000000 + n,
-    treeSha: createHash('sha1').update(`tree-${name}`).digest('hex'),
+    n, name, owner: 'ootv2-e2e', repoId: 900000000 + n, source,
+    blobSha: gitBlobSha(source),
+    treeSha: createHash('sha1').update(`tree-${name}-${gitBlobSha(source)}`).digest('hex'),
     commitSha: createHash('sha1').update(`commit-${name}`).digest('hex'),
   };
 });
@@ -75,11 +93,12 @@ globalThis.fetch = async (input, init) => {
   if (rest === `git/commits/${repo.commitSha}`) return json({ sha: repo.commitSha, tree: { sha: repo.treeSha } });
   if (rest === `git/trees/${repo.treeSha}`) {
     return json({ sha: repo.treeSha, truncated: false, tree: [
-      { path: 'bot.py', mode: '100644', type: 'blob', size: SOURCE.length, sha: blobSha },
+      { path: 'bot.py', mode: '100644', type: 'blob', size: repo.source.length, sha: repo.blobSha },
     ] });
   }
-  if (rest === `git/blobs/${blobSha}`) {
-    return json({ sha: blobSha, encoding: 'base64', size: SOURCE.length, content: SOURCE.toString('base64') });
+  if (rest === `git/blobs/${repo.blobSha}`) {
+    return json({ sha: repo.blobSha, encoding: 'base64', size: repo.source.length,
+      content: repo.source.toString('base64') });
   }
   return json({ message: 'not found' }, 404);
 };
@@ -220,8 +239,9 @@ async function main() {
       knockoutError = error.code || error.message;
     }
     if (knockoutError) {
-      check('knockout: BLOCKED bởi DB (không phải PASS)', false,
-        `${knockoutError} — cần migration nới roster cho round knockout (20261026120000)`);
+      check('knockout: BLOCKED (không phải PASS)', false, knockoutError === 'capture_roster_mismatch'
+        ? 'capture_roster_mismatch — cần migration 20261026120000 (nới roster cho round knockout)'
+        : `${knockoutError} — series không kết thúc được (thường do mọi ván hòa); cần BTC/Khoa chốt tie-break`);
     } else {
       const bracket = await knockout.bracketProgress({ groupRoundId: roundId, level: 'weekly' });
       check('knockout hoàn tất', last?.status === 'bracket_complete',

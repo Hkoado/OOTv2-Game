@@ -10,11 +10,11 @@ Checklist hiện hành: [SAU-TICH-HOP](handoff/SAU-TICH-HOP.md). Evidence cũ th
 không đóng gate mới, không chứng minh chức năng manual finals đã có.
 
 **Cập nhật 24/10/2026 — E2E online trên DB dev (Huy):** repo→intake→cutoff→vòng bảng 12/12 ván→
-standings→freeze **PASS** (engine trusted-dev + Python, Storage thật); **knockout BLOCKED** bởi trigger
-`capture_roster_mismatch` (migration `20261026120000` đã chuẩn bị, **chưa apply**); publication official
-**chưa hỗ trợ**; replay payload ở `mvp_official_job_attempts.replay`. `.env` (DB thật
-`ftzockzolisecnyhlwej`) **chưa có schema** và không có `SUPABASE_ACCESS_TOKEN`/`SUPABASE_DB_URL`
-⇒ không thể apply/khởi tạo DB thật. `npm test` 399/399, build pass. **RC chưa đạt.**
+standings→freeze **PASS**; knockout **mở/tiến series PASS** sau khi apply `20261026120000` trên DB dev;
+còn chặn ở series **toàn hòa** (`series_invalid`, cần chốt tie-break) và **publication official chưa hỗ trợ**;
+replay payload ở `mvp_official_job_attempts.replay`. `.env` (DB thật `ftzockzolisecnyhlwej`) **chưa có
+schema**; token hiện tại chỉ có quyền trên DB dev (403 với project thật) ⇒ bundle khởi tạo đã xuất ở
+`data/production/fresh-database.sql` (gitignored). `npm test` 417/417, build pass. **RC chưa đạt.**
 
 **Chưa đủ điều kiện mở chấm bot công khai.** Public source repository và vận hành
 dịch vụ nhận code không tin cậy là hai mốc riêng biệt. Không bỏ gate Start để demo.
