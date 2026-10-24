@@ -33,12 +33,17 @@ export function stripTransaction(sql) {
 /**
  * Ghép một script duy nhất: BEGIN → migration → drill assertions → ROLLBACK.
  * Từ chối nếu có COMMIT/ROLLBACK/BEGIN lồng bên trong (không thể bảo đảm rollback).
+ * `migrationApplied=true`: schema đã có (đã apply) nên chỉ chạy assertions trong transaction.
  */
-export function composeDrillSql({ migrationSql, drillSql }) {
+export function composeDrillSql({ migrationSql, drillSql, migrationApplied = false }) {
   const body = stripTransaction(drillSql);
   if (!body) throw new Error('invalid_drill_script');
   if (!/^[ \t]*begin\s*;[ \t]*$/imu.test(drillSql) || !/^[ \t]*rollback\s*;[ \t]*$/imu.test(drillSql)) {
     throw new Error('drill_must_be_transactional');
+  }
+  if (migrationApplied) {
+    if (WRITE_RE.test(body)) throw new Error('drill_contains_transaction_control');
+    return `begin;\nset local statement_timeout = '120s';\n${body}\nrollback;\n`;
   }
   for (const [name, sql] of [['migration', stripTransaction(migrationSql)], ['drill', body]]) {
     if (WRITE_RE.test(sql)) throw new Error(`${name}_contains_transaction_control`);
@@ -59,6 +64,18 @@ function loadEnv() {
   return { ...env, ...process.env };
 }
 
+/** Schema đã được apply chưa? (chỉ đọc Management API, không ghi DB). */
+async function manualTablesPresent({ ref, token }) {
+  const response = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ query: "select to_regclass('public.mvp_manual_final_events') is not null as present" }),
+  });
+  if (!response.ok) throw new Error(`schema_probe_${response.status}`);
+  const rows = JSON.parse(await response.text());
+  return Array.isArray(rows) && rows[0]?.present === true;
+}
+
 async function main() {
   const env = loadEnv();
   const url = env.SUPABASE_URL;
@@ -71,8 +88,18 @@ async function main() {
   }
   const migrationSql = readFileSync(path.join(root, MIGRATION_FILE), 'utf8');
   const drillSql = readFileSync(path.join(root, DRILL_FILE), 'utf8');
-  const query = composeDrillSql({ migrationSql, drillSql });
-  console.log(`[manual-final] rehearsal: ${MIGRATION_FILE} + ${DRILL_FILE} trong 1 transaction (ROLLBACK)`);
+  let present;
+  try {
+    present = await manualTablesPresent({ ref, token });
+  } catch (error) {
+    // Không đoán schema: đoán sai sẽ chạy DDL trùng hoặc bỏ qua migration.
+    process.exitCode = 3;
+    console.error(`FAIL  không đọc được trạng thái schema: ${error.message}`);
+    return;
+  }
+  const query = composeDrillSql({ migrationSql, drillSql, migrationApplied: present });
+  console.log(`[manual-final] rehearsal: ${DRILL_FILE} trong 1 transaction (ROLLBACK)`);
+  console.log(`[manual-final] schema: ${present ? 'đã apply (chỉ drill)' : 'chưa apply (kèm migration, không ghi DB)'}`);
   const response = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
     method: 'POST',
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
@@ -88,7 +115,9 @@ async function main() {
   }
   console.log('PASS  RLS grants, select/lock/gate, pair idempotent, finish fence, duplicate finish,');
   console.log('      cancel/rerun, close guard, audit append-only — tất cả trong 1 transaction đã ROLLBACK.');
-  console.log('NOT APPLIED: migration chưa vào project; operator tự chạy db:apply-migrations khi được phép.');
+  console.log(present
+    ? 'APPLIED: schema đã có trên project; drill chỉ kiểm hành vi và đã rollback dữ liệu drill.'
+    : 'NOT APPLIED: migration chưa vào project; operator tự chạy db:apply-migrations khi được phép.');
 }
 
 const isEntryPoint = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;

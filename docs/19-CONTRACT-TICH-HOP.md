@@ -69,7 +69,7 @@ và consumer đã xác nhận. Chỉ đánh VERIFIED khi đã tích hợp và c�
 | --- | --- | --- | --- |
 | Intake/readiness/publication | Huy, Bảo xác nhận | `PUT/GET/DELETE /api/local/events/:id/repository`, `POST/GET .../submissions/from-github`, `GET /repo-sync-jobs/:id`, `GET /broadcasts/:matchId`; test `githubIntakeApi`, `uploadDisabled`, `publication`; Postgres smoke `db:h4` 30/30 | VERIFIED (mock + DB smoke; browser chưa) |
 | Snapshot/schedule/job/result/standings | Khoa + Huy, Bảo xác nhận DTO | `server/shared/officialSchedule.js` + RPC `mvp_official_*`, `server/lib/officialGroups.js`; test `officialSchedule`, `officialGroups`, `officialBracket`, `officialRounds` | PARTIAL — code/test có, worker Campus/VM chưa nghiệm thu |
-| Manual intake/lock/judging | Huy + Khoa, Bảo xác nhận | Xem mục 6: route `/api/local/manual-finals/*`, RPC `mvp_manual_final_*`; test `manualFinalApi` (9), `manualFinalDrill` (4), `supabaseSchema` (+1); rehearsal DB `npm run db:manual` PASS (BEGIN…ROLLBACK) | IMPLEMENTED (mock + DB rehearsal); migration **chưa apply**, UI/worker chưa nối |
+| Manual intake/lock/judging | Huy + Khoa, Bảo xác nhận | Xem mục 6: route `/api/local/manual-finals/*`, RPC `mvp_manual_final_*`; test `manualFinalApi` (9), `manualFinalDrill` (5), `supabaseSchema` (+1); **migration đã apply 24/10/2026** (project OTTv2-G5) + drill PASS | IMPLEMENTED + APPLIED; UI/worker chưa nối (Bảo/Khoa) |
 | Worker install/control/readiness | Khoa | Có scaffolding, cần sửa và nghiệm thu VM | NOT VERIFIED |
 
 
@@ -124,6 +124,8 @@ API không chạy Python; `storage_path`/lease token không nằm trong DTO; int
 
 - Khoa: `claimManualFinalJobs({worker,limit,leaseSeconds})` → job `validate` (tải artifact từ `storage_path` trong DTO worker, chạy syntax + protocol smoke) hoặc job `match` (chạy Campus trên `snapshot`); trả qua `finishManualFinalJob` / `releaseManualFinalJob`. Cùng sandbox/budget/engine, không runner thứ hai, không lookup latest.
 - Bảo: mọi route admin-only; chỉ hiển thị trạng thái/lý do; nạp file bằng multipart + `x-csrf-token`; không có form nhập điểm tay; không mở upload online cho đội.
-- Migration **chưa apply** trên project: `npm run db:manual` chỉ rehearsal (BEGIN…ROLLBACK). Trước khi UI/worker dùng thật phải apply qua migration history khi có phép.
+- Migration **đã apply** ngày 24/10/2026 trên project `wsyfcgurnrowcuefwynx` (OTTv2-G5) cùng
+  `20261025100000_cutoff_capture.sql`; `npm run db:manual` chạy drill trên schema đã apply (ROLLBACK).
+  `apply-migrations.js` đã có 2 migration này trong PLAN. Chưa nối UI/worker, chưa browser/VM acceptance.
 
 Các quyết định sản phẩm đã chốt trong docs/18 không được thay đổi khi điền bảng này.

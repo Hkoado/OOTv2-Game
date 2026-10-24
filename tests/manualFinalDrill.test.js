@@ -41,6 +41,15 @@ test('drill: từ chối drill không transactional hoặc có COMMIT', () => {
     /drill_contains_transaction_control/u);
 });
 
+test('drill: khi migration đã apply thì chỉ chạy assertions trong transaction', () => {
+  const composed = composeDrillSql({ migrationSql, drillSql, migrationApplied: true });
+  assert.doesNotMatch(composed, /create table public\.mvp_manual_final_events/u);
+  assert.match(composed, /^begin;\n/u);
+  assert.match(composed, /rollback;\n$/u);
+  assert.match(composed, /drill_finish_failed/u, 'vẫn giữ assertions của drill');
+  assert.equal((composed.match(/\bcommit\s*;/giu) || []).length, 0);
+});
+
 test('stripTransaction: bỏ đúng begin/rollback của file drill, giữ block PL/pgSQL', () => {
   const body = stripTransaction(drillSql);
   assert.doesNotMatch(body, /^[ \t]*begin\s*;[ \t]*$/imu);

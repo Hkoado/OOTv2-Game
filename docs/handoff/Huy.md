@@ -20,22 +20,32 @@
 
 | Lệnh | Kết quả |
 | --- | --- |
-| `npm test` | **367/367 pass**, 0 skip (baseline 353 + 14 test mới) |
+| `npm test` | **372/372 pass**, 0 skip |
 | `node --test tests/manualFinalApi.test.js` | 9/9 — quyền/CSRF/IDOR, upload/dup, chọn/khóa, pair idempotent, cancel/rerun, finish fence/duplicate, release retry, replay/download |
-| `node --test tests/manualFinalDrill.test.js` | 4/4 — drill luôn một transaction + ROLLBACK, chặn COMMIT |
+| `node --test tests/manualFinalDrill.test.js` | 5/5 — drill luôn một transaction + ROLLBACK, chặn COMMIT, có chế độ “schema đã apply” |
 | `node --test tests/supabaseSchema.test.js` | 10/10 — +1 test tĩnh cho migration manual final |
-| `npm run build` | pass (Vite, ~15s) |
-| `npm run db:manual` | **PASS** trên project `.env` (`wsyfcgurnrowcuefwynx`): migration + drill trong 1 transaction, **ROLLBACK**; kiểm RLS/grant, chọn/khóa, pair idempotent, finish fence, duplicate finish, cancel/rerun, close guard, audit append-only. Sau drill đọc lại `information_schema` → **không có** bảng `mvp_manual_final_*` (không apply gì). |
+| `npm run build` | pass (Vite) |
+| `npm run db:apply-migrations -- --apply --smoke` | **OK 2/2 + smoke PASS** (24/10/2026): `20261025100000_cutoff_capture` + `20261026100000_manual_final`, mỗi file một transaction |
+| `npm run db:check-github` | mọi bảng HTTP 200; RPC trả domain error (`event_not_found`, `bad_lease`), không còn `PGRST202` |
+| `npm run db:verify` | counts **16/11/2/12/28/4** đúng như trước apply; `apiAuthCsrfLogout: true` |
+| `npm run db:manual` | **PASS** ở chế độ đã-apply (drill trong một transaction, ROLLBACK) |
+
+### Môi trường đã chốt (24/10/2026)
+
+- Project đích = `wsyfcgurnrowcuefwynx` (**OTTv2-G5**, ACTIVE_HEALTHY) — project duy nhất mà
+  `SUPABASE_ACCESS_TOKEN` hiện tại truy cập được (`GET /v1/projects` chỉ trả project này).
+- `ftzockzolisecnyhlwej` nêu trong `PRODUCTION-BOOTSTRAP.md` **không** truy cập được bằng token này;
+  muốn dùng project đó phải cấp URL/token mới rồi chạy fresh bundle + 2 migration này.
+- Snapshot dữ liệu trước khi apply: `data/backup-before-step0.json` (gitignored, không chứa secret).
 
 ### NOT RUN / blocker (không đổi thành PASS)
 
-- **Migration chưa apply remote** (`20261026100000`). Chưa có bảng manual final trên project; UI/worker
-  chưa dùng được cho tới khi operator apply qua migration history đúng thứ tự + chạy
-  `supabase/tests/manual_final.sql` trên project đích.
 - Worker Khoa chưa consume `claimManualFinalJobs`/`finishManualFinalJob`; chưa có VM/sandbox thật
   cho job `match`/`validate`.
-- Browser E2E, load 50/100/200 viewer, backup/restore rehearsal: **NOT RUN** trong đợt này.
-- `npm audit`/secret scan lại chưa chạy sau đợt này (không thêm dependency mới).
+- Bảo chưa nối UI vào API (panel hiện chạy state cục bộ).
+- Browser E2E, load 50/100/200 viewer, **restore rehearsal** (đã có snapshot dữ liệu, chưa diễn tập
+  phục hồi), `npm audit`/secret scan lại: **NOT RUN**.
+
 
 ### Tích hợp sau merge `origin/dev` (e0d88d4)
 
@@ -47,12 +57,13 @@
   từ server (`submission_not_valid`, `event_not_open`, `result_conflict`...), không tự tính hash/lock.
 - Huy **không** sửa UI/runner của Bảo/Khoa trong đợt này.
 
+### Việc của người khác (không tự làm thay)
 
-- Bảo: nối UI mục “Chung kết thủ công” theo DTO mục 6.3 của docs/19; dùng fixture versioned trước,
-  sau đó nối API thật khi migration đã apply.
+- Bảo: nối UI mục “Chung kết thủ công” theo DTO mục 6.3 của docs/19; migration **đã apply** nên có thể
+  nối API thật ngay, fixture chỉ dùng để chạy song song trước khi nối.
 - Khoa: nối worker vào queue chung (`server/shared/manualFinalJobs.js`), giữ luật “lỗi hạ tầng ≠ forfeit”,
   dùng cùng Campus/budget; không tạo runner thứ hai.
-- Operator: apply migration + rehearsal DB/VM trước khi đóng gate RC.
+- Operator: rehearsal DB/VM + restore rehearsal trước khi đóng gate RC.
 
 ## Trạng thái mới nhất
 

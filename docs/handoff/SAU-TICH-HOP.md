@@ -13,9 +13,11 @@ không áp dụng. Nhóm tự checkpoint/tích hợp, user nghiệm thu một RC
   phần online/worker vẫn chờ Khoa/Bảo xác nhận.
 - [ ] Huy: schema/history project đích đúng, migration additive được phép, backup/restore đã thử;
   DB/RLS/grants/Storage/auth/CSRF/IDOR/cutoff/provenance/concurrency integration thật.
-  → **Huy 24/10:** migration `20261026100000_manual_final.sql` **chưa apply**; rehearsal
-  `npm run db:manual` PASS (RLS/grants/chọn-khóa/pair/fence/duplicate/cancel-rerun/close/audit)
-  trong 1 transaction đã ROLLBACK. Backup/restore rehearsal và apply remote: **NOT RUN** (cần phép).
+  → **Huy 24/10:** đã apply `20261025100000_cutoff_capture` + `20261026100000_manual_final` trên
+  project `wsyfcgurnrowcuefwynx` (OTTv2-G5) bằng `db:apply-migrations --apply --smoke` (OK 2/2, smoke
+  PASS); `db:verify` counts 16/11/2/12/28/4 không đổi; `db:manual` PASS trên schema đã apply.
+  Snapshot dữ liệu trước apply: `data/backup-before-step0.json` (gitignored). **Restore rehearsal**
+  và backup artifact/recovery: **NOT RUN**.
 
 - [ ] Khoa: worker Campus riêng, snapshot/hash/runtime/budget, accepted attempt fencing result/log/replay;
   hai worker/crash/retry/stale/duplicate không tính đôi, infra không forfeit.
@@ -30,7 +32,7 @@ không áp dụng. Nhóm tự checkpoint/tích hợp, user nghiệm thu một RC
   → publication/viewer, không sửa DB để vượt bước thiếu.
 - [ ] Cả ba: Chung kết thủ công E2E admin tạo đợt/vòng → nạp bot → validation → chọn/khóa
   → chọn cặp/chấm → điểm/lý do/replay → BTC xác nhận đi tiếp; dùng cùng runner/sandbox.
-  → **Huy 24/10:** backend + RPC + drill DB đã có; **thiếu** worker consume (Khoa) và UI (Bảo),
+  → **Huy 24/10:** backend + RPC + migration **đã apply**; **thiếu** worker consume (Khoa) và UI (Bảo),
   nên E2E trình duyệt **NOT RUN**.
 - [ ] Huy/Bảo/Khoa: manual scoped event/round/team admin-only, source/hash/actor/server time;
   pending/invalid/lock race đúng; sau khóa không thay bài; online không nhận manual provenance giả.
@@ -44,7 +46,7 @@ không áp dụng. Nhóm tự checkpoint/tích hợp, user nghiệm thu một RC
 - [ ] Bảo/Khoa: counts 35/40/48/50, benchmark worker và viewer 50/100/200 có môi trường/P95/error/resource;
   không coi in-process simulation là nghiệm thu hạ tầng triển khai.
 - [ ] Cả ba: full tests/build/diff, replay/rules cũ, backup/artifact/recovery; security/dependency/secret-history/license review.
-  → **Huy 24/10 (phần Huy):** `npm test` **367/367 pass** (0 skip), `npm run build` pass,
+  → **Huy 24/10 (phần Huy):** `npm test` **372/372 pass** (0 skip), `npm run build` pass,
   `git diff --check` sạch; replay/rules cũ không đổi (không sửa engine). Backup/restore DB,
   security/secret-history review lại và license: **NOT RUN**.
 - [ ] Huy tổng hợp, mỗi owner ký: một RC SHA, evidence commands/exit/PASS/FAIL/NOT RUN,
