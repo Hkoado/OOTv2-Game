@@ -35,6 +35,9 @@ không áp dụng. Nhóm tự checkpoint/tích hợp, user nghiệm thu một RC
   các action online nối API thật, viewer clock/cursor/reconnect không leak tương lai/kết quả kín.
 - [ ] Cả ba: online E2E repo → cutoff → receipt/snapshot → chấm → standings/knockout/vé
   → publication/viewer, không sửa DB để vượt bước thiếu.
+  → **Huy 24/10 (DB dev):** repo→intake→cutoff→vòng bảng 12/12 ván→standings→freeze **PASS**;
+  **knockout BLOCKED** (`capture_roster_mismatch`, cần apply `20261026120000`); publication official
+  **chưa có** ⇒ E2E **chưa đạt**; DB thật `ftzockzolisecnyhlwej` **chưa có schema** và thiếu kênh DDL.
 - [ ] Cả ba: Chung kết thủ công E2E admin tạo đợt/vòng → nạp bot → validation → chọn/khóa
   → chọn cặp/chấm → điểm/lý do/replay → BTC xác nhận đi tiếp; dùng cùng runner/sandbox.
   → **Huy 24/10:** backend + RPC + migration **đã apply**; **thiếu** worker consume (Khoa) và UI (Bảo),

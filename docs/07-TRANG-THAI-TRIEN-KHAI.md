@@ -37,6 +37,11 @@
   progress/standings/publish/freeze/bracket/tickets + cancel/requeue job có lý do; DTO bracket whitelist,
   resolve group round theo event. Route test **6/6**, smoke API thật **12/12** (401/403/404/400, domain error
   `job_not_found`); `npm test` 399/399, build pass. Chi tiết DTO: docs/19 §7.
+- **E2E online trên DB dev (24/10/2026):** `tools/cli/e2e-online-drill.js` — repo→intake→cutoff→vòng bảng
+  **PASS** (12/12 ván, standings, freeze); **knockout BLOCKED** bởi trigger `capture_roster_mismatch`
+  (đã chuẩn bị migration `20261026120000`, **chưa apply** vì không còn kênh DDL); publication official
+  **chưa hỗ trợ**; replay payload ở `mvp_official_job_attempts.replay`. `.env` (DB thật
+  `ftzockzolisecnyhlwej`) **chưa có schema**. RC **chưa đạt**.
 
 
 ## Đã nối DB thật + smoke PASS — 24/10/2026

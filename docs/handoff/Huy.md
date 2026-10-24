@@ -121,6 +121,33 @@
 - `npm test` **399/399 pass**, `npm run build` pass (route test nằm ngoài `tests/` nên không đổi con số).
 - Bảo: nối UI theo docs/19 §7; Khoa: không cần đổi service, route chỉ gọi export hiện có.
 
+### E2E online trên DB dev + đánh giá RC (24/10/2026)
+
+- Đọc lại 2 file env theo yêu cầu: `.env` → **DB thật** `ftzockzolisecnyhlwej` (**chưa có schema**:
+  mọi bảng runtime 404) và không có `SUPABASE_ACCESS_TOKEN`/`SUPABASE_DB_URL`; `.envdev` → **DB dev**
+  `wsyfcgurnrowcuefwynx` (đã có đủ schema). Vì vậy mọi drill/E2E chạy trên `.envdev`; drill có guard
+  từ chối nếu trỏ project khác.
+- Thêm `tools/cli/e2e-online-drill.js` (tool, có thể commit): repo → intake → cutoff → snapshot vòng bảng
+  → chấm bằng engine thật (trusted-dev + Python) → standings → freeze → knockout → vé; GitHub API thay
+  bằng test double tại lớp `fetch` (không có token/repo thật), Supabase/Storage/engine là thật.
+- **Kết quả (log `data/e2e-online-final.txt`)**: intake 4/4 valid; cutoff 4/4 pin; vòng bảng 12/12 ván
+  accepted; standings complete (4 qualifiers); freeze PASS. **Knockout BLOCKED** bởi trigger
+  `mvp_cutoff_verify_round` (`capture_roster_mismatch`) vì trigger bắt mọi round phải pin đủ roster.
+- Đã thêm `supabase/migrations/20261026120000_ko_round_roster_guard.sql` (chỉ nới roster cho round
+  `<> 'group'`, giữ nguyên mọi kiểm capture/receipt/submission) + PLAN entry — **CHƯA apply** vì workspace
+  không còn kênh DDL cho cả 2 project.
+- Sửa `server/shared/client.js`: lỗi trigger dạng `P0001` + message domain (`capture_roster_mismatch`,
+  `receipt_mismatch`, …) giờ trả **409 + mã domain** thay vì 503 chung, để UI/log E2E đọc được nguyên nhân.
+- Replay: `mvp_official_games` chỉ có `replay_hash`; payload replay nằm ở `mvp_official_job_attempts.replay`
+  (12/12 ván của drill có đủ). Viewer/publication official cần đọc nguồn này.
+- **Publication official CHƯA hỗ trợ**: `mvp_match_broadcasts` chỉ tham chiếu `mvp_matches`.
+- **RC: CHƯA ĐẠT.** Blocker cụ thể:
+  1. DB thật chưa có schema + không có kênh DDL (`SUPABASE_ACCESS_TOKEN`/`SUPABASE_DB_URL`) ⇒ không thể
+     apply migration/khởi tạo DB thật; cũng không apply được bản vá knockout.
+  2. Knockout bị chặn bởi trigger (cần apply `20261026120000`).
+  3. Publication/replay cho official games chưa có (chỉ MVP).
+  4. VM/2-worker thật + browser E2E + restore rehearsal vẫn NOT RUN.
+
 ### Việc của người khác (không tự làm thay)
 
 - Bảo: nối UI mục “Chung kết thủ công” theo DTO mục 6.3 của docs/19; migration **đã apply** nên có thể

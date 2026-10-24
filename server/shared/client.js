@@ -65,6 +65,10 @@ export async function request(endpoint, { method = 'GET', body, headers = {}, ra
     const code = detail.code;
     if (code === '23505') throw new HttpError(409, 'duplicate_record', 'Dữ liệu trùng hoặc đang có giải hoạt động.');
     if (code === '40001') throw new HttpError(409, 'event_conflict', 'Dữ liệu đã thay đổi. Hãy tải lại.');
+    // Trigger/RPC ném domain code dạng `capture_mismatch` (P0001): giữ mã cho UI thay vì 503 chung.
+    if (code === 'P0001' && typeof detail.message === 'string' && /^[a-z][a-z0-9_]{2,60}$/u.test(detail.message)) {
+      throw new HttpError(409, detail.message, 'DB từ chối thao tác nghiệp vụ. Kiểm tra dữ liệu/provenance rồi thử lại.');
+    }
     throw new HttpError(response.status >= 500 ? 503 : 400, 'shared_db_error', 'Thao tác DB chung thất bại. Kiểm tra migration/cấu hình hoặc dữ liệu đầu vào.');
   }
   if (raw) return Buffer.from(await response.arrayBuffer());

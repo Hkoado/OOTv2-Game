@@ -195,4 +195,24 @@ Nguồn: `server/routes/official.js` (mount trong `server/shared/router.js`), b�
 - Không route nào tự tạo ván/kết quả; `publish` chỉ enqueue đúng ván đã pin qua chain, worker Khoa ghi
   accepted result bằng RPC fence.
 
+### 7.1 Kết quả E2E online trên DB dev (24/10/2026) — chưa đạt tới publication
+
+Chạy `node tools/cli/e2e-online-drill.js` (chỉ chạy khi `SUPABASE_URL` = `wsyfcgurnrowcuefwynx`,
+GitHub API thay bằng test double tại lớp `fetch`; Supabase/Storage/engine trusted-dev là thật):
+
+| Chặng | Kết quả |
+| --- | --- |
+| repo (duyệt + job) → intake | PASS: 4 receipt `valid` + 4 submission (Python syntax + protocol smoke thật) |
+| cutoff capture | PASS: 4 đội pin đúng SHA/receipt (`cutoff-first-resolution.v1`) |
+| mở vòng bảng | PASS: snapshot chính thức, 12 ván (4 đội, round-robin) |
+| chấm bằng engine | PASS: 12/12 ván accepted (draw/REPETITION, 28 plies), job `succeeded` |
+| standings | PASS: complete, 4 qualifiers |
+| khóa vòng bảng | PASS: `frozen=true` |
+| knockout | **BLOCKED**: trigger `mvp_cutoff_verify_round` bắt `count(entries) = số bot trong snapshot` cho **mọi** round ⇒ mở series 2 đội trả `capture_roster_mismatch`. Đã chuẩn bị migration `20261026120000_ko_round_roster_guard.sql` (**CHƯA apply**) |
+| replay | PASS (kiểm bổ sung): 12/12 ván có `replay_hash`; payload replay nằm ở `mvp_official_job_attempts.replay` |
+| publication | **CHƯA hỗ trợ** cho official: `mvp_match_broadcasts` chỉ tham chiếu `mvp_matches` |
+
+Hệ quả: chuỗi repo → cutoff → vòng bảng → standings → freeze đã chạy thật; **knockout → vé → publication
+chưa thể nghiệm thu**. RC **chưa đạt**.
+
 Các quyết định sản phẩm đã chốt trong docs/18 không được thay đổi khi điền bảng này.
