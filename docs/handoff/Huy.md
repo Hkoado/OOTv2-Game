@@ -37,7 +37,16 @@
 - Browser E2E, load 50/100/200 viewer, backup/restore rehearsal: **NOT RUN** trong đợt này.
 - `npm audit`/secret scan lại chưa chạy sau đợt này (không thêm dependency mới).
 
-### Việc của người khác (không tự làm thay)
+### Tích hợp sau merge `origin/dev` (e0d88d4)
+
+- Đã merge `origin/dev` (Bảo: `ManualFinalsPanel.jsx`, `tests/manualFinals.test.js`, dọn scope nộp bài)
+  và giữ nguyên phần API/DB của Huy; `npm test` **371/371 pass**, `npm run build` pass sau merge.
+- **Ranh giới cần Bảo nối tiếp:** `ManualFinalsPanel.jsx` hiện dùng state cục bộ (`Date.now()` cho match,
+  hash bằng Web Crypto ở client, không gọi API) — chưa phải luồng thật và không được coi là bằng chứng
+  E2E. Panel cần gọi đúng route mục 6.1 docs/19 (multipart + `x-csrf-token`), hiển thị trạng thái/lỗi
+  từ server (`submission_not_valid`, `event_not_open`, `result_conflict`...), không tự tính hash/lock.
+- Huy **không** sửa UI/runner của Bảo/Khoa trong đợt này.
+
 
 - Bảo: nối UI mục “Chung kết thủ công” theo DTO mục 6.3 của docs/19; dùng fixture versioned trước,
   sau đó nối API thật khi migration đã apply.
