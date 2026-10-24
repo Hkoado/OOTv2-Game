@@ -115,6 +115,42 @@ export async function requeueOfficialJob(jobId, reason) {
   });
 }
 
+/** §7 Admin: fetch broadcast state of an official game. */
+export async function fetchOfficialBroadcastState(roundPk, gameKey, { signal } = {}) {
+  if (!roundPk || !gameKey) return null;
+  return await apiRequest(
+    `/official/rounds/${encodeURIComponent(roundPk)}/games/${encodeURIComponent(gameKey)}/broadcast`,
+    { signal }
+  );
+}
+
+/** §7 Admin: schedule or update broadcast of an official finished game. */
+export async function scheduleOfficialBroadcast(roundPk, gameKey, { startsAt, plyIntervalMs = 2000, releaseMode = 'window', state = 'scheduled' }) {
+  if (!roundPk || !gameKey) throw new Error('Cần mã vòng (roundPk) và mã ván (gameKey).');
+  return await apiRequest(
+    `/official/rounds/${encodeURIComponent(roundPk)}/games/${encodeURIComponent(gameKey)}/broadcast`,
+    {
+      method: 'PUT',
+      body: {
+        starts_at: startsAt,
+        ply_interval_ms: Number(plyIntervalMs) || 2000,
+        release_mode: releaseMode,
+        state,
+      },
+    }
+  );
+}
+
+/** §7 Viewer: fetch official game broadcast stream package (scoped by membership, timed plies). */
+export async function fetchOfficialGameViewer(roundPk, gameKey, afterSeq = 0, { signal } = {}) {
+  if (!roundPk || !gameKey) return null;
+  const safeSeq = Number.isFinite(Number(afterSeq)) && Number(afterSeq) > 0 ? Math.floor(Number(afterSeq)) : 0;
+  return await apiRequest(
+    `/official/rounds/${encodeURIComponent(roundPk)}/games/${encodeURIComponent(gameKey)}/viewer?after_seq=${safeSeq}`,
+    { signal }
+  );
+}
+
 export default {
   fetchOfficialRound,
   openOfficialRound,
@@ -128,4 +164,7 @@ export default {
   fetchOfficialTickets,
   cancelOfficialJob,
   requeueOfficialJob,
+  fetchOfficialBroadcastState,
+  scheduleOfficialBroadcast,
+  fetchOfficialGameViewer,
 };

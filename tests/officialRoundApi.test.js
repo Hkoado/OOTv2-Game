@@ -13,6 +13,9 @@ import {
   fetchOfficialTickets,
   cancelOfficialJob,
   requeueOfficialJob,
+  fetchOfficialBroadcastState,
+  scheduleOfficialBroadcast,
+  fetchOfficialGameViewer,
 } from '../src/tournament/portal/officialRoundApi.js';
 
 test('officialRoundApi input validations', async () => {
@@ -22,12 +25,18 @@ test('officialRoundApi input validations', async () => {
   assert.equal(await fetchOfficialStandings(''), null);
   assert.equal(await fetchOfficialBracket(''), null);
   assert.equal(await fetchOfficialTickets(''), null);
+  assert.equal(await fetchOfficialBroadcastState('', 'game-1'), null);
+  assert.equal(await fetchOfficialBroadcastState('round-1', ''), null);
+  assert.equal(await fetchOfficialGameViewer('', 'game-1'), null);
+  assert.equal(await fetchOfficialGameViewer('round-1', ''), null);
 
   await assert.rejects(() => openOfficialRound(''), /Cần mã giải/);
   await assert.rejects(() => syncGithubCutoff(''), /Cần mã giải/);
   await assert.rejects(() => publishNextOfficialGame(''), /Cần mã giải/);
   await assert.rejects(() => freezeOfficialRound(''), /Cần mã giải/);
   await assert.rejects(() => openNextKnockoutSeries(''), /Cần mã giải/);
+  await assert.rejects(() => scheduleOfficialBroadcast('', 'game-1', {}), /Cần mã vòng/);
+  await assert.rejects(() => scheduleOfficialBroadcast('round-1', '', {}), /Cần mã vòng/);
 
   // Job operations require jobId and reason 5..400 chars
   await assert.rejects(() => cancelOfficialJob('', 'valid reason'), /Cần mã job/);
@@ -129,6 +138,26 @@ test('officialRoundApi mocked endpoints and error handling', async () => {
     assert.equal(calls.at(-1).options.method, 'POST');
     assert.equal(JSON.parse(calls.at(-1).options.body).reason, 'Retrying on healthy node');
     assert.match(calls.at(-1).url, /\/official\/jobs\/job-99\/requeue$/);
+
+    // 9. Official Broadcast State & Scheduling & Viewer
+    const bState = await fetchOfficialBroadcastState('round-uuid', 'g1');
+    assert.equal(bState.ok, true);
+    assert.match(calls.at(-1).url, /\/official\/rounds\/round-uuid\/games\/g1\/broadcast$/);
+
+    const bSched = await scheduleOfficialBroadcast('round-uuid', 'g1', {
+      startsAt: '2026-10-24T12:00:00.000Z',
+      plyIntervalMs: 1500,
+      releaseMode: 'full',
+      state: 'scheduled',
+    });
+    assert.equal(bSched.ok, true);
+    assert.equal(calls.at(-1).options.method, 'PUT');
+    assert.equal(JSON.parse(calls.at(-1).options.body).ply_interval_ms, 1500);
+    assert.match(calls.at(-1).url, /\/official\/rounds\/round-uuid\/games\/g1\/broadcast$/);
+
+    const bViewer = await fetchOfficialGameViewer('round-uuid', 'g1', 5);
+    assert.equal(bViewer.ok, true);
+    assert.match(calls.at(-1).url, /\/official\/rounds\/round-uuid\/games\/g1\/viewer\?after_seq=5$/);
   } finally {
     globalThis.fetch = originalFetch;
   }
