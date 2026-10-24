@@ -5,6 +5,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../.." && pwd)"
 runner="$here/run-bot.sh"
 fixtures="$root/sandbox/fixtures"
+cgroup_root="${OOTV2_CGROUP_ROOT:-/sys/fs/cgroup/ootv2-sandbox}"
 tmp="$(mktemp -d /tmp/ootv2-selftest.XXXXXX)"
 trap 'rm -rf "$tmp"' EXIT
 pass=0; fail=0
@@ -121,7 +122,7 @@ elapsed=$(( $(date +%s%3N) - start_ms ))
 [ "$code" -eq 124 ] && [ "$elapsed" -lt 3000 ] && ok "wall timeout on sleep (${elapsed}ms)" \
   || no "wall timeout on sleep" "exit=$code elapsed=${elapsed}ms"
 
-left=$(ls -A /sys/fs/cgroup/ootv2-sandbox 2>/dev/null | wc -l)
+left=$(ls -A "$cgroup_root" 2>/dev/null | wc -l)
 [ "$left" -eq 0 ] && ok "cgroup cleanup" || no "cgroup cleanup" "$left entries left"
 if pgrep -f '/work/bot.py' >/dev/null 2>&1; then
   no "process cleanup" "leftover bot process"
