@@ -89,7 +89,11 @@ function segmentsValid(series) {
 
 /** Pins colors per persisted prefix; extra games only after a tied completed main. */
 function nextSeriesGame({ series, results }) {
-  const main = nextOfficialKnockoutGame({ series, results });
+  // `assignNextOfficialGameColor` từ chối kết quả của ván không nằm trong danh sách truyền vào,
+  // nên lần pin ván chính chỉ được thấy kết quả ván chính (ván phụ đã chấm làm hỏng prefix).
+  const mainIds = new Set(series.mainGames.map((game) => game.id));
+  const main = nextOfficialKnockoutGame({ series,
+    results: results.filter((record) => mainIds.has(record.gameId)) });
   if (main) return { game: main, phase: 'main' };
   if (!series.mainGames.every((game) => results.some((record) => record.gameId === game.id))) return null;
   try {

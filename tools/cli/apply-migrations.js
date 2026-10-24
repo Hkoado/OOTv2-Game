@@ -43,6 +43,8 @@ const env = loadEnv();
 const args = process.argv.slice(2);
 const apply = args.includes('--apply');
 const smoke = args.includes('--smoke');
+/** Dự án chính thức mới chỉ có foundation: cho phép apply các migration tạo bảng runtime. */
+const bootstrap = args.includes('--bootstrap');
 const onlyArg = args.find((value) => value.startsWith('--only='));
 const only = onlyArg ? new Set(onlyArg.slice('--only='.length).split(',').map((v) => v.trim()).filter(Boolean)) : null;
 
@@ -88,6 +90,21 @@ async function restRpc(name, payload) {
 
 /** Object đại diện của mỗi migration: đã tồn tại thì coi như đã apply. */
 const PLAN = [
+  {
+    version: '20261022125205',
+    file: 'supabase/migrations/20261022125205_shared_mvp_runtime_tables.sql',
+    why: 'bảng runtime MVP shared (participants/submissions/tournaments/matches/accounts/sessions)',
+    exists: async () => (await restGet('/rest/v1/mvp_participants?select=*&limit=1')).status === 200,
+  },
+  {
+    version: '20261022125322',
+    file: 'supabase/migrations/20261022125322_shared_mvp_runtime_functions.sql',
+    why: 'RPC MVP shared (account/draft/claim/finish/release/import)',
+    exists: async () => {
+      const result = await restRpc('mvp_account_create', { p_account: {}, p_participant: null });
+      return !(result.status === 404 && result.body?.code === 'PGRST202');
+    },
+  },
   {
     version: '20261022150000',
     file: 'supabase/migrations/20261022150000_judge_monitor.sql',
@@ -230,6 +247,28 @@ PLAN.push({
 });
 
 
+PLAN.push({
+  version: '20261026130000',
+  file: 'supabase/migrations/20261026130000_manual_worker_heartbeat.sql',
+  why: 'Khoa review: heartbeat manual + fencing lease hết hạn + 0-ply result (additive)',
+  exists: async () => {
+    // RPC heartbeat: PGRST202 = chưa có function.
+    const result = await restRpc('mvp_manual_final_heartbeat',
+      { p_job: '00000000-0000-4000-8000-000000000000', p_token: '00000000-0000-4000-8000-000000000000',
+        p_generation: 0 });
+    return !(result.status === 404 && result.body?.code === 'PGRST202');
+  },
+});
+
+
+PLAN.push({
+  version: '20261026140000',
+  file: 'supabase/migrations/20261026140000_official_broadcast.sql',
+  why: 'Huy: publication cho ván official (lịch phát + viewer theo ply đã phát)',
+  exists: async () => (await restGet('/rest/v1/mvp_official_broadcasts?select=*&limit=1')).status === 200,
+});
+
+
 const readSql = (relative) => readFileSync(path.join(root, relative), 'utf8');
 
 /** Management API không hiểu meta-command `\echo`; bỏ các dòng đó trước khi gửi. */
@@ -318,8 +357,12 @@ async function main() {
 
   const missingBaseline = await preflight();
   if (missingBaseline.length) {
-    console.error(`Dừng: baseline thiếu ${missingBaseline.join(', ')} — kiểm tra project/URL trước khi apply.`);
-    process.exit(1);
+    const createdByPlan = missingBaseline.every((table) => table === 'mvp_tournaments' || table === 'mvp_submissions');
+    if (!(bootstrap && createdByPlan)) {
+      console.error(`Dừng: baseline thiếu ${missingBaseline.join(', ')} — kiểm tra project/URL trước khi apply.`);
+      process.exit(1);
+    }
+    console.log(`Bootstrap: thiếu ${missingBaseline.join(', ')} — sẽ tạo bằng migration runtime trong PLAN.`);
   }
 
   const pending = [];

@@ -1,8 +1,8 @@
 /**
  * e2e-online-drill.js — E2E online trên DB dev (.envdev):
  * repo → cutoff capture → snapshot vòng bảng → chấm bằng engine thật → bảng xếp hạng
- * → knockout → vé. GitHub API được thay bằng test double tại lớp `fetch` (không có token/repo thật);
- * Supabase/Storage/engine (trusted-dev) là thật.
+ * → knockout → vé → publication (lịch phát + viewer). GitHub API được thay bằng test double
+ * tại lớp `fetch` (không có token/repo thật); Supabase/Storage/engine (trusted-dev) là thật.
  *
  * An toàn:
  * - Từ chối chạy nếu `SUPABASE_URL` không phải project dev (`OOTV2_E2E_PROJECT_REF`,
@@ -42,6 +42,10 @@ const results = [];
 const check = (name, ok, detail = '') => {
   results.push({ name, ok });
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`);
+};
+/** Việc không chạy được vì thiếu hạ tầng: KHÔNG tính là PASS, cũng không làm sai kết quả drill. */
+const skip = (name, detail = '') => {
+  console.log(`SKIP  ${name}${detail ? ` — ${detail}` : ''}`);
 };
 
 // ---------- GitHub test double (chỉ api.github.com) ----------
@@ -228,8 +232,10 @@ async function main() {
 
     let last = null;
     let knockoutError = null;
+    let knockoutDetail = null;
     try {
-      for (let i = 0; i < 16; i += 1) {
+      // Series dài nhất: 4 ván chính + 2 ván phụ/nhánh; cả giải tối đa ~30 ván ⇒ 120 bước là dư.
+      for (let i = 0; i < 120; i += 1) {
         last = await knockout.openNextKnockoutSeries({ groupRoundId: roundId, level: 'weekly' });
         log('knockout step', { status: last.status, matchId: last.matchId ?? null });
         if (['bracket_complete', 'blocked'].includes(last.status)) break;
@@ -237,11 +243,12 @@ async function main() {
       }
     } catch (error) {
       knockoutError = error.code || error.message;
+      knockoutDetail = error.message;
     }
     if (knockoutError) {
       check('knockout: BLOCKED (không phải PASS)', false, knockoutError === 'capture_roster_mismatch'
         ? 'capture_roster_mismatch — cần migration 20261026120000 (nới roster cho round knockout)'
-        : `${knockoutError} — series không kết thúc được (thường do mọi ván hòa); cần BTC/Khoa chốt tie-break`);
+        : `${knockoutError} — ${knockoutDetail}`);
     } else {
       const bracket = await knockout.bracketProgress({ groupRoundId: roundId, level: 'weekly' });
       check('knockout hoàn tất', last?.status === 'bracket_complete',
@@ -249,8 +256,10 @@ async function main() {
 
       if (last?.status === 'bracket_complete') {
         const tickets = await knockout.knockoutTickets({ groupRoundId: roundId, level: 'weekly' });
-        check('xếp hạng + cấp vé', Array.isArray(tickets.tickets) && tickets.tickets.length === 2,
-          JSON.stringify(tickets.tickets));
+        const awarded = tickets.tickets?.awarded ?? [];
+        check('xếp hạng + cấp vé', Array.isArray(awarded) && awarded.length === 2,
+          JSON.stringify({ awarded: awarded.length, vacant: tickets.tickets?.vacant ?? null,
+            ranked: tickets.ranking?.length ?? 0 }));
         log('ranking head', tickets.ranking?.slice(0, 3));
       }
     }
@@ -267,9 +276,43 @@ async function main() {
       && withReplay.length >= finished.length,
       JSON.stringify({ finished: finished.length, withReplay: withReplay.length }));
 
-    // Publication: hiện chỉ hỗ trợ profile MVP (mvp_matches) — official chưa có lịch phát.
-    check('publication official: CHƯA hỗ trợ (gap, không phải PASS)', false,
-      'mvp_match_broadcasts chỉ tham chiếu mvp_matches; official_games chưa có lịch phát');
+    // Publication official: đặt lịch phát cho ván chung kết đã chấm, kiểm viewer bị cắt ply
+    // và chỉ mở kết quả khi release_mode = full đã phát xong.
+    try {
+      await rows('official_broadcasts', 'limit=1');
+      const broadcasts = await import('../../server/services/officialBroadcasts.js');
+      const [finalRound] = await rows('official_rounds',
+        `event_id=eq.${eventId}&round_id=eq.${encodeURIComponent('ko:final:1')}&select=id,round_id`);
+      if (!finalRound) throw new Error('final_round_not_found');
+      const finalGames = await rows('official_games',
+        `round_pk=eq.${finalRound.id}&select=game_key,result&order=seq.asc`);
+      const scored = finalGames.filter((game) => game.result);
+      const target = scored.at(-1);
+      const windowedArgs = { roundPk: finalRound.id, gameKey: target.game_key, account: admin,
+        body: { starts_at: new Date(Date.now() - 1500).toISOString(), ply_interval_ms: 250,
+          release_mode: 'window' } };
+      await broadcasts.scheduleOfficialGameBroadcast(windowedArgs);
+      const windowed = await broadcasts.officialGameViewerPackage({ roundPk: finalRound.id,
+        gameKey: target.game_key, account: admin });
+      await broadcasts.scheduleOfficialGameBroadcast({ ...windowedArgs,
+        body: { starts_at: windowedArgs.body.starts_at, ply_interval_ms: 250, release_mode: 'full',
+          state: 'ended' } });
+      const revealed = await broadcasts.officialGameViewerPackage({ roundPk: finalRound.id,
+        gameKey: target.game_key, account: admin });
+      check('publication official: window không lộ kết quả, full mở đủ replay',
+        !Object.hasOwn(windowed, 'result') && windowed.events.length <= windowed.visible_plies
+        && revealed.result === target.result
+        && revealed.replay?.events?.length === revealed.events.length,
+        JSON.stringify({ windowedEvents: windowed.events.length, visible: windowed.visible_plies,
+          revealedEvents: revealed.events.length, result: revealed.result }));
+    } catch (error) {
+      if (error.code === 'shared_db_error' || /official_broadcasts/.test(String(error.message))) {
+        skip('publication official (DB dev chưa có mvp_official_broadcasts)',
+          'apply 20261026140000 trên project đang chạy drill rồi chạy lại');
+      } else {
+        check('publication official', false, `${error.code || error.message} — ${error.message}`);
+      }
+    }
   } catch (error) {
     check(`E2E lỗi: ${error.message}`, false);
   } finally {
@@ -277,7 +320,8 @@ async function main() {
     if (eventId) {
       console.log(`[e2e] dữ liệu drill: event=${eventId}${roundId ? ` round=${roundId}` : ''}`);
       console.log('[e2e] dọn tay bằng owner/Management API trên các bảng: '
-        + 'mvp_official_jobs, mvp_official_job_attempts, mvp_official_games, mvp_official_rounds, '
+        + 'mvp_official_broadcasts, mvp_official_jobs, mvp_official_job_attempts, mvp_official_games, '
+        + 'mvp_official_rounds, '
         + 'mvp_cutoff_captures, mvp_github_receipts, mvp_repo_sync_jobs, mvp_repo_connections, '
         + `mvp_submissions, mvp_tournament_entries, mvp_official_setups, mvp_tournaments (event=${eventId})`);
     }

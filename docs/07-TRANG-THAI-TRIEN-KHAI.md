@@ -37,13 +37,13 @@
   progress/standings/publish/freeze/bracket/tickets + cancel/requeue job có lý do; DTO bracket whitelist,
   resolve group round theo event. Route test **6/6**, smoke API thật **12/12** (401/403/404/400, domain error
   `job_not_found`); `npm test` 399/399, build pass. Chi tiết DTO: docs/19 §7.
-- **E2E online trên DB dev (24/10/2026):** `tools/cli/e2e-online-drill.js` — repo→intake→cutoff→vòng bảng
-  **PASS** (12/12 ván, standings, freeze); knockout **mở/tiến series PASS** sau khi apply
-  `20261026120000` trên DB dev; còn chặn ở series **toàn hòa** (`series_invalid`, cần chốt tie-break) và
-  publication official **chưa hỗ trợ**; replay payload ở `mvp_official_job_attempts.replay`.
-  `.env` (DB thật `ftzockzolisecnyhlwej`) **chưa có schema**; token hiện tại **chỉ có quyền trên DB dev**
-  (403 với project thật) ⇒ bundle khởi tạo đã xuất ở `data/production/fresh-database.sql` (gitignored).
-  RC **chưa đạt**.
+- **E2E online (24/10/2026):** `tools/cli/e2e-online-drill.js` trên DB dev — repo→intake→cutoff→vòng bảng
+  12/12→standings→freeze→**knockout complete 4/4→vé 2** đều **PASS** (13/13 check). Đã sửa bug pin ván phụ
+  (`nextSeriesGame` lọc `mainGames`) + test hồi quy; publication official có backend mới
+  (`20261026140000_official_broadcast.sql`, `server/services/officialBroadcasts.js`, 3 route) và đã
+  E2E trên **DB thật** bằng fixture tạm rồi xoá sạch. DB thật `ftzockzolisecnyhlwej` đã bootstrap đủ
+  **19 migration** (smoke PASS). Còn NOT RUN: browser E2E, VM/2-worker thật, restore rehearsal, UI viewer
+  cho publication official (Bảo nối theo contract `docs/19` §7).
 
 
 ## Đã nối DB thật + smoke PASS — 24/10/2026

@@ -44,7 +44,8 @@ Kết quả chính thức phải xuất phát accepted attempt, không chỉ th�
 
 **Bổ sung 24/10/2026 (Khoa, quyết định user):** manual heartbeat + expired-lease fencing
 và accepted engine result/replay 0-ply được chuẩn bị trong migration additive
-`20261026120000_manual_worker_heartbeat.sql` (chưa apply remote). Thay ghi chú lịch sử
+`20261026130000_manual_worker_heartbeat.sql` (đổi tên từ `20261026120000_…` vì trùng version với
+`ko_round_roster_guard`; file chưa apply remote nên đổi tên an toàn). Thay ghi chú lịch sử
 “chờ Huy heartbeat/0-ply” ở bên dưới; xem `KHOA-WORKER-RC.md` về order/gates.
 
 - Intake mode phân biệt online GitHub và manual final; binding nằm ở đợt/vòng, kiểm ở server.
@@ -180,6 +181,18 @@ Nguồn: `server/routes/official.js` (mount trong `server/shared/router.js`), b�
 | `GET /api/local/events/:id/official/tickets` | — | `{event_id, round_id, ranking, tickets}` (409 `bracket_incomplete` nếu chưa xong) |
 | `POST /api/local/official/jobs/:jobId/cancel` | `{reason}` (5..400) | `{job_id, alreadyCancelled, reason}` |
 | `POST /api/local/official/jobs/:jobId/requeue` | `{reason}` (5..400) | `{job_id, status, reason}` |
+| `PUT /api/local/official/rounds/:roundPk/games/:gameKey/broadcast` | `{starts_at, ply_interval_ms?, release_mode?, state?}` | `{broadcast, game}` (admin) |
+| `GET /api/local/official/rounds/:roundPk/games/:gameKey/broadcast` | — | `{broadcast:{phase,visible_plies,total_plies,reveal_result,...}, round_id, game}` (admin) |
+| `GET /api/local/official/rounds/:roundPk/games/:gameKey/viewer?after_seq=` | — | `{schema_version:'official-broadcast.v1', phase, events[], reveal_result, ...}` (thành viên giải) |
+
+Quy tắc publication official (`server/services/officialBroadcasts.js`, migration `20261026140000`):
+
+- Chỉ đặt lịch cho ván **đã có kết quả accepted** (`game_not_scored` 409); `event_id` luôn lấy từ round,
+  trigger `mvp_official_broadcast_guard` chặn `broadcast_event_mismatch` và `broadcast_game_not_scored`.
+- Replay nguồn là `mvp_official_job_attempts.replay` của attempt `succeeded`; `total_plies` = số `events`.
+- Viewer nhận `events` có `seq` đã tới hạn phát, không bao giờ có `result`/`replay` đầy đủ trước khi
+  `reveal_result = true` (chỉ `release_mode='full'` khi đã phát xong hoặc `state='ended'`).
+- `broadcast_not_published` (404) cho đội khi chưa công bố; đội ngoài giải bị `scope_denied`.
 
 **DTO bracket** (whitelist, không lộ snapshot/artifact key):
 
@@ -200,24 +213,31 @@ Nguồn: `server/routes/official.js` (mount trong `server/shared/router.js`), b�
 - Không route nào tự tạo ván/kết quả; `publish` chỉ enqueue đúng ván đã pin qua chain, worker Khoa ghi
   accepted result bằng RPC fence.
 
-### 7.1 Kết quả E2E online trên DB dev (24/10/2026) — knockout mở được, còn 2 gap sản phẩm
+### 7.1 Kết quả E2E online (24/10/2026) — chuỗi repo → vé PASS, publication đã có backend
 
 Chạy `node tools/cli/e2e-online-drill.js` trên `.envdev` (`wsyfcgurnrowcuefwynx`); GitHub API thay bằng
-test double tại lớp `fetch`, Supabase/Storage/engine trusted-dev là thật.
+test double tại lớp `fetch`, Supabase/Storage/engine trusted-dev là thật. Log: `data/e2e-online-ko6.txt`.
 
 | Chặng | Kết quả |
 | --- | --- |
 | repo (duyệt + job) → intake | PASS: 4 receipt `valid` + 4 submission (syntax + protocol smoke thật) |
 | cutoff capture | PASS: 4 đội pin đúng SHA/receipt |
 | mở vòng bảng | PASS: snapshot chính thức, 12 ván |
-| chấm bằng engine | PASS: 12/12 ván accepted; job `succeeded`; replay lưu ở `mvp_official_job_attempts.replay` |
+| chấm bằng engine | PASS: 12/12 ván accepted; job `succeeded`; replay ở `mvp_official_job_attempts.replay` |
 | standings + khóa vòng | PASS: complete (4 qualifiers), `frozen=true` |
-| knockout mở/tiến series | **PASS sau khi apply `20261026120000`** (trước đó `capture_roster_mismatch`) |
-| knockout kết thúc series | **BLOCKED khi cả series toàn hòa**: `resolveOfficialKnockoutSeries` ném `series_invalid` sau extra game ⇒ cần BTC/Khoa chốt tie-break (seed/administrative) thay vì fail-closed |
-| publication official | **CHƯA hỗ trợ**: `mvp_match_broadcasts` chỉ tham chiếu `mvp_matches` |
+| knockout | **PASS**: `bracket_complete`, 4/4 series (semifinal ×2, final, third_place); series toàn hòa được giải bằng **seed** đúng hợp đồng `officialBracket` (không bịa thêm ván) |
+| vé | **PASS**: `awarded=2`, `vacant=0`, xếp hạng đủ 4 đội |
+| replay | PASS: 12/12 ván vòng bảng có `replay_hash` + replay trong attempts |
+| publication official | E2E trên DB dev **SKIP** (dev thiếu migration `20261026140000` và không còn kênh DDL); đã chứng minh riêng: 8 unit test + rehearsal SQL trên DB thật (guards) + **E2E publication trên DB thật** (fixture tạm → window không lộ kết quả → `full` mở đủ 12/12 replay → đội ngoài giải `scope_denied` → xoá sạch, đếm lại 0) |
 
-Ghi chú môi trường: token Management API hiện tại chỉ thấy project dev `wsyfcgurnrowcuefwynx`;
-project thật `ftzockzolisecnyhlwej` trả **403** (không đủ quyền) và schema vẫn rỗng. Bundle khởi tạo
-đã xuất sẵn ở `data/production/fresh-database.sql` (gitignored) để dán vào SQL Editor của project thật.
+**Bug đã sửa (24/10):** `nextSeriesGame` truyền *toàn bộ* kết quả (kể cả ván phụ) vào lần pin ván chính;
+`assignNextOfficialGameColor` từ chối kết quả ngoài danh sách nên series toàn hòa ném
+`series_invalid: Invalid color result` sau ván phụ đầu tiên. Sửa: lọc kết quả theo `mainGames` trước khi pin;
+regression test `tests/officialKnockoutResolve.test.js` (4 main + 2 phụ → thắng theo seed).
+
+**DB thật `ftzockzolisecnyhlwej`:** token mới đã có quyền; đã apply **19 migration** bằng
+`node tools/cli/apply-migrations.js --bootstrap --apply --smoke` (smoke PASS, dữ liệu rỗng), gồm cả
+`20261026130000_manual_worker_heartbeat` (đổi tên từ `…120000` vì trùng version) và
+`20261026140000_official_broadcast`. `db:verify` + `db:check-github` + `db:manual` PASS trên project thật.
 
 Các quyết định sản phẩm đã chốt trong docs/18 không được thay đổi khi điền bảng này.
