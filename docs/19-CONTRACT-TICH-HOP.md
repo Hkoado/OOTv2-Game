@@ -1,12 +1,12 @@
 # Contract phối hợp cho đợt hoàn thiện
 
-**Cập nhật 25/10/2026:** phạm vi và ownership theo [RC online tối giản](20-RC-ONLINE-TOI-GIAN.md).
+**Cập nhật 25/10/2026:** phạm vi và ownership theo [Hướng dẫn vận hành](runbook/BAN-TO-CHUC.md).
 Huy chốt với Bảo hai boundary kết quả đã công bố/cutoff batch bằng DTO + fixture versioned
 trước khi nối; tái sử dụng mapping sẵn có, không coi endpoint đề xuất là đã implement.
 Khoa sở hữu config/package/Vercel và tổng hợp RC; health UI chỉ nối nếu thực sự cần.
 Manual E2E tạm hoãn, mọi nguyên tắc ACL/provenance/fencing bên dưới vẫn giữ nguyên.
 
-Ngày 24/10/2026. Đi cùng [phạm vi chốt](18-CHOT-HOAN-THIEN-VA-NGHIEM-THU.md).
+Ngày 24/10/2026. Đi cùng [Hướng dẫn vận hành](runbook/BAN-TO-CHUC.md).
 Đây là **contract ngữ nghĩa bắt buộc**, không khẳng định các route/RPC dưới đây đã tồn tại.
 Nhóm map vào exports/routes/schema thật trước khi code từng boundary; không tạo tên trùng hoặc
 đường chạy song song chỉ để khớp tài liệu. Bảng mapping ở cuối chưa được coi là contract wire đã xong.
@@ -159,11 +159,11 @@ API không chạy Python; `storage_path`/lease token không nằm trong DTO; int
   300 s (trần claim 900 s); (c) `mvp_manual_final_claim` requeue job hết lease **mà không kiểm
   `attempt`/`max_attempts`**, nên worker bị kill lặp có thể đẩy `attempt` vượt CHECK 10 và làm
   hỏng cả transaction claim — cần migration additive (đề xuất trong
-  [drill manual worker](../DRILL-MANUAL-WORKER.md) §7). Ba điểm này cần Huy quyết định.
+  [drill manual worker](DRILL-MANUAL-WORKER.md) §7). Ba điểm này cần được đối chiếu trước nghiệm thu.
 
   Drill/kiểm chứng: `npm run drill:manual-worker` (9 kịch bản 2 worker, không DB/Python),
   `node tools/cli/worker-health.js` (đã probe 2 bảng manual + `mvp_manual_final_claim`).
-  Nhật ký và giới hạn: [DRILL-MANUAL-WORKER](../DRILL-MANUAL-WORKER.md).
+  Nhật ký và giới hạn: [DRILL-MANUAL-WORKER](DRILL-MANUAL-WORKER.md).
 - Bảo: mọi route admin-only; chỉ hiển thị trạng thái/lý do; nạp file bằng multipart + `x-csrf-token`; không có form nhập điểm tay; không mở upload online cho đội.
 - Migration **đã apply** ngày 24/10/2026 trên project `wsyfcgurnrowcuefwynx` (OTTv2-G5) cùng
   `20261025100000_cutoff_capture.sql`; `npm run db:manual` chạy drill trên schema đã apply (ROLLBACK).
@@ -262,7 +262,7 @@ Các quyết định sản phẩm đã chốt trong docs/18 không được thay
 
 ## 8. Cutoff batch tiến độ/retry và Login throttle phân tán (Huy, 25/10/2026)
 
-Theo điều lệ [RC online tối giản](20-RC-ONLINE-TOI-GIAN.md):
+Theo điều lệ [Hướng dẫn vận hành](runbook/BAN-TO-CHUC.md):
 
 ### 8.1 API Cutoff batch có tiến độ và retry giữ SHA
 - `GET /api/local/events/:id/github-cutoff-status` (admin-only):

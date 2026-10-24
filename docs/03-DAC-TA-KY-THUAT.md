@@ -10,7 +10,7 @@ Thiết kế một coordinator, một database cục bộ và một hoặc hai r
 
 ## 2. Cấu trúc và tái sử dụng
 
-Giao diện theo [tích hợp UI vào repo](05-TICH-HOP-UI-VA-REPO.md) và [style kit giấy da/hầm ngục](ui-style/README.md). Token JSON có hai theme là nguồn thị giác; không suy luật terrain từ ảnh tham khảo. Giữ behavior game cũ, migrate CSS có scope và kiểm tra hồi quy.
+Giao diện theo [tích hợp UI vào repo](05-TICH-HOP-UI-VA-REPO.md) và [Hướng dẫn vận hành](runbook/BAN-TO-CHUC.md). Token JSON có hai theme là nguồn thị giác; không suy luật terrain từ ảnh tham khảo. Giữ behavior game cũ, migrate CSS có scope và kiểm tra hồi quy.
 
 ```text
 src/tournament/           UI hiện có, bổ sung portal/BTC/map/replay

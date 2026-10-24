@@ -1,6 +1,6 @@
 # Kiến trúc chấm trước và phát trận theo lịch — 23/10/2026
 
-> Bổ sung yêu cầu mới: [thiết lập giải chính thức và chia việc 3 người](16-THIET-LAP-CHINH-THUC-VA-CHIA-VIEC.md).
+> Bổ sung yêu cầu mới: [Hướng dẫn vận hành](runbook/BAN-TO-CHUC.md).
 > Giải mới là `campus-setup.v1`, chưa nối runtime. M1–M6 ở đây vẫn là roadmap intake/privacy/viewer;
 > không dùng milestone setup để tuyên bố GitHub intake/scheduler chính thức đã hoàn tất.
 
@@ -8,7 +8,7 @@ Tài liệu này **chốt hướng triển khai**, không phải tuyên bố M1�
 Mốc M0 (baseline + quyết định) đã thực hiện; các mốc sau triển khai dần, mỗi lần một milestone.
 
 **Đối chiếu sau các commit Supabase-only/M1 ngày 23/10:** xem
-[bàn giao tiếp tục](15-BAN-GIAO-TIEP-TUC.md) cho phần đã có, phần thiếu và bước làm tuần tự.
+[Hướng dẫn vận hành](runbook/BAN-TO-CHUC.md) cho phần đã có, phần thiếu và bước làm tuần tự.
 M1 chưa hoàn tất GitHub SHA/job/receipt; chỉ đóng M1 trước, chưa làm tràn M2–M6.
 
 ## 1. Vấn đề và quyết định

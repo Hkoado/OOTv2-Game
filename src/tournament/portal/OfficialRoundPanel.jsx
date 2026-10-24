@@ -226,8 +226,22 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
     try {
       const summary = await syncGithubCutoff(event.id, { teamIds });
       setSyncSummary(summary);
-      setNotice(`Đã xếp ${summary.queued} job; bỏ qua ${summary.skipped}; lỗi ${summary.failed?.length || 0}.`);
-      await loadCutoffStatus();
+      const status = await fetchOfficialCutoffStatus(event.id);
+      if (status) setCutoffStatus(status);
+      else setCutoffStatus(null);
+      const failed = summary.failed?.length || 0;
+      const remaining = Number.isFinite(status?.pending_count)
+        ? status.pending_count
+        : Number.isFinite(summary.remaining) ? summary.remaining : null;
+      if (summary.complete === true && status?.complete !== false && remaining === 0 && failed === 0) {
+        setNotice(`Đã ghim toàn bộ: thêm ${summary.queued} đội; bỏ qua ${summary.skipped}.`);
+      } else if (summary.budget_exhausted || remaining > 0 || failed > 0 || status?.busy_count > 0) {
+        const stillPending = remaining ?? 'chưa xác định';
+        setNotice(`Batch này đã xử lý ${summary.queued}; bỏ qua ${summary.skipped}; lỗi ${failed}; còn ${stillPending} đội chưa ghim. Hãy làm mới hoặc retry batch tiếp theo.`);
+      } else {
+        setNotice(`Batch này đã xử lý ${summary.queued}; bỏ qua ${summary.skipped}. Chưa có xác nhận authoritative rằng toàn bộ đội đã ghim; hãy làm mới tiến độ.`);
+      }
+      if (!status) setError('Không tải lại được trạng thái authoritative cutoff. Kết quả batch chưa xác nhận đầy đủ; hãy làm mới tiến độ.');
     } catch (err) {
       setError(err.message || 'Không chốt được GitHub.');
     } finally {
@@ -788,16 +802,26 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
               ) : (
                 <>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <span className="tt-muted">Tiến độ series: </span>
-                      <strong>{bracket.resolved} / {bracket.expected} series</strong>
-                    </div>
-                    <Badge tone={bracket.complete ? 'success' : 'live'}>
-                      {bracket.complete ? 'Knockout hoàn tất' : 'Đang thi đấu'}
-                    </Badge>
+                    {(admin || bracket.published !== false) && (
+                      <>
+                        <div>
+                          <span className="tt-muted">Tiến độ series: </span>
+                          <strong>{bracket.resolved} / {bracket.expected} series</strong>
+                        </div>
+                        <Badge tone={bracket.complete ? 'success' : 'live'}>
+                          {bracket.complete ? 'Knockout hoàn tất' : 'Đang thi đấu'}
+                        </Badge>
+                      </>
+                    )}
                   </div>
 
-                  {bracket.next && (
+                    {!admin && bracket.published === true && bracket.complete === false && (
+                      <Alert tone="info" title="Knockout đang được công bố theo lịch">
+                        Trạng thái hoàn tất và các cặp đấu chưa công bố sẽ không hiển thị trước khi được mở.
+                      </Alert>
+                    )}
+
+                  {admin && bracket.next && (
                     <Alert tone="info" title={`Series kế tiếp: ${bracket.next.match_id}`}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                         <div>
@@ -817,7 +841,7 @@ export default function OfficialRoundPanel({ event, teams = [], admin, busy, act
                     </Alert>
                   )}
 
-                  {bracket.waiting && (
+                  {admin && bracket.waiting && (
                     <Alert tone="warning">Đang chờ giải quyết series điều kiện trước khi mở cặp đấu mới.</Alert>
                   )}
 

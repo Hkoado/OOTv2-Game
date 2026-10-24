@@ -64,10 +64,10 @@ async function eventLevel(eventId, api) {
   return LEVELS.includes(cfg?.level) ? cfg.level : 'weekly';
 }
 
-function bracketView({ eventId, groupRoundId: roundId, progress }) {
+function bracketView({ eventId, groupRoundId: roundId, progress, outcomes = progress.outcomes || {} }) {
   const plan = progress.plan;
   const series = [];
-  for (const [matchId, outcome] of Object.entries(progress.outcomes || {})) {
+  for (const [matchId, outcome] of Object.entries(outcomes)) {
     series.push({
       match_id: matchId,
       series_id: outcome.seriesId,
@@ -83,9 +83,9 @@ function bracketView({ eventId, groupRoundId: roundId, progress }) {
     level: plan.level,
     seed: plan.seed,
     expected_matches: progress.expected,
-    resolved_matches: progress.resolved,
-    waiting: progress.waiting,
-    next: progress.next ? {
+    resolved_matches: Object.keys(outcomes).length,
+    waiting: Object.keys(outcomes).length === progress.expected ? progress.waiting : null,
+    next: Object.keys(outcomes).length === progress.expected && progress.next ? {
       match_id: progress.next.matchId,
       stage: progress.next.stage,
       series_id: progress.next.series?.id || null,
@@ -196,10 +196,20 @@ export function officialRouter({ api = liveOfficialApi } = {}) {
           }
         }
       }
-      sanitizedProg = { ...bracketProg, outcomes: sanitizedOutcomes };
+      // Progress internals also reveal accepted but unrevealed games (resolved count,
+      // next series and waiting reason). For members derive progress only from visible
+      // outcomes; admin keeps the full operational DTO on the admin route.
+      sanitizedProg = {
+        ...bracketProg,
+        outcomes: sanitizedOutcomes,
+        resolved: Object.keys(sanitizedOutcomes).length,
+        next: null,
+        waiting: null,
+      };
     }
 
-    res.json({ published: true, ...bracketView({ eventId: req.params.id, groupRoundId: roundId, progress: sanitizedProg }) });
+    res.json({ published: true, ...bracketView({ eventId: req.params.id, groupRoundId: roundId,
+      progress: sanitizedProg, outcomes: sanitizedProg.outcomes }) });
   });
 
   router.get('/events/:id/official/published/tickets', requireSession, async (req, res) => {

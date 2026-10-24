@@ -5,7 +5,7 @@ Tháng/kỳ, knockout, offline và VM production làm sau (A4 đã chốt).
 
 **Checkpoint 24/10:** code cutoff mới cần migration
 `20261025100000_cutoff_capture.sql` (chưa apply remote). Xem
-[readiness](PRODUCTION-READINESS.md) trước khi chạy. Các kết quả DB drill cũ bên
+[Hướng dẫn vận hành](runbook/BAN-TO-CHUC.md) trước khi chạy. Các kết quả DB drill cũ bên
 dưới không chứng minh migration mới đã được nghiệm thu trên Supabase.
 
 ## Luồng đã nối

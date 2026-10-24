@@ -1,388 +1,281 @@
-# OOTv2 · Cổng giải đấu bot
+# OOTv2 — Nền tảng thi đấu bot Oẳn Tù Tì
 
-## Luật hiện hành và 5 map luyện tập — 24/10/2026
+OOTv2 là ứng dụng web tổ chức giải đấu bot lập trình trên bàn cờ chiến thuật **9 × 9**. Mỗi đội xây dựng bot Python tự xếp quân và lựa chọn nước đi. Hệ thống tiếp nhận bài qua GitHub, khóa phiên bản thi đấu, chấm bằng worker riêng, tính kết quả và phát diễn biến trận đấu theo lịch của ban tổ chức.
 
-- Ván Campus mới dùng `map.v2` / `ott-campus.v2`: **Lửa cản Bao, Nước cản Kéo,
-  Bụi cây cản Búa, Vực cản tất cả**. Áp dụng khi đặt, đổi chỗ, đi/bắt quân và cắt góc.
-- Trang đăng nhập → **Chơi offline**: vẫn tự xếp tay, nhấc/đổi quân, Xếp nhanh, xác nhận.
-  Hai người lần lượt thao tác cùng máy; bàn ẩn đội hình đối thủ đến khi cả hai xác nhận.
-  Đây là riêng tư hiển thị trên máy dùng chung, không phải sandbox hay bảo mật P2P.
-- 5 map trong menu offline và thiết lập map giải: `learn-fire`, `learn-water`, `learn-bush`,
-  `learn-chasm`, `campus-four-terrains`. Map cuối đủ cả 4 loại, gồm địa hình ở sân nhà.
-  Tải JSON ngay trên bàn offline hoặc lấy trong `examples/maps/`; tái sinh bằng
-  `node tools/cli/generate-sample-maps.js`. File map v1 cũ chỉ là fixture lịch sử.
-- **Bot phải tự xếp quân bằng code**: viết sẵn cả `setup(obs)` và `move(obs)` trong một
-  file Python. Không cần hardcode đội hình: dùng `you`, map và `availableSquaresByType`
-  để trả đủ 9 vị trí riêng biệt. Setup thiếu/sai bị xử lỗi, không có người/xếp nhanh điền hộ.
-  Nút tải bot mẫu trên cổng Campus lấy đúng `examples/campus_bot.py` (`bot.v1` persistent),
-  không lấy mẫu MVP stateless tại `/api/sample-bot`.
-- Giải mới chỉ lưu map v2; map/replay v1 và UI phòng cũ không được mount vẫn giữ khả năng
-  đọc/hồi quy lịch sử. Không mở worker MVP cho v2. Runtime giải chính thức/lưu-công bố màu
-  và nghiệm thu Supabase thật vẫn là các hạng mục riêng, chưa hoàn tất.
+Dự án kết hợp **cổng quản lý giải**, **engine luật cờ**, **pipeline chấm bot**, **bảng xếp hạng/knockout** và **trình xem trận đấu**. Người dùng cũng có thể chơi hai người trên cùng máy để tìm hiểu luật và thử bản đồ.
 
-Demo bot tin cậy với map đủ 4 địa hình (output phải chưa tồn tại):
+> **Phạm vi bàn giao:** mã nguồn phục vụ thẩm định và demo nội bộ có kiểm soát. Build/test thành công không đồng nghĩa đủ điều kiện mở dịch vụ chấm code không tin cậy. Hướng dẫn triển khai và vận hành nằm trong [runbook BTC](docs/runbook/BAN-TO-CHUC.md).
 
-```powershell
-node tools/cli/demo-campus-bots.js --trusted-dev examples/maps/campus-four-terrains.json "$env:TEMP/campus-v2-replay-new.json"
-node tools/cli/verify-replay.js "$env:TEMP/campus-v2-replay-new.json"
-npm test
-npm run build
-node tools/cli/smoke-ui-kit.mjs
-```
+## Mục lục
 
-## Campus persistent trusted-dev — checkpoint 24/10/2026
+1. [Mục tiêu và chức năng](#1-mục-tiêu-và-chức-năng)
+2. [Luật và bot Python](#2-luật-và-bot-python)
+3. [Công nghệ và kiến trúc](#3-công-nghệ-và-kiến-trúc)
+4. [Cấu trúc dự án](#4-cấu-trúc-dự-án)
+5. [Cài đặt và chạy](#5-cài-đặt-và-chạy)
+6. [Kiểm thử](#6-kiểm-thử)
+7. [Triển khai và an toàn](#7-triển-khai-và-an-toàn)
+8. [Tài liệu và kịch bản duyệt](#8-tài-liệu-và-kịch-bản-duyệt)
 
-Lõi `bot.v1` và demo hai bot mẫu chạy độc lập, **chưa nối worker/DB/Start** và không có sandbox OS.
-Không thay profile/replay MVP hiện có. Chỉ dùng bot mẫu hoặc code nội bộ tin cậy:
+## 1. Mục tiêu và chức năng
 
-```powershell
-node --test tests/campusRuntime.test.js
-node tools/cli/demo-campus-bots.js --trusted-dev examples/maps/campus-arena.json "$env:TEMP/oot-campus-bots-new.json"
-node tools/cli/verify-replay.js "$env:TEMP/oot-campus-bots-new.json"
-```
+### Đối tượng sử dụng
 
-Output phải chưa tồn tại. Đọc [giới hạn và contract runtime](docs/CAMPUS-TRUSTED-RUNTIME.md)
-trước khi sử dụng; trusted-dev không chứng minh CPU/RAM accounting hoặc an toàn code sinh viên.
+- **Đội thi:** phát triển thuật toán Python, khai báo repository, theo dõi biên nhận và kết quả được công bố.
+- **Ban tổ chức (BTC):** quản lý tài khoản/đội/giải, map, hạn nộp, duyệt repository, điều hành vòng đấu và công bố kết quả.
+- **Người vận hành:** chuẩn bị Supabase, worker Linux, sandbox, migration, sao lưu và phục hồi.
+- **Hội đồng duyệt:** xem kiến trúc, mã nguồn, bộ kiểm thử, hướng dẫn demo và giới hạn thực tế.
 
-## Thiết lập giải chính thức — checkpoint 23/10/2026
+### Chức năng có trong mã nguồn
 
-Tạo giải mới theo tuần/tháng/kỳ, roster tối đa 56 đội, cutoff, map chính/dự phòng và dự kiến
-chia bảng có seed; không tạo mới giải MVP 8 đội. Đây là **setup foundation**, chưa bật chấm
-chính thức bằng worker MVP. Cần operator áp migration `20261023160000_official_setup.sql`
-trên project test trước khi rollout API (chưa apply remote trong đợt này).
-Đọc [trạng thái, kế hoạch GitHub và chia việc Huy/Bảo/Khoa](docs/16-THIET-LAP-CHINH-THUC-VA-CHIA-VIEC.md).
-Hướng dẫn 8 đội/Start bên dưới chỉ còn áp dụng giải MVP lịch sử, không phải luồng tạo mới.
+| Nhóm | Nội dung |
+| --- | --- |
+| Tài khoản | Đăng nhập theo phiên, admin/đội, kiểm quyền theo giải, CSRF và giới hạn đăng nhập |
+| Thiết lập giải | Giải tuần/tháng/kỳ, danh sách đội, seed, chia bảng, cutoff, map chính/dự phòng và khóa map đã công bố |
+| Nộp bot GitHub | Repository được BTC duyệt; commit SHA, job kiểm tra, receipt và trạng thái lỗi |
+| Khóa phiên bản | Snapshot nguồn/map/seed/protocol/runtime/budget; retry không tự đổi bài đã pin |
+| Chấm giải | Worker Campus riêng, vòng bảng, phân màu, điểm, knockout và vé đi tiếp |
+| Công bố | Kết quả kín trước công bố; phát nước đi theo lịch, viewer/replay và kiểm quyền server |
+| Chơi cùng máy | Xếp quân thủ công, setup kín, năm map Campus v2 và lịch sử nước đi |
+| Công cụ | Kiểm map/replay, bot mẫu, health, migration, bộ cài VM và script kiểm thử |
 
-## Runtime Supabase dùng chung — **DB duy nhất** (23/10/2026)
+**Chung kết thủ công** có mã nguồn admin-only để nạp/chọn/khóa bot và chấm qua API/Supabase/worker có kết nối. Nghiệm thu đầu-cuối module này đang hoãn; đây **không phải** giải hoạt động hoàn toàn không Internet.
 
-Từ 23/10/2026 driver SQLite đã bị **bỏ hoàn toàn**: API, worker và công cụ chỉ nói chuyện với
-Supabase (Postgres + Storage). Không còn `better-sqlite3`, `OOTV2_DB_DRIVER`, `OOTV2_DB_PATH`
-hay file `*.sqlite`; thiếu `SUPABASE_*` thì API/worker **dừng ngay** thay vì chạy DB khác.
-Đọc [hướng dẫn DB và migration](docs/12-SUPABASE-DATABASE.md) trước khi chạy.
-Sao chép `.env.example` thành `.env` (**DB chính thức**) và điền credential **backend-only**
-trên máy BTC tin cậy; tuyệt đối không đặt service-role key trong biến `VITE_*` hoặc gửi cho bot.
-Drill/kiểm thử trên DB dev thì tạo `.envdev` riêng rồi chạy `npm run dev:api:dev-db`,
-`npm run dev:worker:dev-db`, `npm run worker:official:dev-db`; `.env` luôn là cấu hình chính thức.
+Mã phòng/P2P và giải MVP cũ được giữ để tương thích/hồi quy. Entrypoint hiện tại chỉ mount **CampusPortal**, không mở giao diện LegacyApp.
 
-Từ thư mục repository, chạy ba terminal: `npm run dev`, `npm run dev:api`,
-`npm run dev:worker`. Có thể chạy nhiều worker trên các máy tin cậy với cùng DB;
-API vẫn chỉ bind loopback vì chưa có sandbox OS. Tài khoản và password hash cũ được giữ,
-session cũ bị bỏ: đăng nhập lại. Bucket bot private giữ profile MVP **256 KiB/200 plies**
-(xem `docs/07-TRANG-THAI-TRIEN-KHAI.md`); không thay luật hoặc runner sang Campus trong đợt này.
+## 2. Luật và bot Python
 
-## Đóng gói worker cho máy Windows khác (24/10/2026)
+### Bàn cờ Campus v2
 
-Máy Windows khác pull repo có thể tự dựng VM chấm bằng script:
+- Bàn **9 × 9**, hai bên Đỏ/Xanh; mỗi bên 9 quân: 3 Búa (rock), 3 Bao (paper), 3 Kéo (scissors).
+- Búa thắng Kéo, Kéo thắng Bao, Bao thắng Búa.
+- Di chuyển một ô theo tám hướng, tuân thủ ô chiếm chỗ, địa hình và luật cắt góc của engine.
+- Đỏ đi trước. Thắng bằng chiếm nhà chính hoặc loại hết một loại quân đối thủ; judge xử lý nước sai, timeout và các điều kiện kết thúc.
+- Setup bot kín: không nhận đội hình đối phương trước khi hai bên hoàn tất; không tự điền hộ setup thiếu/sai.
 
-```powershell
-Copy-Item tools\vm\worker.config.example.json tools\vm\worker.local.json
-powershell -File tools\vm\Worker.ps1 -Action doctor
-powershell -File tools\vm\Worker.ps1 -Action install
-powershell -File tools\vm\Worker.ps1 -Action start
-```
+| Địa hình | Loại quân bị cản |
+| --- | --- |
+| Lửa | Bao |
+| Nước | Kéo |
+| Bụi cây | Búa |
+| Vực | Tất cả |
 
-Gói này chạy **worker GitHub intake** (`npm run worker:github`): tải source theo
-SHA, kiểm tra tĩnh + cú pháp Python, upload Storage private. **Chưa có** worker
-chấm trận Campus và service `ootv2-official-worker` không tồn tại; `server/worker.js`
-(MVP) không được cài, không được enable. Đọc
-[đóng gói worker](docs/WORKER-PACKAGING.md) trước khi cài.
+Năm map luyện tập: learn-fire, learn-water, learn-bush, learn-chasm, campus-four-terrains. Map/replay v1 lịch sử không bị chuyển luật ngầm. Xem [luật chi tiết](docs/17-LUAT-DIA-HINH-VA-XEP-KIN.md).
 
-## Nền tảng DB Supabase (22/10/2026)
+### Chuẩn bot
 
-Đã tạo 13 bảng quản lý người chơi/đội/giải/vòng/trận trên project OTTv2-G5.
-Xem [schema, quyền truy cập và kiểm thử](docs/12-SUPABASE-DATABASE.md).
-API/worker MVP dùng các bảng `mvp_*` riêng; chưa tích hợp runtime Campus hoặc đồng bộ offline.
-Migration nằm trong `supabase/migrations/`; SQL smoke trong `supabase/tests/` chạy
-toàn bộ bằng SQL Editor và tự rollback dữ liệu thử. Không chạy lại migration đã áp dụng.
+- Một file **bot.py** UTF-8 tại gốc repository, tối đa **256 KiB**, chỉ thư viện chuẩn Python; không ZIP/package hoặc cài pip.
+- Protocol Campus **bot.v1**, JSON Lines qua stdin/stdout, process persistent; viết cả setup và move, flush mỗi phản hồi, không in debug ra stdout.
+- Setup tự trả đủ 9 quân ở 9 vị trí hợp lệ theo màu/map; không xếp tay thay bot.
+- Mẫu hiện hành: [campus_bot.py](examples/campus_bot.py). Mẫu sample_bot.py là protocol MVP stateless lịch sử, không thay bot Campus.
+- Budget mặc định Campus: **400 plies**, setup wall 5 giây, move wall 1 giây, tổng phản hồi 45 giây, CPU 30 giây, RAM 256 MiB, tối đa 32 process. Budget được pin/hash trong runtime; không suy ra mọi chỉ số đã nghiệm thu trên production.
+- Profile MVP cũ vẫn giữ **200 plies** và protocol/replay riêng.
 
-## Xem trực tiếp và chạy công khai một origin (22/10/2026)
+## 3. Công nghệ và kiến trúc
 
-- API Express phục vụ luôn `dist/` + SPA fallback → web và API cùng cổng 3001,
-  phù hợp mở Internet bằng **Cloudflare Tunnel** (miễn phí) từ máy tại nhà.
-- Khán giả ẩn danh xem mọi ván đang đấu tại `/#/live` (bàn cờ + nước đi, poll 2 giây).
-  Log bot (stdout/stderr) chỉ đội sở hữu và admin đọc được qua `/api/local/live/...`.
-- Chạy thử nhanh (Supabase là DB duy nhất; cần `.env` có `SUPABASE_*`):
+| Thành phần | Công nghệ |
+| --- | --- |
+| Frontend | React 19, Vite 6, JavaScript ESM, CSS, UI kit và font đi kèm |
+| API | Node.js >=22.12, Express 5, REST và polling |
+| Dữ liệu | Supabase PostgreSQL + Storage private; không SQLite |
+| Bot | Python >=3.12, thư viện chuẩn |
+| Worker | Node.js riêng, Campus runtime và adapter sandbox Linux |
+| Cô lập | Script namespace/cgroup/seccomp, attestation; cần nghiệm thu đúng release |
+| Kiểm thử | Node built-in test runner, SQL smoke và script browser |
+| Đóng gói | Web/API trên Vercel; worker trên VM Linux riêng, công cụ Windows/Hyper-V |
 
-```powershell
-npm run build
-npm start                         # API + web: http://127.0.0.1:3001
-npm run start:worker              # terminal khác
-node tools/cli/create-admin.js    # lần đầu: tạo tài khoản admin
-```
+~~~text
+Trình duyệt React
+        │ REST /api, cookie session + CSRF
+        ▼
+Express API ─── metadata repository/SHA ─── GitHub
+        │
+        ▼
+Supabase PostgreSQL + Storage private
+        ▲                         ▲
+        │ job/receipt             │ snapshot/lease/result/replay
+GitHub intake worker       Official Campus worker
+        │                         │
+ tải bot đúng SHA          Engine + Linux sandbox
+                                  │ JSONL
+                              Python bot A/B
+~~~
 
-Sau đó đăng nhập ở `http://127.0.0.1:3001/#/login`, tạo 8 đội + upload bot, tạo giải và Start;
-worker tự nhặt ván. Xem trực tiếp tại `/#/live`.
-Hướng dẫn tunnel, biến `.env`, Windows Service và
-giới hạn bảo mật: [docs/13-LIVE-VA-TRIEN-KHAI.md](docs/13-LIVE-VA-TRIEN-KHAI.md).
+API không chạy Python và không clone repository. Worker kiểm artifact/hash đã pin và ghi kết quả qua lease/fencing. Trình duyệt chỉ hiển thị dữ liệu được server cho phép, không quyết định thắng thua. Health API không chứng nhận worker/sandbox sẵn sàng.
 
-## Chơi thử và chuẩn bị giải
+## 4. Cấu trúc dự án
 
-- Trang đăng nhập có **Chơi offline**: hai người cùng máy, không tài khoản/API, 5 map địa hình v2 mẫu.
-- Admin tạo giải bằng tên, thêm đội/map sau. Runtime lưu **Supabase**; không còn snapshot SQLite cục bộ.
-- Thư mục snapshot chưa phải bundle backup. Worker MVP chỉ chạy map không ô cản.
-- [Bàn giao và chia việc tiếp theo](docs/10-BAN-GIAO-OFFLINE-VA-THU-MUC-GIAI.md).
+Workspace bàn giao: **D:\OOTv2-Game**. Cây dưới dùng đường dẫn tương đối với gốc đó. Danh mục **toàn bộ file** được trình bày trong [PROJECT-STRUCTURE.md](docs/PROJECT-STRUCTURE.md).
 
-Ứng dụng hiện **tournament-first**: mở `http://127.0.0.1:3000/` **luôn** vào màn hình đăng nhập.
-Đăng nhập bằng tài khoản BTC cấp; không có tab phòng chơi/spectator trên giao diện chính.
-
-```powershell
-node tools/cli/create-admin.js   # tạo admin đầu tiên (nếu chưa có)
-npm run build
-node tools/cli/start-local.js    # API :3001 + worker + web :3000
-```
-
-- Thông tin admin local nằm trong `data/local-admin-credentials.txt` (không commit/chia sẻ).
-- Đội: **Tổng quan**, **Đội của tôi**, **Bot & bài nộp**, **Giải đấu**, **Luật & hướng dẫn**.
-- Admin: **Tổng quan**, **Đội & tài khoản**, **Bài nộp**, **Quản lý giải**, **Luật & vận hành**.
-- UI phòng chơi tay, spectator và Tournament MVP cũ được giữ nguyên trong `src/LegacyApp.jsx`
-  nhưng **không được mount**; không còn mở bằng query string.
-- Cổng giải đấu: `src/App.jsx` → `src/tournament/portal/CampusPortal.jsx` → `LocalCore.jsx`.
-  Theme/token lấy từ `docs/ui-style/tokens.json`; CSS tại `src/tournament/portal/tournament.css`.
-- Polling 4 giây, không chồng request, tự dừng khi tab ẩn; ReplayBoard được tải theo nhu cầu.
-- Chỉ dùng bot nội bộ tin cậy trên máy thử nghiệm; chưa có sandbox, tích hợp runtime Supabase hoặc GitHub sync.
-- Core dùng profile MVP 8 đội/30 ván, không phải Campus production. API legacy không auth tắt mặc định.
-
-Hướng dẫn vận hành chi tiết: [localhost và phân công 4 người](docs/09-LOCAL-CORE-VA-BAN-GIAO-4-NGUOI.md).
-Tài liệu Campus: [mục lục](docs/README.md), [trạng thái triển khai](docs/07-TRANG-THAI-TRIEN-KHAI.md),
-[hướng chấm trước và phát trận](docs/14-KIEN-TRUC-CHAM-TRUOC-VA-PHAT-TRAN.md).
-
-> Các mục 1–… bên dưới mô tả luật chơi và giao diện phòng/spectator gốc. Chúng vẫn đúng về luật
-> và còn mã nguồn trong `LegacyApp.jsx`, nhưng không phải màn hình khởi động hiện tại.
-
----
-
-# Oẳn Tù Tì v2 (OTTv2) - Online Multiplayer Strategy Match
-
-Tài liệu Campus mới: [mục lục giải đấu/UI](docs/README.md),
-[trạng thái triển khai](docs/07-TRANG-THAI-TRIEN-KHAI.md).
-Hiện có nền tảng engine `ott-campus.v1` và CLI kiểm map/replay; API/worker/UI giải đấu bên dưới
-vẫn là MVP 8 bot. Dùng `npm run test:engine` để kiểm cả luật legacy và Campus;
-`npm run map:validate -- examples/maps/campus-arena.json` để kiểm map mẫu.
-
-Trò chơi cờ chiến thuật **Oẳn Tù Tì v2 (OTTv2)** trên bàn cờ **9x9** dành cho 2 người chơi thi đấu trực tuyến thời gian thực qua phòng, kèm chế độ **Người xem (Spectator)**. Dự án được tối ưu để push lên GitHub và deploy trực tiếp lên Vercel.
----
-
-## 1. Giới thiệu & Điểm nổi bật
-
-- **Công nghệ Realtime:** Sử dụng thư viện **playhtml** (`playhtml.fun`) với hạ tầng PartyKit và CRDT state sync, cho phép chơi nhiều người cùng lúc mà không cần tự dựng server Node.js backend cồng kềnh.
-- **Hệ thống Phòng chơi & Người xem (Spectator):**
-  - Người chơi có thể tạo phòng mới hoặc vào phòng bằng mã.
-  - Mỗi phòng hỗ trợ đúng 2 người chơi: **Đội Đỏ (P1)** và **Đội Xanh (P2)**.
-  - Khi phòng đã đủ 2 người, tất cả người vào sau sẽ tự động trở thành **Người xem (Spectator)** theo dõi trận đấu theo thời gian thực để tránh xung đột nước đi.
-- **Thiết kế tối giản, theme sáng:**
-  - Tông màu trắng chủ đạo kết hợp màu xanh lá cây thanh lịch, hiện đại.
-  - Quân cờ biểu tượng Đấm ✊ / Lá ✋ / Kéo ✌️ rõ ràng, sắc nét với viền Đỏ và Xanh dương.
-  - Trải nghiệm phẳng, sạch sẽ, không nhấp nháy, không hiệu ứng neon lóa mắt.
-
----
-
-## 2. Luật chơi chi tiết (Bám sát quy chuẩn)
-
-### 2.1 Bàn cờ & Phân vùng
-- **Kích thước bàn cờ:** 9x9 (81 ô). Tọa độ cột `a` đến `i`, hàng `1` đến `9`.
-- **Sân nhà Đội Đỏ:** Gồm đúng **28 ô** quanh Nhà chính `a1` (thỏa mãn `col + row <= 8`).
-- **Sân nhà Đội Xanh:** Gồm đúng **28 ô** quanh Nhà chính `i9` (thỏa mãn `col + row >= 12`).
-- **Ranh giới giữa sân:** Là 3 đường chéo ở giữa bàn cờ gồm đúng **25 ô** (thỏa mãn `col + row ∈ {9, 10, 11}`). *Không được phép đặt quân vào ranh giới trong giai đoạn xếp quân.*
-
-### 2.2 Quân cờ & Giai đoạn Xếp quân (30 giây)
-- Mỗi đội có đúng **9 quân cờ**:
-  - **3 quân Đấm (Búa ✊)**
-  - **3 quân Lá (Bao ✋)**
-  - **3 quân Kéo (✌️)**
-- **Thời gian xếp quân:** 30 giây cho mỗi đội.
-  - **Đội Đỏ** được đi trước và phải xếp quân trước trong 28 ô sân nhà của mình.
-  - **Đội Xanh** xếp quân sau. Đặc biệt: **Đội Xanh ĐƯỢC NHÌN THẤY toàn bộ vị trí và loại quân Đội Đỏ đã xếp** trên bàn cờ để dàn thế trận đối phó.
-  - Hết 30 giây nếu chưa xếp xong, hệ thống tự động đặt ngẫu nhiên số quân còn lại vào các ô trống hợp lệ trong sân nhà.
-
-### 2.3 Quy tắc Di chuyển & Ăn quân
-- **Di chuyển:** Mỗi quân cờ được di chuyển tối đa **1 ô theo 8 hướng** (như quân Vua trong cờ vua).
-- **Luật ăn quân Oẳn Tù Tì:**
-  - **Đấm (Búa ✊)** thắng **Kéo (✌️)**
-  - **Kéo (✌️)** thắng **Lá (Bao ✋)**
-  - **Lá (Bao ✋)** thắng **Đấm (Búa ✊)**
-- **Hai quân cùng loại:** Không thể ăn nhau mà chỉ đứng **chặn đường nhau** (không thể đi vào ô của nhau).
-- **Chặn nước đi tự sát:** Hệ thống ngăn chặn hoàn toàn nước đi vào ô có quân địch mạnh hơn mình (quân cờ chỉ có thể đi vào ô trống hoặc ô có quân địch yếu hơn để ăn quân).
-
-### 2.4 Điều kiện Chiến thắng
-Người chơi giành chiến thắng ngay lập tức khi thỏa mãn **1 trong 2** điều kiện sau:
-1. **Đột kích Nhà chính:** Đội Đỏ đưa 1 quân bất kỳ đến được ô **`i9`** (Nhà chính Đội Xanh), HOẶC Đội Xanh đưa 1 quân bất kỳ đến được ô **`a1`** (Nhà chính Đội Đỏ).
-2. **Tiêu diệt sạch 1 loại quân:** Ăn hết sạch hoàn toàn cả 3 quân của cùng một loại của đối phương (ví dụ ăn sạch 3 Kéo, hoặc 3 Búa, hoặc 3 Bao của địch).
-
----
-
-## 3. Cấu trúc Dự án
-
-```text
-OTTv2-group5/
-├── index.html              # HTML entrypoint chuẩn SEO & Google Fonts
-├── package.json            # Dependencies: React 19, playhtml, lucide-react, vite
-├── vite.config.js          # Cấu hình Vite dev server và build
-├── vercel.json             # Cấu hình Vercel rewrite SPA routing
-├── .gitignore              # Bỏ qua node_modules và dist
+~~~text
+OOTv2-Game/
+├── api/                     # Entrypoint Express trên Vercel
+├── docs/                    # Đặc tả, hướng dẫn vận hành, review, danh mục file
+│   ├── runbook/             # Hướng dẫn BTC và đội thi
+│   └── ui-style/            # Style, token và tham khảo asset
+├── examples/                # Bot Python mẫu
+│   └── maps/                # Map v2 và fixture v1 lịch sử
+├── public/                  # Tài nguyên tĩnh public
+├── sandbox/
+│   ├── fixtures/            # Kiểm tài nguyên/cô lập; không chạy trên host
+│   └── linux/               # Runner, preflight, selftest, seccomp, attestation
+├── server/
+│   ├── contracts/           # Bot protocol, schema map, snapshot/hash
+│   ├── judge/               # Engine/runner Campus, MVP và sandbox adapter
+│   ├── lib/                 # HTTP, origin, throttle, phân bảng/màu
+│   ├── middleware/          # Upload
+│   ├── replay/              # Replay Campus
+│   ├── routes/              # API official, manual, live
+│   ├── services/            # Intake, cutoff, điều phối, kết quả, phát sóng
+│   ├── shared/              # Supabase, auth, artifact, queue và RPC adapter
+│   ├── app.js               # Express app
+│   ├── config.js            # Env và giới hạn
+│   ├── index.js             # Khởi động API
+│   ├── githubWorker.js      # Worker intake GitHub
+│   ├── officialWorker.js    # Worker Campus / manual
+│   └── worker.js            # Worker MVP lịch sử
 ├── src/
-│   ├── main.jsx            # Mount React
-│   ├── App.jsx             # Điều phối Sảnh chờ, Phòng chơi, Modals
-│   ├── index.css           # Design system, theme sáng, màu xanh lá chủ đạo
-│   ├── game/
-│   │   ├── constants.js    # Bàn cờ 9x9, 28 ô sân nhà, 25 ô ranh giới, rules mapping
-│   │   ├── rules.js        # Logic nước đi 8 hướng, ăn quân, chặn tự sát, check thắng
-│   │   └── gameState.js    # State machine: Waiting, Setup Red/Blue, Playing, Finished
-│   ├── components/
-│   │   ├── Header.jsx      # Thanh điều hướng, copy mã phòng, nút luật chơi
-│   │   ├── Lobby.jsx       # Sảnh chờ, tạo phòng mới, vào bằng mã, xem phòng
-│   │   ├── Board.jsx       # Bàn cờ 9x9 hiển thị tương tác nước đi, ranh giới, nhà chính
-│   │   ├── Square.jsx      # Ô cờ, phân màu 3 khu vực sân, gợi ý nước đi
-│   │   ├── Piece.jsx       # Quân cờ tròn tối giản ✊ ✋ ✌️
-│   │   ├── SetupPanel.jsx  # Bảng xếp 9 quân trong 30s có đồng hồ đếm ngược
-│   │   ├── PlayerCard.jsx  # Thông tin người chơi, lượt đi, bộ đếm quân còn sống
-│   │   ├── MoveHistory.jsx # Biên bản nước đi và lịch sử ăn quân
-│   │   ├── GameOverModal.jsx # Thông báo kết quả và lý do chiến thắng
-│   │   └── RulesModal.jsx  # Bảng quy chuẩn luật chơi chi tiết
-│   └── sync/
-│       └── usePlayRoom.js  # Realtime sync qua playhtml + BroadcastChannel fallback
-```
+│   ├── components/          # Component game gốc
+│   ├── game/                # Luật, state, terrain, map và offline game
+│   ├── sync/                # Phòng/P2P cũ, không mount mặc định
+│   ├── tournament/          # API client, replay và UI MVP giữ lại
+│   │   └── portal/          # Cổng giải, setup, bài nộp, kết quả, offline
+│   │       └── live/        # Viewer/publication
+│   ├── ui/                  # Board adapter, UI kit, atlas/font/license
+│   ├── App.jsx              # Mount CampusPortal
+│   ├── LegacyApp.jsx        # Giao diện cũ giữ tương thích
+│   ├── main.jsx             # React entrypoint
+│   └── index.css            # CSS nền
+├── supabase/
+│   ├── migrations/          # SQL versioned, không xóa/đổi lịch sử
+│   └── tests/               # Kiểm tra PostgreSQL
+├── tests/                   # Unit, regression, API/contract và mô phỏng
+├── tools/
+│   ├── cli/                 # Demo, validate, health, migration, drill
+│   ├── production/          # Manifest migration, cấu hình worker
+│   ├── provision/           # Linux/systemd, update/rollback
+│   └── vm/                  # Cài/điều khiển VM từ Windows
+├── .env.example             # Mẫu env không chứa credential
+├── .gitattributes           # Quy tắc Git/line ending
+├── .gitignore               # Loại secret/cache/output sinh tự động
+├── AGENTS.md                # Quy tắc bảo trì
+├── index.html               # HTML shell
+├── package.json             # Dependency và lệnh
+├── package-lock.json        # Dependency lockfile
+├── README.md                # Giới thiệu và chạy dự án
+├── vercel.json              # Serverless build/header/routing
+└── vite.config.js           # React build và proxy API
+~~~
 
----
+**Không thuộc hồ sơ mã nguồn:** .git/, node_modules/, dist/, data/, .env, .envdev, cache Python, log, backup và credential. Không nén toàn bộ workspace thô để nộp vì data/ và env có thể chứa dữ liệu riêng. Không xóa source legacy/fixture chỉ vì chúng không được mount.
 
-## 4. Hướng dẫn chạy thử nghiệm tại Local
+## 5. Cài đặt và chạy
 
-1. Mở terminal tại thư mục dự án và chạy:
-   ```bash
-   npm install
-   ```
+### Yêu cầu
 
-2. Khởi động môi trường phát triển:
-   ```bash
-   npm run dev
-   ```
+Node.js >=22.12, npm, Python >=3.12; project Supabase riêng cho demo với schema và Storage private đúng cấu hình. Giải online cần Internet cho GitHub/Supabase. Worker production cần VM Linux theo tài liệu sandbox, không chạy bot lạ trên Windows host.
 
-3. Mở trình duyệt tại địa chỉ `http://localhost:3000` (hoặc cổng hiển thị trên terminal).
-   - **Mẹo thử nghiệm 2 người chơi:** Bạn có thể mở 2 cửa sổ/tab trình duyệt (hoặc 1 tab thường và 1 tab ẩn danh Incognito), nhập cùng một mã phòng (ví dụ `OTT-1234`) để đóng vai Đội Đỏ và Đội Xanh thi đấu với nhau theo thời gian thực! Mở tab thứ 3 để trải nghiệm chế độ Người xem (Spectator).
+### Cài dependency và cấu hình
 
----
+~~~powershell
+Set-Location D:\OOTv2-Game
+npm.cmd ci
+Copy-Item .env.example .env
+~~~
 
-## 5. Hướng dẫn Push lên GitHub
+Điền SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY và nên đặt OOTV2_EXPECTED_PROJECT_REF trong .env. Không commit/gửi credential cùng hồ sơ và không dùng tiền tố VITE_ cho secret.
 
-```bash
-git init
-git add .
-git commit -m "feat: complete OTTv2 online multiplayer strategy game with playhtml"
-git branch -M main
-git remote add origin <URL_GITHUB_REPO_CUA_BAN>
-git push -u origin main
-```
+**DB:** operator đối chiếu tools/production/migrationPlan.js, SQL trong supabase/migrations/ và ledger đích. Lệnh npm.cmd run db:production mặc định chỉ kiểm cấu hình/manifest, không apply và không xác nhận schema remote. Bootstrap/apply/Storage là thao tác quản trị cần phê duyệt, backup và đích rõ ràng; không tự chạy trên DB có dữ liệu. Xem [bootstrap](docs/PRODUCTION-BOOTSTRAP.md).
 
----
+Khi schema sẵn sàng, operator có thể chạy npm.cmd run db:admin để tạo admin đầu tiên. Lệnh này **ghi DB**, chỉ chạy trên project được phép; credential ngẫu nhiên lưu riêng tại data/local-admin-credentials.txt, không có mật khẩu mặc định công khai.
 
-## 6. Hướng dẫn Deploy lên Vercel
+### Chạy frontend và API
 
-Dự án đã được tích hợp sẵn file `vercel.json` chuẩn cấu hình SPA. Bạn có thể deploy rất dễ dàng:
+~~~powershell
+# Terminal 1: API 127.0.0.1:3001
+npm.cmd run dev:api
+# Terminal 2: Vite 127.0.0.1:3000, proxy /api sang API
+npm.cmd run dev
+~~~
 
-### Cách 1: Qua giao diện Vercel Dashboard (Khuyên dùng)
-1. Đăng nhập vào [Vercel](https://vercel.com).
-2. Nhấn nút **"Add New..."** → chọn **"Project"**.
-3. Import GitHub repository bạn vừa push.
-4. Framework Preset sẽ tự động nhận diện là **Vite**.
-5. Nhấn **"Deploy"**. Trong vòng 1 phút, trang web OTTv2 của bạn sẽ chính thức online toàn cầu!
+Hoặc phục vụ web đã build cùng origin API:
 
-### Cách 2: Qua Vercel CLI
-```bash
-npx vercel
-```
-Làm theo hướng dẫn trên terminal để hoàn tất deploy.
+~~~powershell
+npm.cmd run build
+npm.cmd start
+~~~
 
----
+Chọn **Chơi offline** ở màn đăng nhập để thử bàn cờ cùng máy. Luồng tài khoản/giải cần API và DB, không fallback dữ liệu giả khi mất kết nối. Trên Windows, dùng npm.cmd nếu execution policy chặn npm.ps1; không cần đổi policy toàn máy.
 
-## 7. Giải đấu bot (MVP — M0→M5)
+### Worker và demo bot tin cậy
 
-Song song với chế độ chơi tay 2 người ở trên, repo có thêm **chế độ Giải đấu bot**: người chơi nộp **một file Python `.py`**, judge (Node) chạy bot trong tiến trình con riêng, mỗi trận đấu do server xử lý và có **replay read-only**.
+~~~powershell
+npm.cmd run worker:github
+npm.cmd run worker:official
+npm.cmd run worker:health -- --scope=judge --json
+~~~
 
-> ⚠️ **Chỉ chạy local, với code của người mình tin tưởng.** Tiến trình con **không phải sandbox an toàn** cho người lạ. API chỉ bind `127.0.0.1`; không public API/worker này lên Internet. Triển khai công khai là **OUT OF SCOPE** cho tới khi có cô lập cấp hệ điều hành đã kiểm thử.
+Các worker là process riêng, chỉ chạy sau khi chuẩn bị schema, artifact và môi trường cô lập; không chạy worker trên Vercel. Đọc [bộ cài](docs/WORKER-PACKAGING.md) và [sandbox](sandbox/README.md) trước khi khởi động.
 
-### 7.1 Chuẩn bị
+Demo chỉ dùng bot mẫu tin cậy, output phải chưa tồn tại:
 
-- **Node.js 22+** (đã dùng cho Vite/React).
-- **Python 3.12+** có trên `PATH` (`python --version`). Bot chỉ được dùng **thư viện chuẩn**; không nhận ZIP/package/`pip install`.
+~~~powershell
+node tools/cli/demo-campus-bots.js --trusted-dev examples/maps/campus-four-terrains.json "$env:TEMP/ootv2-campus-demo-new.json"
+node tools/cli/verify-replay.js "$env:TEMP/ootv2-campus-demo-new.json"
+~~~
 
-### 7.2 Chạy 3 tiến trình dev (3 terminal)
+Trusted-dev **không phải sandbox an toàn**, production cấm chế độ này. Không chạy fixture phá tài nguyên trong sandbox/fixtures/ trực tiếp trên host.
 
-```bash
-# Terminal 1 — API (Express + Supabase), mặc định http://127.0.0.1:3001
-npm run dev:api
+### Biến môi trường chính
 
-# Terminal 2 — Judge worker: chạy tuần tự từng game, claim qua Supabase
-npm run dev:worker
+| Biến | Ý nghĩa |
+| --- | --- |
+| SUPABASE_URL | Project DB/Storage chung cho API và worker |
+| SUPABASE_SERVICE_ROLE_KEY | Chỉ backend/worker, không frontend |
+| OOTV2_EXPECTED_PROJECT_REF | Guard tránh nhầm project |
+| OOTV2_ENV_FILE | Chọn env tường minh; development mặc định .env |
+| OOTV2_API_HOST / OOTV2_API_PORT | Local mặc định 127.0.0.1:3001 |
+| OOTV2_PUBLIC_ORIGIN / OOTV2_TRUST_PROXY | Origin/proxy cho CSRF và HTTPS cookie |
+| OOTV2_GITHUB_TOKEN | Credential đọc GitHub của BTC, chỉ backend |
+| OOTV2_DATA_DIR / OOTV2_PYTHON_BIN | Cache riêng và executable Python |
+| OOTV2_CAMPUS_SANDBOX | Production worker dùng linux-sandbox |
+| OOTV2_SANDBOX_RUNNER / OOTV2_SANDBOX_ATTESTATION | Runner/receipt đúng release trên VM |
+| OOTV2_ALLOW_TRUSTED_DEV | Chỉ opt-in dev tin cậy, cấm production |
 
-# Terminal 3 — UI (Vite)
-npm run dev
-```
+Production nhận cấu hình từ platform/service, không tự nạp .env của checkout. .envdev chỉ dùng khi chọn tường minh. Xem toàn bộ ví dụ tại [.env.example](.env.example).
 
-Vite dev proxy `/api` → `127.0.0.1:3001` (xem `vite.config.js`), nên UI không cần cấu hình CORS.
+## 6. Kiểm thử
 
-Mở UI, bấm tab **“Giải đấu bot”** (hoặc thêm `?view=tournament` vào URL).
+~~~powershell
+npm.cmd test
+npm.cmd run test:engine
+npm.cmd run build
+npm.cmd audit
+node --test src/ui/ott-v2-ui-kit/board.test.mjs
+node tools/cli/smoke-ui-kit.mjs
+git diff --check
+~~~
 
-### 7.3 Thao tác demo end-to-end
+Smoke UI kit hiện dùng Edge trên Windows. Test bao phủ luật/terrain, protocol, runner, snapshot/hash, queue/fencing, ACL/CSRF, cutoff, publication, standings/knockout, replay và cấu hình triển khai. Mock/mô phỏng không thay nghiệm thu DB/VM/browser tích hợp.
 
-1. Đăng nhập bằng tài khoản BTC (`#/login`; tạo lần đầu bằng `node tools/cli/create-admin.js`).
-2. Tab **Đội & Bot** → tạo **8 đội**, mỗi đội upload **một file `.py`** (dùng `examples/sample_bot.py` để thử). Cột trạng thái phải hiện “Đủ điều kiện thi đấu”.
-3. Tab **Giải đấu** → chọn đúng **8 đội**, đặt tên giải → **Tạo giải (draft)** → **Start**. Admin tạo tài khoản đội trong tab **Đội & Bot** (mỗi đội tự upload bot).
-   - Chia bảng theo seed: **A = 1,4,5,8 · B = 2,3,6,7**; vòng bảng 24 game (mỗi cặp 2 lượt đổi màu) + bán kết 4 game (2 cặp × 2 lượt) + chung kết 2 game = **30 game**.
-4. Worker ở Terminal 2 tự nhặt game `pending` và chạy lần lượt. UI tự làm mới mỗi **3 giây**.
-5. Trang chi tiết giải hiển thị **bracket bán kết → chung kết**, **bảng xếp hạng A/B**, **danh sách 30 game**; game đã xong có nút **Replay** (board 9x9 read-only, tua từng nước / tự chạy).
+Browser smoke chỉ gồm màn đăng nhập/offline trên preview, không thay E2E API/DB theo vai trò. Chạy lại các lệnh trên với đúng commit chuẩn bị triển khai; không dùng kết quả của một checkout cũ để xác nhận release mới.
 
-### 7.4 Lệnh hữu ích
+## 7. Triển khai và an toàn
 
-```bash
-npm run worker:once    # chạy đúng 1 game rồi thoát (tiện debug)
-npm run worker:drain   # chạy tới khi hết game pending
-npm test               # node --test tests/*.test.js (engine, protocol, runner, live stream)
-npm run db:verify      # smoke DB chung: health + login/CSRF/logout
-npm run build          # kiểm tra UI build được (Vite)
-```
+- Vercel: frontend + API, **không thực thi Python**.
+- Supabase: schema, grants/RLS và Storage private đúng manifest.
+- VM Linux: intake và worker, kiểm runtime/sandbox/artifact trước chạy.
+- /api/health chỉ liveness; /api/ready cần admin, chỉ kiểm DB, không chứng nhận worker.
+- Không mở code bên ngoài trước gate sandbox, hai worker/recovery, rollback và restore.
+- Cutoff dùng cutoff-first-resolution.v1: lần resolve thành công đầu sau cutoff, **không chứng minh HEAD lịch sử đúng tại hạn nộp**. Lưu ý giới hạn thời gian xử lý trong runbook BTC.
+- Không tự sửa snapshot/replay/migration lịch sử để vượt lỗi runtime/hash.
+- Chưa có LICENSE toàn dự án trong checkout. Font có OFL đi kèm; quyền ảnh đầu vào atlas cần chủ dự án xác nhận trước khi phân phối công khai. Không tự tuyên bố MIT hoặc asset đã được duyệt.
 
-### 7.5 Biến môi trường (tuỳ chọn)
+## 8. Tài liệu và kịch bản duyệt
 
-Server tự nạp `.env` ở thư mục gốc theo kiểu **không ghi đè**: biến đã có trong môi trường (shell, `node --env-file=…`, Vercel) thắng giá trị trong file, nên `node --env-file=.envdev server/index.js` chạy DB dev mà không bị `.env` đè; `OOTV2_ENV_FILE` cho phép chọn file khác `.env`. Toàn bộ biến đều có default an toàn:
+- [Mục lục kỹ thuật](docs/README.md).
+- [Toàn bộ danh mục file](docs/PROJECT-STRUCTURE.md).
+- [Hướng dẫn đội thi](docs/runbook/SINH-VIEN.md).
+- [Hướng dẫn BTC](docs/runbook/BAN-TO-CHUC.md).
 
-| Biến (`server/config.js`) | Mặc định | Ý nghĩa |
-| --- | --- | --- |
-| `OOTV2_API_HOST` | `127.0.0.1` | Host API — **chỉ loopback** cho tới khi có sandbox cấp OS. |
-| `OOTV2_API_PORT` | `3001` | Cổng API. |
-| `SUPABASE_URL` | (bắt buộc) | Project URL của Supabase (HTTPS). Thiếu → API/worker dừng ngay. |
-| `SUPABASE_SERVICE_ROLE_KEY` | (bắt buộc) | Service-role key, **chỉ** ở backend. Thiếu → API/worker dừng ngay. |
-| `OOTV2_EXPECTED_PROJECT_REF` | (trống) | Pin project ref: API/worker/tool dừng ngay nếu `SUPABASE_URL` trỏ project khác (guard chỉ áp cho URL `*.supabase.co` hoặc `*.supabase.in`). |
-| `OOTV2_ENV_FILE` | `.env` | File env được nạp; đặt `.envdev` để chạy trên DB dev/drill. |
-| `OOTV2_DATA_DIR` | `<repo>/data` | Thư mục cache tạm cho bot tải từ Storage + file log; ngoài `public/`, `src/`, `dist/`. |
-| `OOTV2_PYTHON_BIN` | (trống) | Lệnh Python; để trống thì tự dò `python` / `py -3` / `python3`. |
-| `OOTV2_PUBLIC_ORIGIN` | (trống) | Origin HTTPS của web khi chạy sau reverse proxy, phân tách bằng dấu phẩy (guard same-origin). Same-origin qua proxy vẫn được chấp nhận nếu không khai báo. |
-| `OOTV2_TRUST_PROXY` | `loopback` | Tin `X-Forwarded-For`/`X-Forwarded-Proto` từ proxy cùng máy; `0` để tắt, số hop nếu proxy ở máy khác. |
-
-Giới hạn cứng (trong `config.limits`, đổi bằng code): file bot ≤ **256 KiB**, input/output mỗi luồng ≤ **64/16 KiB**, timeout setup **3 s** và move **2 s**, tối đa **200 plies**, worker poll mỗi **1 s**.
-
-### 7.6 Bản đồ mã nguồn phần giải đấu
-
-```text
-server/
-├── index.js            # Khởi động API (bind 127.0.0.1, fail-fast nếu thiếu SUPABASE_*)
-├── app.js              # Express app: /api/health, /api/live, /api/local, web tĩnh
-├── config.js           # Đọc env + giới hạn (không dùng dependency)
-├── shared/             # Toàn bộ truy cập Supabase: client, accounts, tournaments, live, worker
-├── routes/live.js      # API công khai xem trực tiếp (L1), rate limit, no-store
-├── services/           # hàm thuần: judgeView, liveView, botValidation
-├── lib/                # httpError, origin, rateLimit, names, tournamentFormat
-├── middleware/upload.js# multer memoryStorage, 256 KiB
-├── judge/              # gameAdapter (dùng lại engine src/game), matchRunner, botRunner
-└── worker.js           # entry worker → shared/worker.js (claim + lease + heartbeat)
-src/tournament/         # UI giải đấu (api.js, labels.js, replay.js, *View.jsx, ReplayBoard.jsx, live/*)
-tests/                  # node --test: engine/protocol/runner + live stream (PostgREST giả lập)
-supabase/migrations/    # schema mvp_*, RPC, judge monitor, live stream
-examples/sample_bot.py  # bot mẫu đúng giao thức
-data/                   # (tạo khi chạy) cache bot + log local — không commit
-```
-
-
-## UI Kit tích hợp (22/10/2026)
-
-Component bàn cờ, atlas và font offline nằm trong src/ui/ott-v2-ui-kit/.
-Đọc [bàn giao UI kit](docs/11-TICH-HOP-UI-KIT.md) về adapter, kiểm thử và giới hạn QA.
-Dự án không phụ thuộc thư mục UI Kit ngoài repository.
+**Kịch bản trình bày:** (1) chơi cùng máy với map bốn địa hình; (2) giới thiệu bot mẫu/protocol; (3) đăng nhập admin/đội trên DB demo riêng; (4) trình bày receipt/snapshot và vòng đấu khi worker sẵn sàng; (5) công bố ván đã chấm và mở viewer; (6) chạy test/build, đối chiếu giới hạn còn lại. Không dùng dữ liệu sản xuất/secret hoặc bỏ gate để demo.

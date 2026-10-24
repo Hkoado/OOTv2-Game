@@ -90,7 +90,7 @@ Trang `#/live` phục vụ các đội thi và khán giả có tài khoản tron
 ## 6. Cấu hình triển khai và health — 25/10/2026
 
 **Chưa được mở chấm bot không tin cậy chỉ dựa vào health xanh.** Theo dõi gate trong
-`docs/WORKER-UNTRUSTED-READINESS.md`; RC online và nghiệm thu sandbox là hai mốc khác nhau.
+`docs/runbook/BAN-TO-CHUC.md`; RC online và nghiệm thu sandbox là hai mốc khác nhau.
 
 | Nơi đặt | Biến/cấu hình |
 | --- | --- |
@@ -112,6 +112,13 @@ Production cấm trusted-dev, WSL override, localhost origin và upload online c
   đối chiếu `recorded`/`reason`, không log source, token, secret. Chỉ hủy/requeue qua API được audit.
 
 ## 7. Thứ tự phát hành và rollback
+
+### Lưu ý trước khi vận hành
+
+- Deploy web/API nội bộ không tự khởi động worker và không chứng nhận chấm bot không tin cậy.
+- Cutoff hiện có batch limit nhưng chưa có deadline chung xuyên suốt DB/GitHub; chuỗi I/O chậm có thể vượt trần function 30 giây. Demo nội bộ chấp nhận giới hạn này; khi timeout cần đối soát status/capture trước retry, không xóa pin hoặc đổi SHA đã chốt.
+- Trước khi nhận code không tin cậy, kiểm đúng release: full sandbox attestation, hai consumer, lease hết hạn/stale write/duplicate finish, crash/retry, mất DB/Storage, reboot, update lỗi/rollback và restore DB + Storage. Không coi fixture local, service active hay DB health là đã nghiệm thu các bước này.
+- Sandbox deny-list có giới hạn trước kernel vulnerabilities/side-channel; không đặt worker cạnh API hoặc dữ liệu cá nhân. Intake valid về text/cú pháp không phải sandbox acceptance.
 
 1. Chốt RC SHA và evidence Huy/Bảo/Khoa; kiểm migration manifest với ledger đích, không dùng số
    migration trong handoff cũ làm bằng chứng. Huy xác nhận schema/grants tương thích.

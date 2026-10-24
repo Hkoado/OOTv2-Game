@@ -1,6 +1,6 @@
 # Tích hợp UI giấy da/hầm ngục vào OTTv2 hiện có
 
-Ngày 22/10/2026. Đây là đặc tả UI sản phẩm và kế hoạch tích hợp; không chứa yêu cầu dựng lại demo. Đọc cùng [đặc tả kỹ thuật](03-DAC-TA-KY-THUAT.md) và [style kit](ui-style/README.md).
+Ngày 22/10/2026. Đây là đặc tả UI sản phẩm và kế hoạch tích hợp; không chứa yêu cầu dựng lại demo. Đọc cùng [đặc tả kỹ thuật](03-DAC-TA-KY-THUAT.md) và [Hướng dẫn vận hành](runbook/BAN-TO-CHUC.md).
 
 ## 1. Mục tiêu
 

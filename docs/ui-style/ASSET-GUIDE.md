@@ -87,7 +87,7 @@ Không áp một kích thước SVG cố định lên mọi SVG lồng trong spr
 ## 7. Tham khảo hiện có
 
 - [Bộ hình đơn giản](references/style-elements.png): tham khảo **mức độ giản lược, viền và màu**, không phải yêu cầu phải dùng đúng atlas này.
-- [Nguồn ảnh và cách dùng tham khảo](references/README.md).
+- [Hướng dẫn vận hành](../runbook/BAN-TO-CHUC.md).
 - Không dùng screenshot cả trang làm mẫu bố cục.
 
 ## 8. Prompt khởi điểm cho hình mới

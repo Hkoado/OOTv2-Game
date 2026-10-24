@@ -1,7 +1,7 @@
 # 02 — Đặc tả Bot Protocol, Judge Worker và chế độ chạy local
 
-> T?i li?u l?ch s? cho profile MVP. Khi m? r?ng Campus, ?u ti?n [docs m?i](README.md)
-> v? [tr?ng th?i tri?n khai](07-TRANG-THAI-TRIEN-KHAI.md); gi? version ?? ??c k?t qu?/replay c?.
+> T?i li?u l?ch s? cho profile MVP. Khi m? r?ng Campus, ?u ti?n [Hướng dẫn vận hành](runbook/BAN-TO-CHUC.md)
+> v? [Hướng dẫn vận hành](runbook/BAN-TO-CHUC.md); gi? version ?? ??c k?t qu?/replay c?.
 
 ## 1. Quyết định quan trọng
 

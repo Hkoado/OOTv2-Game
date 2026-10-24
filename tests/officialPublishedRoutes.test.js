@@ -274,15 +274,21 @@ test('11. H2: Bracket giấu outcome của series knockout chưa phát sóng ho�
     },
   });
 
-  // Đội thi: kết quả sf1 bị giấu khỏi series
+  // Đội thi: outcome và metadata tiến độ nội bộ của sf1 đều không bị rò.
   const resMember = await request(appKnockoutPartial, 'GET', `/events/${EVENT_ID}/official/published/bracket`, { user: 'member' });
   assert.equal(resMember.status, 200);
   assert.equal(resMember.body.series.length, 0, 'Series chưa reveal bị loại khỏi DTO');
+  assert.equal(resMember.body.resolved_matches, 0, 'Không lộ số series đã chấm nhưng chưa reveal');
+  assert.equal(resMember.body.next, null, 'Không lộ series kế tiếp từ trạng thái nội bộ');
+  assert.equal(resMember.body.waiting, null, 'Không lộ lý do chờ nội bộ');
+  assert.equal(resMember.body.expected_matches, 1, 'Tổng số series trong bracket vẫn được công bố');
+  assert.equal(JSON.stringify(resMember.body).includes('SECRET'), false);
 
   // Admin xem nội bộ qua admin route vẫn thấy
   const resAdmin = await request(appKnockoutPartial, 'GET', `/events/${EVENT_ID}/official/bracket`, { user: 'admin' });
   assert.equal(resAdmin.status, 200);
   assert.equal(resAdmin.body.series.length, 1);
+  assert.equal(resAdmin.body.resolved_matches, 1, 'Admin giữ metadata vận hành đầy đủ');
 });
 
 test('12. H2: Tickets bị từ chối 409 khi có series knockout chưa hoàn tất broadcast', async () => {

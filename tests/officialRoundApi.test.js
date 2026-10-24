@@ -58,6 +58,32 @@ test('officialRoundApi input validations', async () => {
   await assert.rejects(() => requeueOfficialJob('job-1', 'a'.repeat(401)), /5 đến 400 ký tự/);
 });
 
+test('cutoff sync completion and remaining fields are surfaced by the API client', async () => {
+  const originalFetch = globalThis.fetch;
+  let call = 0;
+  globalThis.fetch = async (url) => {
+    call++;
+    if (url.includes('github-cutoff-sync')) {
+      return new Response(JSON.stringify({ queued: 5, skipped: 0, failed: [], remaining: 3, complete: false, budget_exhausted: true }),
+        { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({ pinned_count: 5, total_approved: 8, pending_count: 3, busy_count: 0, complete: false }),
+      { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const sync = await syncGithubCutoff('evt-progress');
+    assert.equal(sync.complete, false);
+    assert.equal(sync.remaining, 3);
+    assert.equal(sync.budget_exhausted, true);
+    const status = await fetchOfficialCutoffStatus('evt-progress');
+    assert.equal(status.complete, false);
+    assert.equal(status.pending_count, 3);
+    assert.equal(call, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('officialRoundApi mocked endpoints and error handling', async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];

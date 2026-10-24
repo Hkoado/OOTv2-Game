@@ -2,7 +2,7 @@
 
 Ngày 22/10/2026. Project đã được người dùng xác nhận: **OTTv2-G5**, ref `wsyfcgurnrowcuefwynx`.
 Migration đã áp dụng: **10/10** file trong `supabase/migrations` (apply 24/10/2026 qua Management API,
-smoke PostgreSQL PASS) — xem mục “DB thật” trong [bàn giao Huy](handoff/Huy.md).
+smoke PostgreSQL PASS) — xem mục “DB thật” trong [Hướng dẫn vận hành](runbook/BAN-TO-CHUC.md).
 
 ## Phạm vi
 
@@ -42,8 +42,8 @@ Migration DDL dùng kết nối quản trị đã xác thực.
 - API chỉ resolve `repository id` + HEAD `commit SHA` qua `api.github.com` (`server/services/githubRepo.js`),
   kiểm host/protocol/redirect/size/timeout, token chỉ ở header. Không clone, không tải `bot.py`,
   không chạy git/Python; worker BTC (H2) sẽ tải blob đúng SHA.
-- Route + DTO đã chốt: xem [docs/16](16-THIET-LAP-CHINH-THUC-VA-CHIA-VIEC.md) và
-  [bàn giao Huy](handoff/Huy.md). UI B2 dùng `receipt`/`job` view này trực tiếp.
+- Route + DTO đã chốt: xem [Hướng dẫn vận hành](runbook/BAN-TO-CHUC.md) và
+  [Hướng dẫn vận hành](runbook/BAN-TO-CHUC.md). UI B2 dùng `receipt`/`job` view này trực tiếp.
 - Bảo mật: receipt chỉ trả whitelist (không `storage_path`, không token, không raw lỗi GitHub);
   team chỉ đọc job/receipt của mình, admin đọc mọi đội; giải đã chạy thì `event_frozen`/`frozen`.
 
