@@ -221,3 +221,15 @@ test('manual final migration: 6 bảng RLS, quyền hẹp, RPC nguyên tử và 
   assert.match(manual, /status = 'canceled', canceled_at = clock_timestamp\(\)/iu);
   assert.match(manual, /where status = 'finished'/iu);
 });
+
+test('login throttle migration: bảng mvp_login_attempts RLS, quyền hẹp và RPC hit/reset', () => {
+  const throttle = readFileSync(new URL('../supabase/migrations/20261026170000_shared_login_throttle.sql', import.meta.url), 'utf8');
+  assert.match(throttle, /create table if not exists public\.mvp_login_attempts/i);
+  assert.match(throttle, /alter table public\.mvp_login_attempts enable row level security/i);
+  assert.match(throttle, /revoke all on table public\.mvp_login_attempts from public, anon, authenticated/i);
+  assert.match(throttle, /create or replace function public\.mvp_login_throttle_hit/i);
+  assert.match(throttle, /create or replace function public\.mvp_login_throttle_reset/i);
+  assert.match(throttle, /security definer set search_path = ''/i);
+  assert.match(throttle, /revoke all on function public\.mvp_login_throttle_hit/i);
+  assert.match(throttle, /grant execute on function public\.mvp_login_throttle_hit/i);
+});

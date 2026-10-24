@@ -233,3 +233,4 @@ test('9. Broadcast state: kiểm tra phân quyền đội thi và anonymous', as
   const resAdmin = await request(app, 'GET', `/official/rounds/${ROUND_ID}/games/g1/broadcast`, { user: 'admin' });
   assert.equal(resAdmin.status, 200);
 });
+

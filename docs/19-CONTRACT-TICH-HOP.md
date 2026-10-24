@@ -259,3 +259,24 @@ reclaim, worker cũ bị fence, duplicate finish, retry cap, 0-ply accepted, RES
 `public.ootv2_schema_migrations` có **21 dòng** version+name+sha256.
 
 Các quyết định sản phẩm đã chốt trong docs/18 không được thay đổi khi điền bảng này.
+
+## 8. Cutoff batch tiến độ/retry và Login throttle phân tán (Huy, 25/10/2026)
+
+Theo điều lệ [RC online tối giản](20-RC-ONLINE-TOI-GIAN.md):
+
+### 8.1 API Cutoff batch có tiến độ và retry giữ SHA
+- `GET /api/local/events/:id/github-cutoff-status` (admin-only):
+  - Trả về: `{ event_id, event_status, cutoff, reached, total_approved, pinned_count, busy_count, pending_count, complete, teams: [...] }`
+  - Mỗi đội có `{ team_id, repository, branch, status: 'pinned'|'busy'|'pending', commit_sha, captured_at, receipt_id }`.
+- `POST /api/local/events/:id/github-cutoff-sync` (admin-only):
+  - Body: `{ team_ids?: string[], limit?: number }` (cho phép lọc retry chỉ định các đội bị lỗi mà không ảnh hưởng tới đội đã pin).
+  - Trả về: `{ cutoff, policy:'cutoff-first-resolution.v1', total, queued, skipped, failed: [{ team_id, error }], remaining }`.
+
+### 8.2 Login throttle phân tán qua Supabase
+- Migration: `supabase/migrations/20261026170000_shared_login_throttle.sql`.
+- Bảng `mvp_login_attempts` (RLS bật, cấm REST, chỉ RPC `SECURITY DEFINER`), RPC `mvp_login_throttle_hit(p_key, p_max, p_window_ms)`, `mvp_login_throttle_reset(p_key)`.
+- Phân tầng bảo vệ:
+  - `id:ip|username`: 10 lần / 60 giây (chặn brute-force tài khoản).
+  - `ip:ip`: 60 lần / 60 giây (chặn quét từ một máy sau NAT).
+  - Đăng nhập thành công chỉ reset bộ đếm cặp `id:ip|username`.
+- Adapter Node.js: `server/lib/loginThrottle.js` tự động dùng RPC Supabase khi có kết nối, và fallback về in-memory Map nếu RPC/mạng gián đoạn.

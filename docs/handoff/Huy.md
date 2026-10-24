@@ -1,22 +1,38 @@
 # Kết quả Huy — Backend / GitHub / privacy
 
-## Đợt 25/10/2026 — API Kết quả công bố cho Đội thi (RC online tối giản commit 9e06a8d)
+## Đợt 25/10/2026 — Hoàn tất 3 phần việc Backend / Auth / Cutoff (RC online tối giản)
 
-- **Phạm vi:** Hoàn thành Mục 1 được giao tại `docs/20-RC-ONLINE-TOI-GIAN.md` và `docs/assignments/Huy.md`.
-- **Code mới / nâng cấp:**
-  - `server/routes/official.js`: Giữ nguyên toàn bộ 7 route điều hành admin-only; thêm 4 route công bố cho thành viên giải:
-    - `GET /events/:id/official/published/standings`: Yêu cầu session + membership giải; chỉ trả khi vòng bảng đã `frozen`, nếu chưa trả 409 `round_not_published`.
-    - `GET /events/:id/official/published/bracket`: Yêu cầu session + membership giải; chỉ trả khi vòng bảng đã `frozen`.
-    - `GET /events/:id/official/published/tickets`: Yêu cầu session + membership giải; trả vé khi knockout hoàn tất, 409 `tickets_not_published` nếu chưa.
-    - `GET /events/:id/official/published/games`: Danh sách các ván đấu đã lên lịch/đang phát sóng.
-  - `server/services/officialBroadcasts.js`: Thêm hàm `listPublishedOfficialGames`, chỉ lọc các ván có `isPublished(info) = true` cho đội thi, admin thấy toàn bộ.
-  - `server/shared/accounts.js`: `requireSession` tôn trọng session đã gắn trên request, bảo vệ CSRF và phiên đăng nhập.
-  - `docs/19-CONTRACT-TICH-HOP.md`: Bổ sung bảng route DTO cho các endpoint công bố mới.
-- **Bằng chứng kiểm thử:**
-  - `node --test tests/officialPublishedRoutes.test.js`: **9/9 PASS** (kiểm tra anonymous 401, outsider 403, vòng chưa freeze 409, kết quả kín không bị rò rỉ, phân quyền admin).
-  - `node --test tests/officialBroadcast.test.js`: **9/9 PASS** (+1 test cho `listPublishedOfficialGames`).
-  - `npm test`: **462/462 tests PASS** (100%).
-  - `npm run build`: **Pass** (1,656 modules).
+- **Phạm vi:** Hoàn thành toàn bộ gói được giao cho Huy tại [docs/20-RC-ONLINE-TOI-GIAN.md](../20-RC-ONLINE-TOI-GIAN.md) và [docs/assignments/Huy.md](../assignments/Huy.md).
+- **Mục 1 — API Kết quả công bố cho Đội thi:**
+  - Giữ nguyên 7 route admin điều hành kín.
+  - Thêm 4 route cho thành viên giải:
+    - `GET /events/:id/official/published/standings` (yêu cầu round freeze).
+    - `GET /events/:id/official/published/bracket` (yêu cầu round freeze).
+    - `GET /events/:id/official/published/tickets` (yêu cầu knockout complete).
+    - `GET /events/:id/official/published/games` (danh sách ván đã lên lịch/đang phát sóng).
+  - `server/services/officialBroadcasts.js`: thêm `listPublishedOfficialGames`.
+  - `tests/officialPublishedRoutes.test.js`: 9/9 PASS.
+- **Mục 2 — Cutoff Batch có Tiến độ & Retry giữ SHA/policy:**
+  - `server/services/githubCutoff.js`:
+    - `getCutoffStatus({ eventId })`: Trả về tiến độ chi tiết (tổng đội, pinned_count, busy_count, pending_count, complete, danh sách đội chi tiết).
+    - `syncAllAtCutoff({ eventId, teamIds, limit })`: Hỗ trợ retry danh sách đội chỉ định mà không ghi đè các đội đã pin (giữ nguyên SHA/receipt bất biến).
+  - Mount route trong `server/shared/router.js`:
+    - `GET /events/:id/github-cutoff-status` (admin).
+    - `POST /events/:id/github-cutoff-sync` (admin, nhận `team_ids`, `limit`).
+  - `tests/githubCutoff.test.js`: 7/7 PASS (thêm test status và retry teamIds).
+- **Mục 3 — Login Throttle dùng chung Supabase:**
+  - Migration: `supabase/migrations/20261026170000_shared_login_throttle.sql` (bảng `mvp_login_attempts`, RPC `mvp_login_throttle_hit`, `mvp_login_throttle_reset`).
+  - `server/lib/loginThrottle.js`: Gọi RPC phân tán, tự động fallback an toàn về in-memory nếu DB/mạng gián đoạn.
+  - Tích hợp async/await vào route `/login` trong `server/shared/router.js`.
+  - Khai báo PLAN trong `tools/cli/apply-migrations.js` (chưa apply remote, tuân thủ quy tắc safety gate).
+  - `tests/loginThrottle.test.js`: 5/5 PASS.
+  - `tests/supabaseSchema.test.js`: 11/11 PASS.
+- **Hợp đồng & Tài liệu:**
+  - Cập nhật mục 7 và thêm mục 8 trong `docs/19-CONTRACT-TICH-HOP.md` cho Bảo và Khoa.
+- **Bằng chứng kiểm thử tổng thể:**
+  - `npm test`: **467/467 tests PASS** (100%).
+  - `npm run build`: **Pass** (1,656 modules transformed sạch sẽ).
+  - Không có cảnh báo hay lỗi cú pháp.
 
 ---
 

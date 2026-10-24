@@ -313,6 +313,26 @@ PLAN.push({
   },
 });
 
+PLAN.push({
+  version: '20261026170000',
+  file: 'supabase/migrations/20261026170000_shared_login_throttle.sql',
+  why: 'Huy: Login throttle dùng chung qua Supabase (bảo vệ brute-force serverless)',
+  exists: async () => {
+    if (!accessToken || !projectRef) return false;
+    try {
+      const found = await managementRows(
+        "select to_regclass('public.mvp_login_attempts') as tbl, "
+        + "proname from pg_proc where pronamespace = 'public'::regnamespace "
+        + "and proname = 'mvp_login_throttle_hit'"
+      );
+      return Boolean(found?.[0]?.tbl);
+    } catch {
+      return false;
+    }
+  },
+});
+
+
 
 const readSql = (relative) => readFileSync(path.join(root, relative), 'utf8');
 

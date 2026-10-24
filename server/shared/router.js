@@ -11,7 +11,7 @@ import * as githubIntake from '../services/githubIntake.js';
 import * as githubCutoff from '../services/githubCutoff.js';
 import * as officialRounds from '../services/officialRounds.js';
 import * as publication from './publication.js';
-import { rows, uuid } from './client.js';
+import { rows, uuid, rpc } from './client.js';
 import { isAllowedOrigin } from '../lib/origin.js';
 import { isSecureRequest } from '../lib/cookieSecurity.js';
 import { createLoginThrottle } from '../lib/loginThrottle.js';
@@ -62,7 +62,7 @@ export function bracketFromData(tournaments, data) {
 }
 
 export function sharedRouter() {
-  const router=Router(),loginThrottle=createLoginThrottle();
+  const router=Router(),loginThrottle=createLoginThrottle({ rpcClient: rpc });
   router.use((req,res,next)=>{
     res.set('Cache-Control','no-store');
     const origin=req.get('origin');
@@ -72,13 +72,13 @@ export function sharedRouter() {
   router.post('/login',async(req,res)=>{
     // Chặn brute-force theo cặp IP+tài khoản (trần riêng theo IP đủ rộng cho lớp sau NAT).
     const ip=req.ip||req.socket?.remoteAddress;
-    const gate=loginThrottle.check({ip,username:req.body?.username});
+    const gate=await loginThrottle.check({ip,username:req.body?.username});
     if (!gate.allowed) {
       res.set('Retry-After',String(gate.retryAfter));
       throw new HttpError(429,'login_rate_limit','Thử lại sau một phút.');
     }
     const result=await accounts.login(req.body?.username,req.body?.password,{remember:req.body?.remember===true});
-    loginThrottle.reset({ip,username:req.body?.username});
+    await loginThrottle.reset({ip,username:req.body?.username});
     // Đặt cookie mới trước, rồi xoá cookie path cũ (client cũ có thể còn gửi kèm).
     res.cookie(accounts.COOKIE_NAME,result.token,cookieOptions(req,accounts.sessionTtlMs(result.remember)));
     res.clearCookie(accounts.COOKIE_NAME,legacyClearCookieOptions(req));
@@ -135,7 +135,12 @@ export function sharedRouter() {
   });
   // BTC: đúng cutoff, pull một lần cho tất cả repo đã duyệt; job thành công không chạy lại.
   router.post('/events/:id/github-cutoff-sync',requireLocalAdmin,async(req,res)=>{
-    res.status(202).json(await githubCutoff.syncAllAtCutoff({eventId:req.params.id,actor:req.account}));
+    const teamIds = Array.isArray(req.body?.team_ids) ? req.body.team_ids : null;
+    const limit = Number.isInteger(req.body?.limit) ? req.body.limit : null;
+    res.status(202).json(await githubCutoff.syncAllAtCutoff({eventId:req.params.id,actor:req.account,teamIds,limit}));
+  });
+  router.get('/events/:id/github-cutoff-status',requireLocalAdmin,async(req,res)=>{
+    res.json(await githubCutoff.getCutoffStatus({eventId:req.params.id}));
   });
   router.get('/events/:id/submissions/from-github',async(req,res)=>{
     const teamId=githubIntake.scopeTeam(req.account,typeof req.query.team==='string'?req.query.team:null);
