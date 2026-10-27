@@ -27,11 +27,11 @@ function OverviewHead({ account, isAdmin, onNavigate }) {
   return (
     <header className="tt-page-head">
       <div>
-        <p className="tt-eyebrow">{isAdmin ? 'Ban tổ chức · vận hành giải' : 'Đội thi · mùa giải local'}</p>
+        <p className="tt-eyebrow">{isAdmin ? 'Ban tổ chức · vận hành giải' : 'Đội thi · mùa giải'}</p>
         <h1 className="tt-page-title">{isAdmin ? 'Bảng điều khiển giải đấu' : `Xin chào, ${account.name}`}</h1>
         <p className="tt-page-lead">
           {isAdmin
-            ? 'Thiết lập giải tuần, tháng, kỳ theo điều lệ; theo dõi đội, bài nộp và tiến độ. Giải chính thức chưa bật chấm bằng scheduler MVP.'
+            ? 'Thiết lập giải tuần, tháng, kỳ theo điều lệ; theo dõi đội, bài nộp và tiến độ.'
             : 'Nộp bot, theo dõi bảng đấu và xem lại từng ván. Bot của đội được khóa khi giải bắt đầu.'}
         </p>
       </div>

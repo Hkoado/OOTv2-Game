@@ -136,18 +136,6 @@ export default function TeamsPage({ teams, accounts, actions, busy }) {
             </div>
           </form>
         </Panel>
-
-        <Panel title="Nguyên tắc vận hành" subtitle="Áp dụng cho bản local, người dùng tin cậy.">
-          <ul className="tt-bullets">
-            <li>Không tạo tài khoản cho người ngoài nhóm; API chỉ bind loopback.</li>
-            <li>Đặt lại mật khẩu sẽ thu hồi mọi phiên đăng nhập cũ của đội đó.</li>
-            <li>Đội chưa có bot hợp lệ không thể được chọn khi tạo giải 8 đội.</li>
-            <li>Tên đội phải duy nhất (không phân biệt hoa thường, bỏ khoảng trắng hai đầu).</li>
-          </ul>
-          <Alert tone="warning" title="Chỉ dùng với người tin cậy">
-            Bot chạy trên máy BTC, chưa được cô lập cấp hệ điều hành.
-          </Alert>
-        </Panel>
       </div>
 
       <Panel
