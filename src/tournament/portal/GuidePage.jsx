@@ -45,7 +45,7 @@ export default function GuidePage({ account }) {
         </Panel>
 
         <div className="tt-stack">
-          <Panel title="Thể thức Campus" subtitle="Thiết lập chính thức; scheduler/worker giải chính thức chưa được bật.">
+          <Panel title="Thể thức Campus">
             <ol className="tt-steps">
               <li><strong>Giải tuần → tháng → kỳ</strong><span>Tối đa 56 đội; chia bảng xác định theo roster và seed lưu.</span></li>
               <li><strong>Vòng bảng</strong><span>Mỗi cặp 2 ván; màu theo chính sách so le/ưu tiên số thua trong cùng vòng.</span></li>
@@ -89,32 +89,21 @@ export default function GuidePage({ account }) {
           </Alert>
         </Panel>
 
-        <Panel
-          title={isAdmin ? 'Vận hành local' : 'An toàn & hỗ trợ'}
-          subtitle={isAdmin ? 'Ba tiến trình dev trên máy BTC.' : 'Biết trước để tránh mất dữ liệu.'}
-        >
-          {isAdmin ? (
-            <div className="tt-code-list">
-              <div><span>API</span><code>npm run dev:api</code></div>
-              <div><span>Worker</span><code>npm run dev:worker</code></div>
-              <div><span>UI dev</span><code>npm run dev</code></div>
-              <div><span>Test</span><code>npm test</code></div>
-              <div><span>Admin đầu tiên</span><code>node tools/cli/create-admin.js</code></div>
-            </div>
-          ) : (
+        {!isAdmin && (
+          <Panel title="An toàn & hỗ trợ" subtitle="Biết trước để tránh mất dữ liệu.">
             <ul className="tt-bullets">
               <li>Một tài khoản cho mỗi đội; không chia sẻ mật khẩu.</li>
               <li>Phiên đăng nhập 8 giờ, cookie HttpOnly; BTC thu hồi bằng cách đặt lại mật khẩu.</li>
               <li>Bài nộp bị khóa khi đội đang thi; gửi trước giờ bắt đầu.</li>
               <li>Kết quả và replay chỉ đọc; khiếu nại gửi BTC kèm mã ván.</li>
             </ul>
-          )}
-          <div className="tt-inline-facts">
-            <span><ShieldCheck size={15} aria-hidden="true" />API bind loopback</span>
-            <span><Swords size={15} aria-hidden="true" />Server xác thực nước đi</span>
-            <span><FileCode2 size={15} aria-hidden="true" />Replay có seed</span>
-          </div>
-        </Panel>
+            <div className="tt-inline-facts">
+              <span><ShieldCheck size={15} aria-hidden="true" />API bind loopback</span>
+              <span><Swords size={15} aria-hidden="true" />Server xác thực nước đi</span>
+              <span><FileCode2 size={15} aria-hidden="true" />Replay có seed</span>
+            </div>
+          </Panel>
+        )}
       </div>
 
       <Panel title="Tài liệu tham chiếu" subtitle="Mở trực tiếp trong repository.">
